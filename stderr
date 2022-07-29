@@ -1,106 +1,291 @@
 00:00:00.000 [INFO] [libseat] [libseat/backend/seatd.c:64] Could not connect to socket /run/seatd.sock: No such file or directory
 00:00:00.000 [INFO] [libseat] [libseat/libseat.c:76] Backend 'seatd' failed to open seat, skipping
-00:00:00.007 [INFO] [libseat] [libseat/libseat.c:73] Seat opened with backend 'logind'
-00:00:00.007 [INFO] [backend/session/session.c:110] Successfully loaded libseat session
-00:00:00.010 [INFO] [backend/backend.c:220] Found 2 GPUs
-00:00:00.010 [INFO] [backend/drm/backend.c:183] Initializing DRM backend for /dev/dri/card0 (i915)
-00:00:00.010 [DEBUG] [backend/drm/drm.c:85] Using atomic DRM interface
-00:00:00.010 [DEBUG] [backend/drm/drm.c:98] ADDFB2 modifiers supported
-00:00:00.010 [INFO] [backend/drm/drm.c:251] Found 3 DRM CRTCs
-00:00:00.010 [INFO] [backend/drm/drm.c:178] Found 9 DRM planes
-00:00:00.010 [INFO] [backend/drm/backend.c:183] Initializing DRM backend for /dev/dri/card1 (nvidia-drm)
-00:00:00.010 [DEBUG] [backend/drm/drm.c:85] Using atomic DRM interface
-00:00:00.010 [DEBUG] [backend/drm/drm.c:98] ADDFB2 modifiers supported
-00:00:00.010 [INFO] [backend/drm/drm.c:251] Found 4 DRM CRTCs
-00:00:00.010 [INFO] [backend/drm/drm.c:178] Found 12 DRM planes
-00:00:00.015 [INFO] [render/egl.c:180] Supported EGL client extensions: EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration EGL_EXT_device_query EGL_KHR_client_get_all_proc_addresses EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11 EGL_EXT_platform_x11 EGL_EXT_platform_device EGL_KHR_platform_wayland EGL_EXT_platform_wayland EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_MESA_platform_xcb EGL_MESA_platform_surfaceless
-00:00:00.018 [DEBUG] [render/egl.c:437] Using EGL device /dev/dri/card1
-00:00:00.021 [INFO] [render/egl.c:326] Using EGL 1.5
-00:00:00.021 [INFO] [render/egl.c:327] Supported EGL display extensions: EGL_EXT_buffer_age EGL_EXT_client_sync EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import EGL_EXT_image_dma_buf_import_modifiers EGL_MESA_image_dma_buf_export EGL_EXT_output_base EGL_EXT_output_drm EGL_EXT_protected_content EGL_EXT_stream_consumer_egloutput EGL_EXT_stream_acquire_mode EGL_EXT_sync_reuse EGL_IMG_context_priority EGL_KHR_config_attribs EGL_KHR_create_context_no_error EGL_KHR_context_flush_control EGL_KHR_create_context EGL_KHR_fence_sync EGL_KHR_get_all_proc_addresses EGL_KHR_partial_update EGL_KHR_swap_buffers_with_damage EGL_KHR_no_config_context EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base EGL_KHR_reusable_sync EGL_KHR_stream EGL_KHR_stream_attrib EGL_KHR_stream_consumer_gltexture EGL_KHR_stream_cross_process_fd EGL_KHR_stream_fifo EGL_KHR_stream_producer_eglsurface EGL_KHR_surfaceless_context EGL_KHR_wait_sync EGL_NV_nvrm_fence_sync EGL_NV_quadruple_buffer EGL_NV_stream_consumer_eglimage EGL_NV_stream_cross_display EGL_NV_stream_cross_object EGL_NV_stream_cross_process EGL_NV_stream_cross_system EGL_NV_stream_dma EGL_NV_stream_flush EGL_NV_stream_metadata EGL_NV_stream_remote EGL_NV_stream_reset EGL_NV_stream_socket EGL_NV_stream_socket_inet EGL_NV_stream_socket_unix EGL_NV_stream_sync EGL_NV_stream_fifo_next EGL_NV_stream_fifo_synchronous EGL_NV_stream_consumer_gltexture_yuv EGL_NV_stream_attrib EGL_NV_stream_origin EGL_NV_system_time EGL_NV_output_drm_flip_event EGL_NV_triple_buffer EGL_NV_robustness_video_memory_purge EGL_EXT_present_opaque EGL_WL_bind_wayland_display EGL_WL_wayland_eglstream
-00:00:00.021 [INFO] [render/egl.c:329] Supported EGL device extensions: EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
-00:00:00.021 [INFO] [render/egl.c:331] EGL vendor: NVIDIA
-00:00:00.021 [INFO] [render/egl.c:333] EGL driver name: nvidia
-00:00:00.021 [DEBUG] [render/egl.c:158] Supported DMA-BUF formats: AB24 XB24 R8   RG88 UYVY AB4H AR24 AS24 XS24 XR24 RG16 AR30 R101 R100 AB30 B101 B100 YU12 NV12 NV21 NV16 NV24 P010 P210 P012 HD01 UHD0 
-00:00:00.021 [DEBUG] [render/egl.c:159] EGL DMA-BUF format modifiers supported
-00:00:00.027 [DEBUG] [render/egl.c:388] Obtained high priority context
-00:00:00.027 [DEBUG] [render/egl.c:485] Using EGL_PLATFORM_DEVICE_EXT
-00:00:00.055 [INFO] [render/gles2/renderer.c:737] Creating GLES2 renderer
-00:00:00.055 [INFO] [render/gles2/renderer.c:738] Using OpenGL ES 3.2 NVIDIA 515.57
-00:00:00.055 [INFO] [render/gles2/renderer.c:739] GL vendor: NVIDIA Corporation
-00:00:00.055 [INFO] [render/gles2/renderer.c:740] GL renderer: NVIDIA GeForce GTX 1060/PCIe/SSE2
-00:00:00.055 [INFO] [render/gles2/renderer.c:741] Supported GLES2 extensions: GL_EXT_base_instance GL_EXT_blend_func_extended GL_EXT_blend_minmax GL_EXT_buffer_storage GL_EXT_clear_texture GL_EXT_clip_control GL_EXT_clip_cull_distance GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_conservative_depth GL_EXT_copy_image GL_EXT_depth_clamp GL_EXT_debug_label GL_EXT_discard_framebuffer GL_EXT_disjoint_timer_query GL_EXT_draw_buffers_indexed GL_EXT_draw_elements_base_vertex GL_EXT_EGL_image_array GL_EXT_EGL_image_storage GL_EXT_EGL_image_external_wrap_modes GL_EXT_float_blend GL_EXT_frag_depth GL_EXT_geometry_point_size GL_EXT_geometry_shader GL_EXT_gpu_shader5 GL_EXT_map_buffer_range GL_EXT_multi_draw_indirect GL_EXT_multisample_compatibility GL_EXT_multisampled_render_to_texture GL_EXT_multisampled_render_to_texture2 GL_EXT_multiview_texture_multisample GL_EXT_multiview_timer_query GL_EXT_occlusion_query_boolean GL_EXT_polygon_offset_clamp GL_EXT_post_depth_coverage GL_EXT_primitive_bounding_box GL_EXT_raster_multisample GL_EXT_render_snorm GL_EXT_robustness GL_EXT_separate_shader_objects GL_EXT_shader_group_vote GL_EXT_shader_implicit_conversions GL_EXT_shader_integer_mix GL_EXT_shader_io_blocks GL_EXT_shader_non_constant_global_initializers GL_EXT_shader_texture_lod GL_EXT_shadow_samplers GL_EXT_sparse_texture GL_EXT_sparse_texture2 GL_EXT_sRGB GL_EXT_sRGB_write_control GL_EXT_tessellation_point_size GL_EXT_tessellation_shader GL_EXT_texture_border_clamp GL_EXT_texture_buffer GL_EXT_texture_compression_bptc GL_EXT_texture_compression_dxt1 GL_EXT_texture_compression_rgtc GL_EXT_texture_compression_s3tc GL_EXT_texture_cube_map_array GL_EXT_texture_filter_anisotropic GL_EXT_texture_filter_minmax GL_EXT_texture_format_BGRA8888 GL_EXT_texture_mirror_clamp_to_edge GL_EXT_texture_norm16 GL_EXT_texture_query_lod GL_EXT_texture_rg GL_EXT_texture_shadow_lod GL_EXT_texture_sRGB_R8 GL_EXT_texture_sRGB_decode GL_EXT_texture_storage GL_EXT_texture_view GL_EXT_draw_transform_feedback GL_EXT_unpack_subimage GL_EXT_window_rectangles GL_KHR_context_flush_control GL_KHR_debug GL_EXT_memory_object GL_EXT_memory_object_fd GL_NV_memory_object_sparse GL_KHR_parallel_shader_compile GL_KHR_no_error GL_KHR_robust_buffer_access_behavior GL_KHR_robustness GL_EXT_semaphore GL_EXT_semaphore_fd GL_NV_timeline_semaphore GL_KHR_shader_subgroup GL_KHR_texture_compression_astc_ldr GL_KHR_texture_compression_astc_sliced_3d GL_KHR_texture_compression_astc_hdr GL_NV_bgr GL_NV_bindless_texture GL_NV_blend_equation_advanced GL_NV_blend_equation_advanced_coherent GL_NVX_blend_equation_advanced_multi_draw_buffers GL_NV_blend_minmax_factor GL_NV_clip_space_w_scaling GL_NV_conditional_render GL_NV_conservative_raster GL_NV_conservative_raster_pre_snap_triangles GL_NV_copy_buffer GL_NV_copy_image GL_NV_draw_buffers GL_NV_draw_instanced GL_NV_draw_texture GL_NV_draw_vulkan_image GL_NV_EGL_stream_consumer_external GL_NV_explicit_attrib_location GL_NV_fbo_color_attachments GL_NV_fill_rectangle GL_NV_fragment_coverage_to_color GL_NV_fragment_shader_interlock GL_NV_framebuffer_blit GL_NV_framebuffer_mixed_samples GL_NV_framebuffer_multisample GL_NV_generate_mipmap_sRGB GL_NV_geometry_shader_passthrough GL_NV_instanced_arrays GL_NV_internalformat_sample_query GL_NV_gpu_shader5 GL_NV_image_formats GL_NV_memory_attachment GL_NV_occlusion_query_samples GL_NV_non_square_matrices GL_NV_pack_subimage GL_NV_packed_float GL_NV_packed_float_linear GL_NV_path_rendering GL_NV_path_rendering_shared_edge GL_NV_pixel_buffer_object GL_NV_polygon_mode GL_NV_read_buffer GL_NV_read_depth GL_NV_read_depth_stencil GL_NV_read_stencil GL_NV_sample_locations GL_NV_sample_mask_override_coverage GL_NV_shader_atomic_fp16_vector GL_NV_shader_noperspective_interpolation GL_NV_shader_subgroup_partitioned GL_NV_shadow_samplers_array GL_NV_shadow_samplers_cube GL_NV_sRGB_formats GL_NV_stereo_view_rendering GL_NV_texture_array GL_NV_texture_barrier GL_NV_texture_border_clamp GL_NV_texture_compression_latc GL_NV_texture_compression_s3tc GL_NV_texture_compression_s3tc_update GL_NV_timer_query GL_NV_viewport_array GL_NV_viewport_array2 GL_NV_viewport_swizzle GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_OES_compressed_ETC1_RGB8_texture GL_EXT_compressed_ETC1_RGB8_sub_texture GL_OES_depth24 GL_OES_depth32 GL_OES_depth_texture GL_OES_depth_texture_cube_map GL_OES_copy_image GL_OES_draw_buffers_indexed GL_OES_draw_elements_base_vertex GL_OES_texture_border_clamp GL_OES_tessellation_point_size GL_OES_tessellation_shader GL_OES_texture_buffer GL_OES_geometry_point_size GL_OES_geometry_shader GL_OES_gpu_shader5 GL_OES_shader_io_blocks GL_OES_texture_view GL_OES_primitive_bounding_box GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_EGL_image_external_essl3 GL_OES_EGL_sync GL_OES_element_index_uint GL_OES_fbo_render_mipmap GL_OES_get_program_binary GL_OES_mapbuffer GL_OES_packed_depth_stencil GL_OES_rgb8_rgba8 GL_EXT_read_format_bgra GL_OES_sample_shading GL_OES_sample_variables GL_OES_shader_image_atomic GL_OES_shader_multisample_interpolation GL_OES_standard_derivatives GL_OES_surfaceless_context GL_OES_texture_cube_map_array GL_OES_texture_npot GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_texture_stencil8 GL_OES_texture_storage_multisample_2d_array GL_OES_vertex_array_object GL_OES_vertex_half_float GL_OES_viewport_array GL_OVR_multiview GL_OVR_multiview2 GL_OVR_multiview_multisampled_render_to_texture GL_ANDROID_extension_pack_es31a 
-00:00:00.056 [DEBUG] [render/allocator/allocator.c:98] Trying to create gbm allocator
-00:00:00.056 [DEBUG] [render/allocator/gbm.c:203] Created GBM allocator with backend nvidia
-00:00:00.056 [DEBUG] [render/allocator/gbm.c:206] Using DRM node /dev/dri/card1
-00:00:00.056 [INFO] [render/egl.c:180] Supported EGL client extensions: EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration EGL_EXT_device_query EGL_KHR_client_get_all_proc_addresses EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11 EGL_EXT_platform_x11 EGL_EXT_platform_device EGL_KHR_platform_wayland EGL_EXT_platform_wayland EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_MESA_platform_xcb EGL_MESA_platform_surfaceless
-00:00:00.057 [DEBUG] [render/egl.c:437] Using EGL device /dev/dri/card0
-00:00:00.077 [INFO] [render/egl.c:326] Using EGL 1.5
-00:00:00.077 [INFO] [render/egl.c:327] Supported EGL display extensions: EGL_ANDROID_blob_cache EGL_ANDROID_native_fence_sync EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import EGL_EXT_image_dma_buf_import_modifiers EGL_IMG_context_priority EGL_KHR_cl_event2 EGL_KHR_config_attribs EGL_KHR_create_context EGL_KHR_create_context_no_error EGL_KHR_fence_sync EGL_KHR_get_all_proc_addresses EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_image_base EGL_KHR_no_config_context EGL_KHR_reusable_sync EGL_KHR_surfaceless_context EGL_EXT_pixel_format_float EGL_KHR_wait_sync EGL_MESA_configless_context EGL_MESA_drm_image EGL_MESA_image_dma_buf_export EGL_MESA_query_driver EGL_WL_bind_wayland_display 
-00:00:00.077 [INFO] [render/egl.c:329] Supported EGL device extensions: EGL_EXT_device_drm EGL_EXT_device_drm_render_node
-00:00:00.077 [INFO] [render/egl.c:331] EGL vendor: Mesa Project
-00:00:00.077 [DEBUG] [render/egl.c:158] Supported DMA-BUF formats: AB4H XB4H AR30 XR30 AB30 AR24 AB24 XR24 XB24 AR15 RG16 R8   R16  GR88 GR32 YUV9 YU11 YU12 YU16 YU24 YVU9 YV11 YV12 YV16 YV24 NV12 P010 P012 P016 NV16 AYUV XYUV Y410 Y412 Y416 YUYV UYVY Y210 Y212 Y216 
-00:00:00.077 [DEBUG] [render/egl.c:159] EGL DMA-BUF format modifiers supported
-00:00:00.078 [DEBUG] [render/egl.c:388] Obtained high priority context
-00:00:00.078 [DEBUG] [render/egl.c:485] Using EGL_PLATFORM_DEVICE_EXT
-00:00:00.079 [INFO] [render/gles2/renderer.c:737] Creating GLES2 renderer
-00:00:00.079 [INFO] [render/gles2/renderer.c:738] Using OpenGL ES 3.2 Mesa 22.1.3
-00:00:00.079 [INFO] [render/gles2/renderer.c:739] GL vendor: Intel
-00:00:00.079 [INFO] [render/gles2/renderer.c:740] GL renderer: Mesa Intel(R) UHD Graphics 630 (CFL GT2)
-00:00:00.079 [INFO] [render/gles2/renderer.c:741] Supported GLES2 extensions: GL_EXT_blend_minmax GL_EXT_multi_draw_arrays GL_EXT_texture_filter_anisotropic GL_EXT_texture_compression_s3tc GL_EXT_texture_compression_dxt1 GL_EXT_texture_compression_rgtc GL_EXT_texture_format_BGRA8888 GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth24 GL_OES_element_index_uint GL_OES_fbo_render_mipmap GL_OES_mapbuffer GL_OES_rgb8_rgba8 GL_OES_standard_derivatives GL_OES_stencil8 GL_OES_texture_3D GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_texture_npot GL_OES_vertex_half_float GL_EXT_draw_instanced GL_EXT_texture_sRGB_decode GL_OES_EGL_image GL_OES_depth_texture GL_AMD_performance_monitor GL_OES_packed_depth_stencil GL_EXT_texture_type_2_10_10_10_REV GL_NV_conditional_render GL_OES_get_program_binary GL_APPLE_texture_max_level GL_EXT_discard_framebuffer GL_EXT_read_format_bgra GL_NV_pack_subimage GL_EXT_frag_depth GL_NV_fbo_color_attachments GL_OES_EGL_image_external GL_OES_EGL_sync GL_OES_vertex_array_object GL_OES_viewport_array GL_ANGLE_pack_reverse_row_order GL_ANGLE_texture_compression_dxt3 GL_ANGLE_texture_compression_dxt5 GL_EXT_occlusion_query_boolean GL_EXT_robustness GL_EXT_texture_rg GL_EXT_unpack_subimage GL_NV_draw_buffers GL_NV_read_buffer GL_NV_read_depth GL_NV_read_depth_stencil GL_NV_read_stencil GL_EXT_draw_buffers GL_EXT_map_buffer_range GL_KHR_debug GL_KHR_robustness GL_KHR_texture_compression_astc_ldr GL_NV_pixel_buffer_object GL_OES_depth_texture_cube_map GL_OES_required_internalformat GL_OES_surfaceless_context GL_EXT_color_buffer_float GL_EXT_sRGB_write_control GL_EXT_separate_shader_objects GL_EXT_shader_framebuffer_fetch GL_EXT_shader_group_vote GL_EXT_shader_implicit_conversions GL_EXT_shader_integer_mix GL_EXT_tessellation_point_size GL_EXT_tessellation_shader GL_INTEL_conservative_rasterization GL_INTEL_performance_query GL_ANDROID_extension_pack_es31a GL_EXT_base_instance GL_EXT_compressed_ETC1_RGB8_sub_texture GL_EXT_copy_image GL_EXT_draw_buffers_indexed GL_EXT_draw_elements_base_vertex GL_EXT_gpu_shader5 GL_EXT_polygon_offset_clamp GL_EXT_primitive_bounding_box GL_EXT_render_snorm GL_EXT_shader_io_blocks GL_EXT_texture_border_clamp GL_EXT_texture_buffer GL_EXT_texture_cube_map_array GL_EXT_texture_norm16 GL_EXT_texture_view GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_KHR_context_flush_control GL_KHR_robust_buffer_access_behavior GL_NV_image_formats GL_OES_copy_image GL_OES_draw_buffers_indexed GL_OES_draw_elements_base_vertex GL_OES_gpu_shader5 GL_OES_primitive_bounding_box GL_OES_sample_shading GL_OES_sample_variables GL_OES_shader_io_blocks GL_OES_shader_multisample_interpolation GL_OES_tessellation_point_size GL_OES_tessellation_shader GL_OES_texture_border_clamp GL_OES_texture_buffer GL_OES_texture_cube_map_array GL_OES_texture_stencil8 GL_OES_texture_storage_multisample_2d_array GL_OES_texture_view GL_EXT_blend_func_extended GL_EXT_buffer_storage GL_EXT_float_blend GL_EXT_geometry_point_size GL_EXT_geometry_shader GL_EXT_shader_samples_identical GL_EXT_texture_sRGB_R8 GL_KHR_no_error GL_KHR_texture_compression_astc_sliced_3d GL_NV_fragment_shader_interlock GL_OES_EGL_image_external_essl3 GL_OES_geometry_point_size GL_OES_geometry_shader GL_OES_shader_image_atomic GL_EXT_clear_texture GL_EXT_clip_cull_distance GL_EXT_disjoint_timer_query GL_EXT_texture_compression_s3tc_srgb GL_MESA_shader_integer_functions GL_EXT_clip_control GL_EXT_color_buffer_half_float GL_EXT_memory_object GL_EXT_memory_object_fd GL_EXT_semaphore GL_EXT_semaphore_fd GL_EXT_texture_compression_bptc GL_EXT_texture_mirror_clamp_to_edge GL_KHR_parallel_shader_compile GL_EXT_EGL_image_storage GL_EXT_shader_framebuffer_fetch_non_coherent GL_EXT_texture_shadow_lod GL_INTEL_blackhole_render GL_MESA_framebuffer_flip_y GL_NV_compute_shader_derivatives GL_EXT_demote_to_helper_invocation GL_EXT_depth_clamp GL_EXT_texture_query_lod GL_MESA_bgra 
-00:00:00.085 [DEBUG] [render/allocator/allocator.c:98] Trying to create gbm allocator
-00:00:00.087 [DEBUG] [render/allocator/gbm.c:203] Created GBM allocator with backend drm
-00:00:00.087 [DEBUG] [render/allocator/gbm.c:206] Using DRM node /dev/dri/card0
-00:00:00.087 [DEBUG] [xcursor/wlr_xcursor.c:243] Loaded cursor theme 'default' at size 24 (13 available cursors)
-00:00:00.087 [DEBUG] [backend/libinput/backend.c:87] Starting libinput backend
-00:00:00.623 [DEBUG] [backend/libinput/events.c:95] Added Video Bus [0:6]
-00:00:00.638 [DEBUG] [backend/libinput/events.c:95] Added Video Bus [0:6]
-00:00:00.651 [DEBUG] [backend/libinput/events.c:95] Added Power Button [0:1]
-00:00:00.659 [DEBUG] [backend/libinput/events.c:95] Added Lid Switch [0:5]
-00:00:00.659 [DEBUG] [backend/libinput/switch.c:20] Created switch for device Lid Switch
-00:00:00.659 [DEBUG] [backend/libinput/events.c:95] Added Sleep Button [0:3]
-00:00:00.665 [DEBUG] [backend/libinput/events.c:95] Added Integrated Camera: Integrated C [1226:28784]
-00:00:00.670 [DEBUG] [backend/libinput/events.c:95] Added SYNA2B46:00 06CB:CD5F Mouse [1739:52575]
-00:00:00.670 [DEBUG] [backend/libinput/events.c:95] Added SYNA2B46:00 06CB:CD5F Touchpad [1739:52575]
-00:00:00.670 [DEBUG] [backend/libinput/events.c:95] Added Ideapad extra buttons [0:0]
-00:00:00.674 [DEBUG] [backend/libinput/events.c:95] Added AT Translated Set 2 keyboard [1:1]
-00:00:00.678 [DEBUG] [backend/libinput/backend.c:133] libinput successfully initialized
-00:00:00.678 [INFO] [backend/drm/drm.c:1185] Scanning DRM connectors on /dev/dri/card0
-00:00:00.679 [INFO] [backend/drm/drm.c:1251] Found connector 'eDP-1'
-00:00:00.679 [INFO] [backend/drm/drm.c:1287] 'eDP-1' connected
-00:00:00.679 [DEBUG] [backend/drm/drm.c:1288] Current CRTC: 51
-00:00:00.679 [INFO] [backend/drm/drm.c:1298] Physical size: 340x190
-00:00:00.679 [INFO] [backend/drm/drm.c:1338] Detected modes:
-00:00:00.679 [INFO] [backend/drm/drm.c:1360]   1920x1080@60027 (preferred)
-00:00:00.679 [DEBUG] [backend/drm/drm.c:1047] Reallocating CRTCs
-00:00:00.679 [DEBUG] [backend/drm/drm.c:1058] State before reallocation:
-00:00:00.679 [DEBUG] [backend/drm/drm.c:1064]   'eDP-1' crtc=0 status=1 desired_enabled=1
-00:00:00.679 [DEBUG] [backend/drm/drm.c:1115] State after reallocation:
-00:00:00.679 [DEBUG] [backend/drm/drm.c:1122]   'eDP-1' crtc=0 status=1 desired_enabled=1
-00:00:00.679 [INFO] [backend/drm/drm.c:1412] connector eDP-1: Requesting modeset
-00:00:00.679 [DEBUG] [backend/drm/drm.c:492] connector eDP-1: Can't enable an output without a buffer
-00:00:00.679 [DEBUG] [types/output/render.c:192] Attaching empty buffer to output for modeset
-00:00:00.679 [DEBUG] [types/output/render.c:73] Choosing primary buffer format 0x34325258 for output 'eDP-1'
-00:00:00.679 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
-00:00:00.681 [DEBUG] [render/allocator/gbm.c:140] Allocated 1920x1080 GBM buffer (format 0x34325258, modifier 0x100000000000004)
-00:00:00.681 [DEBUG] [render/gles2/renderer.c:142] Created GL FBO for buffer 1920x1080
-00:00:00.683 [INFO] [backend/drm/drm.c:708] connector eDP-1: Modesetting with '1920x1080@60027mHz'
-00:00:00.688 [INFO] [backend/drm/drm.c:1185] Scanning DRM connectors on /dev/dri/card1
-00:00:00.688 [INFO] [backend/drm/drm.c:1251] Found connector 'DP-1'
-00:00:00.688 [INFO] [backend/drm/drm.c:1251] Found connector 'HDMI-A-1'
-00:00:00.688 [INFO] [backend/drm/drm.c:1251] Found connector 'DP-2'
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1047] Reallocating CRTCs
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1058] State before reallocation:
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1064]   'DP-1' crtc=-1 status=0 desired_enabled=0
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1064]   'HDMI-A-1' crtc=-1 status=0 desired_enabled=0
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1064]   'DP-2' crtc=-1 status=0 desired_enabled=0
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1115] State after reallocation:
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1122]   'DP-1' crtc=-1 status=0 desired_enabled=0
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1122]   'HDMI-A-1' crtc=-1 status=0 desired_enabled=0
-00:00:00.688 [DEBUG] [backend/drm/drm.c:1122]   'DP-2' crtc=-1 status=0 desired_enabled=0
-00:00:00.689 [INFO] [tinywl.c:1362] Running Wayland compositor on WAYLAND_DISPLAY=wayland-0
-00:00:00.689 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
-00:00:00.690 [DEBUG] [render/allocator/gbm.c:140] Allocated 1920x1080 GBM buffer (format 0x34325258, modifier 0x100000000000004)
-00:00:00.691 [DEBUG] [render/gles2/renderer.c:142] Created GL FBO for buffer 1920x1080
+00:00:00.004 [INFO] [libseat] [libseat/libseat.c:73] Seat opened with backend 'logind'
+00:00:00.004 [INFO] [backend/session/session.c:110] Successfully loaded libseat session
+00:00:00.006 [INFO] [backend/backend.c:220] Found 2 GPUs
+00:00:00.006 [INFO] [backend/drm/backend.c:183] Initializing DRM backend for /dev/dri/card0 (i915)
+00:00:00.006 [DEBUG] [backend/drm/drm.c:85] Using atomic DRM interface
+00:00:00.006 [DEBUG] [backend/drm/drm.c:98] ADDFB2 modifiers supported
+00:00:00.006 [INFO] [backend/drm/drm.c:251] Found 3 DRM CRTCs
+00:00:00.006 [INFO] [backend/drm/drm.c:178] Found 9 DRM planes
+00:00:00.006 [INFO] [backend/drm/backend.c:183] Initializing DRM backend for /dev/dri/card1 (nvidia-drm)
+00:00:00.006 [DEBUG] [backend/drm/drm.c:85] Using atomic DRM interface
+00:00:00.006 [DEBUG] [backend/drm/drm.c:98] ADDFB2 modifiers supported
+00:00:00.006 [INFO] [backend/drm/drm.c:251] Found 4 DRM CRTCs
+00:00:00.006 [INFO] [backend/drm/drm.c:178] Found 12 DRM planes
+00:00:00.010 [INFO] [render/egl.c:180] Supported EGL client extensions: EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration EGL_EXT_device_query EGL_KHR_client_get_all_proc_addresses EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11 EGL_EXT_platform_x11 EGL_EXT_platform_device EGL_KHR_platform_wayland EGL_EXT_platform_wayland EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_MESA_platform_xcb EGL_MESA_platform_surfaceless
+00:00:00.013 [DEBUG] [render/egl.c:437] Using EGL device /dev/dri/card1
+00:00:00.014 [INFO] [render/egl.c:326] Using EGL 1.5
+00:00:00.014 [INFO] [render/egl.c:327] Supported EGL display extensions: EGL_EXT_buffer_age EGL_EXT_client_sync EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import EGL_EXT_image_dma_buf_import_modifiers EGL_MESA_image_dma_buf_export EGL_EXT_output_base EGL_EXT_output_drm EGL_EXT_protected_content EGL_EXT_stream_consumer_egloutput EGL_EXT_stream_acquire_mode EGL_EXT_sync_reuse EGL_IMG_context_priority EGL_KHR_config_attribs EGL_KHR_create_context_no_error EGL_KHR_context_flush_control EGL_KHR_create_context EGL_KHR_fence_sync EGL_KHR_get_all_proc_addresses EGL_KHR_partial_update EGL_KHR_swap_buffers_with_damage EGL_KHR_no_config_context EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base EGL_KHR_reusable_sync EGL_KHR_stream EGL_KHR_stream_attrib EGL_KHR_stream_consumer_gltexture EGL_KHR_stream_cross_process_fd EGL_KHR_stream_fifo EGL_KHR_stream_producer_eglsurface EGL_KHR_surfaceless_context EGL_KHR_wait_sync EGL_NV_nvrm_fence_sync EGL_NV_quadruple_buffer EGL_NV_stream_consumer_eglimage EGL_NV_stream_cross_display EGL_NV_stream_cross_object EGL_NV_stream_cross_process EGL_NV_stream_cross_system EGL_NV_stream_dma EGL_NV_stream_flush EGL_NV_stream_metadata EGL_NV_stream_remote EGL_NV_stream_reset EGL_NV_stream_socket EGL_NV_stream_socket_inet EGL_NV_stream_socket_unix EGL_NV_stream_sync EGL_NV_stream_fifo_next EGL_NV_stream_fifo_synchronous EGL_NV_stream_consumer_gltexture_yuv EGL_NV_stream_attrib EGL_NV_stream_origin EGL_NV_system_time EGL_NV_output_drm_flip_event EGL_NV_triple_buffer EGL_NV_robustness_video_memory_purge EGL_EXT_present_opaque EGL_WL_bind_wayland_display EGL_WL_wayland_eglstream
+00:00:00.014 [INFO] [render/egl.c:329] Supported EGL device extensions: EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+00:00:00.014 [INFO] [render/egl.c:331] EGL vendor: NVIDIA
+00:00:00.014 [INFO] [render/egl.c:333] EGL driver name: nvidia
+00:00:00.014 [DEBUG] [render/egl.c:158] Supported DMA-BUF formats: AB24 XB24 R8   RG88 UYVY AB4H AR24 AS24 XS24 XR24 RG16 AR30 R101 R100 AB30 B101 B100 YU12 NV12 NV21 NV16 NV24 P010 P210 P012 HD01 UHD0 
+00:00:00.014 [DEBUG] [render/egl.c:159] EGL DMA-BUF format modifiers supported
+00:00:00.018 [DEBUG] [render/egl.c:388] Obtained high priority context
+00:00:00.018 [DEBUG] [render/egl.c:485] Using EGL_PLATFORM_DEVICE_EXT
+00:00:00.040 [INFO] [render/gles2/renderer.c:737] Creating GLES2 renderer
+00:00:00.040 [INFO] [render/gles2/renderer.c:738] Using OpenGL ES 3.2 NVIDIA 515.57
+00:00:00.040 [INFO] [render/gles2/renderer.c:739] GL vendor: NVIDIA Corporation
+00:00:00.040 [INFO] [render/gles2/renderer.c:740] GL renderer: NVIDIA GeForce GTX 1060/PCIe/SSE2
+00:00:00.040 [INFO] [render/gles2/renderer.c:741] Supported GLES2 extensions: GL_EXT_base_instance GL_EXT_blend_func_extended GL_EXT_blend_minmax GL_EXT_buffer_storage GL_EXT_clear_texture GL_EXT_clip_control GL_EXT_clip_cull_distance GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_conservative_depth GL_EXT_copy_image GL_EXT_depth_clamp GL_EXT_debug_label GL_EXT_discard_framebuffer GL_EXT_disjoint_timer_query GL_EXT_draw_buffers_indexed GL_EXT_draw_elements_base_vertex GL_EXT_EGL_image_array GL_EXT_EGL_image_storage GL_EXT_EGL_image_external_wrap_modes GL_EXT_float_blend GL_EXT_frag_depth GL_EXT_geometry_point_size GL_EXT_geometry_shader GL_EXT_gpu_shader5 GL_EXT_map_buffer_range GL_EXT_multi_draw_indirect GL_EXT_multisample_compatibility GL_EXT_multisampled_render_to_texture GL_EXT_multisampled_render_to_texture2 GL_EXT_multiview_texture_multisample GL_EXT_multiview_timer_query GL_EXT_occlusion_query_boolean GL_EXT_polygon_offset_clamp GL_EXT_post_depth_coverage GL_EXT_primitive_bounding_box GL_EXT_raster_multisample GL_EXT_render_snorm GL_EXT_robustness GL_EXT_separate_shader_objects GL_EXT_shader_group_vote GL_EXT_shader_implicit_conversions GL_EXT_shader_integer_mix GL_EXT_shader_io_blocks GL_EXT_shader_non_constant_global_initializers GL_EXT_shader_texture_lod GL_EXT_shadow_samplers GL_EXT_sparse_texture GL_EXT_sparse_texture2 GL_EXT_sRGB GL_EXT_sRGB_write_control GL_EXT_tessellation_point_size GL_EXT_tessellation_shader GL_EXT_texture_border_clamp GL_EXT_texture_buffer GL_EXT_texture_compression_bptc GL_EXT_texture_compression_dxt1 GL_EXT_texture_compression_rgtc GL_EXT_texture_compression_s3tc GL_EXT_texture_cube_map_array GL_EXT_texture_filter_anisotropic GL_EXT_texture_filter_minmax GL_EXT_texture_format_BGRA8888 GL_EXT_texture_mirror_clamp_to_edge GL_EXT_texture_norm16 GL_EXT_texture_query_lod GL_EXT_texture_rg GL_EXT_texture_shadow_lod GL_EXT_texture_sRGB_R8 GL_EXT_texture_sRGB_decode GL_EXT_texture_storage GL_EXT_texture_view GL_EXT_draw_transform_feedback GL_EXT_unpack_subimage GL_EXT_window_rectangles GL_KHR_context_flush_control GL_KHR_debug GL_EXT_memory_object GL_EXT_memory_object_fd GL_NV_memory_object_sparse GL_KHR_parallel_shader_compile GL_KHR_no_error GL_KHR_robust_buffer_access_behavior GL_KHR_robustness GL_EXT_semaphore GL_EXT_semaphore_fd GL_NV_timeline_semaphore GL_KHR_shader_subgroup GL_KHR_texture_compression_astc_ldr GL_KHR_texture_compression_astc_sliced_3d GL_KHR_texture_compression_astc_hdr GL_NV_bgr GL_NV_bindless_texture GL_NV_blend_equation_advanced GL_NV_blend_equation_advanced_coherent GL_NVX_blend_equation_advanced_multi_draw_buffers GL_NV_blend_minmax_factor GL_NV_clip_space_w_scaling GL_NV_conditional_render GL_NV_conservative_raster GL_NV_conservative_raster_pre_snap_triangles GL_NV_copy_buffer GL_NV_copy_image GL_NV_draw_buffers GL_NV_draw_instanced GL_NV_draw_texture GL_NV_draw_vulkan_image GL_NV_EGL_stream_consumer_external GL_NV_explicit_attrib_location GL_NV_fbo_color_attachments GL_NV_fill_rectangle GL_NV_fragment_coverage_to_color GL_NV_fragment_shader_interlock GL_NV_framebuffer_blit GL_NV_framebuffer_mixed_samples GL_NV_framebuffer_multisample GL_NV_generate_mipmap_sRGB GL_NV_geometry_shader_passthrough GL_NV_instanced_arrays GL_NV_internalformat_sample_query GL_NV_gpu_shader5 GL_NV_image_formats GL_NV_memory_attachment GL_NV_occlusion_query_samples GL_NV_non_square_matrices GL_NV_pack_subimage GL_NV_packed_float GL_NV_packed_float_linear GL_NV_path_rendering GL_NV_path_rendering_shared_edge GL_NV_pixel_buffer_object GL_NV_polygon_mode GL_NV_read_buffer GL_NV_read_depth GL_NV_read_depth_stencil GL_NV_read_stencil GL_NV_sample_locations GL_NV_sample_mask_override_coverage GL_NV_shader_atomic_fp16_vector GL_NV_shader_noperspective_interpolation GL_NV_shader_subgroup_partitioned GL_NV_shadow_samplers_array GL_NV_shadow_samplers_cube GL_NV_sRGB_formats GL_NV_stereo_view_rendering GL_NV_texture_array GL_NV_texture_barrier GL_NV_texture_border_clamp GL_NV_texture_compression_latc GL_NV_texture_compression_s3tc GL_NV_texture_compression_s3tc_update GL_NV_timer_query GL_NV_viewport_array GL_NV_viewport_array2 GL_NV_viewport_swizzle GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_OES_compressed_ETC1_RGB8_texture GL_EXT_compressed_ETC1_RGB8_sub_texture GL_OES_depth24 GL_OES_depth32 GL_OES_depth_texture GL_OES_depth_texture_cube_map GL_OES_copy_image GL_OES_draw_buffers_indexed GL_OES_draw_elements_base_vertex GL_OES_texture_border_clamp GL_OES_tessellation_point_size GL_OES_tessellation_shader GL_OES_texture_buffer GL_OES_geometry_point_size GL_OES_geometry_shader GL_OES_gpu_shader5 GL_OES_shader_io_blocks GL_OES_texture_view GL_OES_primitive_bounding_box GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_EGL_image_external_essl3 GL_OES_EGL_sync GL_OES_element_index_uint GL_OES_fbo_render_mipmap GL_OES_get_program_binary GL_OES_mapbuffer GL_OES_packed_depth_stencil GL_OES_rgb8_rgba8 GL_EXT_read_format_bgra GL_OES_sample_shading GL_OES_sample_variables GL_OES_shader_image_atomic GL_OES_shader_multisample_interpolation GL_OES_standard_derivatives GL_OES_surfaceless_context GL_OES_texture_cube_map_array GL_OES_texture_npot GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_texture_stencil8 GL_OES_texture_storage_multisample_2d_array GL_OES_vertex_array_object GL_OES_vertex_half_float GL_OES_viewport_array GL_OVR_multiview GL_OVR_multiview2 GL_OVR_multiview_multisampled_render_to_texture GL_ANDROID_extension_pack_es31a 
+00:00:00.041 [DEBUG] [render/allocator/allocator.c:98] Trying to create gbm allocator
+00:00:00.041 [DEBUG] [render/allocator/gbm.c:203] Created GBM allocator with backend nvidia
+00:00:00.041 [DEBUG] [render/allocator/gbm.c:206] Using DRM node /dev/dri/card1
+Pre-vulkan create
+00:00:00.041 [INFO] [wlroots/render/vulkan/renderer.c:1472] The vulkan renderer is only experimental and not expected to be ready for daily use
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_device_group_creation v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_display v23
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_external_fence_capabilities v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_external_memory_capabilities v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_external_semaphore_capabilities v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_get_display_properties2 v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_get_physical_device_properties2 v2
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_get_surface_capabilities2 v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_surface v25
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_surface_protected_capabilities v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_wayland_surface v6
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_xcb_surface v6
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_xlib_surface v6
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_EXT_acquire_xlib_display v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_EXT_debug_report v10
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_EXT_debug_utils v2
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_EXT_direct_mode_display v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_EXT_display_surface_counter v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_EXT_acquire_drm_display v1
+00:00:00.053 [DEBUG] [wlroots/render/vulkan/vulkan.c:123] Vulkan instance extension VK_KHR_portability_enumeration v1
+MESA-INTEL: warning: Performance support disabled, consider sysctl dev.i915.perf_stream_paranoid=0
+00:00:00.067 [INFO] [wlroots/render/vulkan/vulkan.c:282] Vulkan device: 'NVIDIA GeForce GTX 1060'
+00:00:00.067 [INFO] [wlroots/render/vulkan/vulkan.c:283]   Device type: 'discrete'
+00:00:00.067 [INFO] [wlroots/render/vulkan/vulkan.c:284]   Supported API version: 1.3.205
+00:00:00.067 [INFO] [wlroots/render/vulkan/vulkan.c:285]   Driver version: 515.228.0
+00:00:00.068 [INFO] [wlroots/render/vulkan/vulkan.c:282] Vulkan device: 'Intel(R) UHD Graphics 630 (CFL GT2)'
+00:00:00.068 [INFO] [wlroots/render/vulkan/vulkan.c:283]   Device type: 'integrated'
+00:00:00.068 [INFO] [wlroots/render/vulkan/vulkan.c:284]   Supported API version: 1.3.211
+00:00:00.068 [INFO] [wlroots/render/vulkan/vulkan.c:285]   Driver version: 22.1.3
+00:00:00.068 [INFO] [wlroots/render/vulkan/vulkan.c:366] Found matching Vulkan physical device: Intel(R) UHD Graphics 630 (CFL GT2)
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_8bit_storage v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_16bit_storage v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_bind_memory2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_buffer_device_address v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_copy_commands2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_create_renderpass2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_dedicated_allocation v3
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_deferred_host_operations v4
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_depth_stencil_resolve v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_descriptor_update_template v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_device_group v4
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_draw_indirect_count v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_driver_properties v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_dynamic_rendering v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_external_fence v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_external_fence_fd v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_external_memory v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_external_memory_fd v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_external_semaphore v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_external_semaphore_fd v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_format_feature_flags2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_get_memory_requirements2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_image_format_list v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_imageless_framebuffer v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_incremental_present v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_maintenance1 v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_maintenance2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_maintenance3 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_maintenance4 v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_multiview v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_pipeline_executable_properties v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_push_descriptor v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_relaxed_block_layout v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_sampler_mirror_clamp_to_edge v3
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_sampler_ycbcr_conversion v14
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_separate_depth_stencil_layouts v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_atomic_int64 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_clock v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_draw_parameters v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_float16_int8 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_float_controls v4
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_integer_dot_product v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_non_semantic_info v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_subgroup_extended_types v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_subgroup_uniform_control_flow v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_shader_terminate_invocation v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_spirv_1_4 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_storage_buffer_storage_class v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_swapchain v70
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_swapchain_mutable_format v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_synchronization2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_timeline_semaphore v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_uniform_buffer_standard_layout v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_variable_pointers v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_vulkan_memory_model v3
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_workgroup_memory_explicit_layout v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_KHR_zero_initialize_workgroup_memory v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_4444_formats v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_buffer_device_address v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_calibrated_timestamps v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_color_write_enable v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_conditional_rendering v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_conservative_rasterization v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_custom_border_color v12
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_depth_clip_control v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_depth_clip_enable v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_descriptor_indexing v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_display_control v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_extended_dynamic_state v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_extended_dynamic_state2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_external_memory_dma_buf v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_external_memory_host v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_fragment_shader_interlock v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_global_priority v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_global_priority_query v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_host_query_reset v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_image_2d_view_of_3d v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_image_drm_format_modifier v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_image_robustness v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_index_type_uint8 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_inline_uniform_block v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_line_rasterization v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_memory_budget v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_multi_draw v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_pci_bus_info v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_physical_device_drm v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_pipeline_creation_cache_control v3
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_pipeline_creation_feedback v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_post_depth_coverage v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_primitive_topology_list_restart v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_private_data v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_provoking_vertex v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_queue_family_foreign v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_robustness2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_sample_locations v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_sampler_filter_minmax v2
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_scalar_block_layout v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_separate_stencil_usage v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_shader_atomic_float v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_shader_atomic_float2 v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_shader_demote_to_helper_invocation v1
+00:00:00.068 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_shader_stencil_export v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_shader_subgroup_ballot v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_shader_subgroup_vote v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_shader_viewport_index_layer v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_subgroup_size_control v2
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_texel_buffer_alignment v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_tooling_info v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_transform_feedback v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_vertex_attribute_divisor v3
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_EXT_ycbcr_image_arrays v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_GOOGLE_decorate_string v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_GOOGLE_hlsl_functionality1 v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_GOOGLE_user_type v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_INTEL_shader_integer_functions2 v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_NV_compute_shader_derivatives v1
+00:00:00.069 [DEBUG] [wlroots/render/vulkan/vulkan.c:397] Vulkan device extension VK_VALVE_mutable_descriptor_type v1
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:229] vulkan: Checking support for format AR24 (0x34325241)
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:257]   drmFormatModifierCount: 3
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x0: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000001: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000002: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:285]  >> shmtex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:229] vulkan: Checking support for format XR24 (0x34325258)
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:257]   drmFormatModifierCount: 3
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x0: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000001: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000002: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:285]  >> shmtex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:229] vulkan: Checking support for format XB24 (0x34324258)
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:257]   drmFormatModifierCount: 3
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x0: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000001: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000002: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:285]  >> shmtex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:229] vulkan: Checking support for format AB24 (0x34324241)
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:257]   drmFormatModifierCount: 3
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x0: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000001: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:137]   modifier: 0x100000000000002: features 0x1dd81, 1 planes
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:173]     >> rendering: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:213]     >> dmatex: supported
+00:00:00.071 [DEBUG] [wlroots/render/vulkan/pixel_format.c:285]  >> shmtex: supported
+Post-vulkan create
+00:00:00.073 [DEBUG] [render/allocator/allocator.c:98] Trying to create gbm allocator
+00:00:00.086 [DEBUG] [render/allocator/gbm.c:203] Created GBM allocator with backend drm
+00:00:00.086 [DEBUG] [render/allocator/gbm.c:206] Using DRM node /dev/dri/card0
+00:00:00.086 [DEBUG] [xcursor/wlr_xcursor.c:243] Loaded cursor theme 'default' at size 24 (13 available cursors)
+00:00:00.086 [DEBUG] [backend/libinput/backend.c:87] Starting libinput backend
+00:00:00.579 [DEBUG] [backend/libinput/events.c:95] Added Video Bus [0:6]
+00:00:00.593 [DEBUG] [backend/libinput/events.c:95] Added Video Bus [0:6]
+00:00:00.607 [DEBUG] [backend/libinput/events.c:95] Added Power Button [0:1]
+00:00:00.617 [DEBUG] [backend/libinput/events.c:95] Added Lid Switch [0:5]
+00:00:00.617 [DEBUG] [backend/libinput/switch.c:20] Created switch for device Lid Switch
+00:00:00.617 [DEBUG] [backend/libinput/events.c:95] Added Sleep Button [0:3]
+00:00:00.623 [DEBUG] [backend/libinput/events.c:95] Added Integrated Camera: Integrated C [1226:28784]
+00:00:00.628 [DEBUG] [backend/libinput/events.c:95] Added SYNA2B46:00 06CB:CD5F Mouse [1739:52575]
+00:00:00.628 [DEBUG] [backend/libinput/events.c:95] Added SYNA2B46:00 06CB:CD5F Touchpad [1739:52575]
+00:00:00.628 [DEBUG] [backend/libinput/events.c:95] Added Ideapad extra buttons [0:0]
+00:00:00.632 [DEBUG] [backend/libinput/events.c:95] Added AT Translated Set 2 keyboard [1:1]
+00:00:00.636 [DEBUG] [backend/libinput/backend.c:133] libinput successfully initialized
+00:00:00.636 [INFO] [backend/drm/drm.c:1185] Scanning DRM connectors on /dev/dri/card0
+00:00:00.638 [INFO] [backend/drm/drm.c:1251] Found connector 'eDP-1'
+00:00:00.638 [INFO] [backend/drm/drm.c:1287] 'eDP-1' connected
+00:00:00.638 [DEBUG] [backend/drm/drm.c:1288] Current CRTC: 51
+00:00:00.638 [INFO] [backend/drm/drm.c:1298] Physical size: 340x190
+00:00:00.638 [INFO] [backend/drm/drm.c:1338] Detected modes:
+00:00:00.638 [INFO] [backend/drm/drm.c:1360]   1920x1080@60027 (preferred)
+00:00:00.638 [DEBUG] [backend/drm/drm.c:1047] Reallocating CRTCs
+00:00:00.638 [DEBUG] [backend/drm/drm.c:1058] State before reallocation:
+00:00:00.638 [DEBUG] [backend/drm/drm.c:1064]   'eDP-1' crtc=0 status=1 desired_enabled=1
+00:00:00.638 [DEBUG] [backend/drm/drm.c:1115] State after reallocation:
+00:00:00.638 [DEBUG] [backend/drm/drm.c:1122]   'eDP-1' crtc=0 status=1 desired_enabled=1
+00:00:00.638 [INFO] [backend/drm/drm.c:1412] connector eDP-1: Requesting modeset
+00:00:00.638 [DEBUG] [backend/drm/drm.c:492] connector eDP-1: Can't enable an output without a buffer
+00:00:00.638 [DEBUG] [types/output/render.c:192] Attaching empty buffer to output for modeset
+00:00:00.638 [DEBUG] [types/output/render.c:73] Choosing primary buffer format 0x34325258 for output 'eDP-1'
+00:00:00.638 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
+00:00:00.639 [DEBUG] [render/allocator/gbm.c:140] Allocated 1920x1080 GBM buffer (format 0x34325258, modifier 0x100000000000002)
+00:00:00.639 [DEBUG] [wlroots/render/vulkan/renderer.c:433] vulkan create_render_buffer: XR24, 1920x1080
+00:00:00.639 [DEBUG] [wlroots/render/vulkan/texture.c:386] vulkan_import_dmabuf: XR24 (mod 100000000000002), 1920x1080, 1 planes
+00:00:00.643 [INFO] [backend/drm/drm.c:708] connector eDP-1: Modesetting with '1920x1080@60027mHz'
+00:00:00.646 [INFO] [backend/drm/drm.c:1185] Scanning DRM connectors on /dev/dri/card1
+00:00:00.646 [INFO] [backend/drm/drm.c:1251] Found connector 'DP-1'
+00:00:00.646 [INFO] [backend/drm/drm.c:1251] Found connector 'HDMI-A-1'
+00:00:00.646 [INFO] [backend/drm/drm.c:1251] Found connector 'DP-2'
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1047] Reallocating CRTCs
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1058] State before reallocation:
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1064]   'DP-1' crtc=-1 status=0 desired_enabled=0
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1064]   'HDMI-A-1' crtc=-1 status=0 desired_enabled=0
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1064]   'DP-2' crtc=-1 status=0 desired_enabled=0
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1115] State after reallocation:
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1122]   'DP-1' crtc=-1 status=0 desired_enabled=0
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1122]   'HDMI-A-1' crtc=-1 status=0 desired_enabled=0
+00:00:00.646 [DEBUG] [backend/drm/drm.c:1122]   'DP-2' crtc=-1 status=0 desired_enabled=0
+00:00:00.647 [INFO] [tinywl.c:1439] Running Wayland compositor on WAYLAND_DISPLAY=wayland-0
+00:00:00.647 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
+00:00:00.649 [DEBUG] [render/allocator/gbm.c:140] Allocated 1920x1080 GBM buffer (format 0x34325258, modifier 0x100000000000002)
+00:00:00.649 [DEBUG] [wlroots/render/vulkan/renderer.c:433] vulkan create_render_buffer: XR24, 1920x1080
+00:00:00.649 [DEBUG] [wlroots/render/vulkan/texture.c:386] vulkan_import_dmabuf: XR24 (mod 100000000000002), 1920x1080, 1 planes
 info: main.c:421: version: 1.12.1 -pgo +ime +graphemes -assertions
 info: main.c:428: arch: Linux x86_64/64-bit
 info: main.c:440: locale: en_US.utf8
@@ -113,38 +298,344 @@ warn: wayland.c:1260: no XDG activation support; bell.urgent will fall back to c
 warn: wayland.c:1272: text input interface not implemented by compositor; IME will be disabled
 info: wayland.c:1286: eDP-1: 1920x1080+0x0@60Hz 0x06FB 15.33" scale=1 PPI=147x154 (physical) PPI=147x154 (logical), DPI=143.66
 warn: wayland.c:1453: no decoration manager available - using CSDs unconditionally
+info: fcft.c:839: /usr/share/fonts/dejavu/DejaVuSansMono.ttf: size=7.00pt/14px, dpi=143.66
 info: fcft.c:839: /usr/share/fonts/dejavu/DejaVuSansMono-Bold.ttf: size=7.00pt/14px, dpi=143.66
 info: fcft.c:839: /usr/share/fonts/dejavu/DejaVuSansMono-BoldOblique.ttf: size=7.00pt/14px, dpi=143.66
-info: fcft.c:839: /usr/share/fonts/dejavu/DejaVuSansMono.ttf: size=7.00pt/14px, dpi=143.66
 info: fcft.c:839: /usr/share/fonts/dejavu/DejaVuSansMono-Oblique.ttf: size=7.00pt/14px, dpi=143.66
 info: terminal.c:699: cell width=8, height=17
 info: terminal.c:587: using 12 rendering threads
-00:00:00.698 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a552448ba0 (res 0x55a5525863b0)
-00:00:00.698 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a5524497c0 (res 0x55a552587250)
-00:00:00.698 [DEBUG] [types/xdg_shell/wlr_xdg_surface.c:414] new xdg_surface 0x55a5523bcae0 (res 0x55a552585870)
-00:00:00.698 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a55244b050 (res 0x55a552585990)
+00:00:00.657 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b5882d70 (res 0x5579b59e0020)
+00:00:00.657 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b588acc0 (res 0x5579b59d6120)
+00:00:00.657 [DEBUG] [types/xdg_shell/wlr_xdg_surface.c:414] new xdg_surface 0x5579b49de2d0 (res 0x5579b59d5ca0)
+00:00:00.657 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b588bff0 (res 0x5579b59d6a20)
 info: fcft.c:839: /usr/share/fonts/dejavu/DejaVuSansMono.ttf: size=12.48pt/13px, dpi=75.00
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a552478270 (res 0x55a552581080)
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a552478bd0 (res 0x55a552580f60)
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a552477590 (res 0x55a5525832d0)
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a5524725e0 (res 0x55a5525831b0)
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a55247f1d0 (res 0x55a552582310)
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a55247d8d0 (res 0x55a552582670)
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a5524730c0 (res 0x55a552590070)
-00:00:00.706 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x55a55246be00 (res 0x55a55258fd10)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b5887d50 (res 0x5579b59d70e0)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b5885e00 (res 0x5579b595f7e0)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b5a32050 (res 0x5579b59a18b0)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b58850a0 (res 0x5579b5921b70)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b587c510 (res 0x5579b5920970)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b58731e0 (res 0x5579b592d5f0)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b58557b0 (res 0x5579b592f0f0)
+00:00:00.666 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b584f480 (res 0x5579b5996cd0)
+00:00:00.666 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 700x474
+00:00:00.666 [DEBUG] [wlroots/render/vulkan/renderer.c:298] Created new vk staging buffer of size 2654400
+00:00:00.668 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 710x5
+00:00:00.668 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 710x5
+00:00:00.668 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x500
+00:00:00.668 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x500
+00:00:00.668 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 700x26
+00:00:00.668 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 26x26
+00:00:00.668 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 26x26
+00:00:00.669 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 26x26
+00:00:02.843 [DEBUG] [types/wlr_surface.c:748] New wlr_surface 0x5579b5a5cde0 (res 0x5579b5a0d1c0)
+00:00:02.843 [DEBUG] [types/xdg_shell/wlr_xdg_surface.c:414] new xdg_surface 0x5579b5a5d120 (res 0x5579b5a0d2e0)
+00:00:02.886 [DEBUG] [wlroots/render/vulkan/texture.c:386] vulkan_import_dmabuf: AR24 (mod 3000000004fe014), 500x500, 1 planes
+00:00:02.886 [ERROR] [wlroots/render/vulkan/texture.c:403] Format 34325241 (AR24) can't be used with modifier 3000000004fe014
+00:00:02.886 [INFO] [wayland] error in client communication (pid 19760)
 info: wayland.c:1624: cursor theme: (null), size: 24, scale: 1
-00:00:01.378 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
-00:00:01.378 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
-00:00:01.378 [DEBUG] [render/gles2/renderer.c:142] Created GL FBO for buffer 256x256
-00:00:02.238 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
-00:00:02.239 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
-00:00:02.239 [DEBUG] [render/gles2/renderer.c:142] Created GL FBO for buffer 256x256
-00:00:02.245 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
-00:00:02.245 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
-00:00:02.245 [DEBUG] [render/gles2/renderer.c:142] Created GL FBO for buffer 256x256
-00:00:02.267 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
-00:00:02.268 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
-00:00:02.268 [DEBUG] [render/gles2/renderer.c:142] Created GL FBO for buffer 256x256
+00:00:20.072 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 9x16
+00:00:20.072 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
+00:00:20.073 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
+00:00:20.073 [DEBUG] [wlroots/render/vulkan/renderer.c:433] vulkan create_render_buffer: AR24, 256x256
+00:00:20.073 [DEBUG] [wlroots/render/vulkan/texture.c:386] vulkan_import_dmabuf: AR24 (mod 0), 256x256, 1 planes
+00:00:20.481 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 16x15
+00:00:20.481 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
+00:00:20.482 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
+00:00:20.482 [DEBUG] [wlroots/render/vulkan/renderer.c:433] vulkan create_render_buffer: AR24, 256x256
+00:00:20.482 [DEBUG] [wlroots/render/vulkan/texture.c:386] vulkan_import_dmabuf: AR24 (mod 0), 256x256, 1 planes
+00:00:20.488 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.489 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
+00:00:20.489 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
+00:00:20.489 [DEBUG] [wlroots/render/vulkan/renderer.c:433] vulkan create_render_buffer: AR24, 256x256
+00:00:20.489 [DEBUG] [wlroots/render/vulkan/texture.c:386] vulkan_import_dmabuf: AR24 (mod 0), 256x256, 1 planes
+00:00:20.495 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.496 [DEBUG] [render/swapchain.c:105] Allocating new swapchain buffer
+00:00:20.496 [DEBUG] [render/allocator/gbm.c:140] Allocated 256x256 GBM buffer (format 0x34325241, modifier 0x0)
+00:00:20.496 [DEBUG] [wlroots/render/vulkan/renderer.c:433] vulkan create_render_buffer: AR24, 256x256
+00:00:20.496 [DEBUG] [wlroots/render/vulkan/texture.c:386] vulkan_import_dmabuf: AR24 (mod 0), 256x256, 1 planes
+00:00:20.503 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.510 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.517 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.525 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.532 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.539 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.547 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.555 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.561 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.730 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.738 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.745 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.752 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.760 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.767 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.774 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.782 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.789 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.797 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.805 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.811 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.819 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.826 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.833 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.841 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.848 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.855 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.863 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.870 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.877 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.885 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.892 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.899 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.907 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.914 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.921 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.929 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.936 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.944 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.951 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.958 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.966 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.973 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.980 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.988 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:20.995 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:21.002 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:21.010 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:21.017 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:21.069 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 9x16
+00:00:21.076 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:21.805 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 16x15
+00:00:22.744 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 713x474
+00:00:22.745 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 723x5
+00:00:22.745 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 723x5
+00:00:22.746 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 713x26
+00:00:22.761 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 737x474
+00:00:22.762 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 747x5
+00:00:22.763 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 747x5
+00:00:22.764 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 737x26
+00:00:22.773 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 789x474
+00:00:22.774 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 799x5
+00:00:22.774 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 799x5
+00:00:22.774 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 789x26
+00:00:22.796 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 843x474
+00:00:22.797 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 853x5
+00:00:22.799 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 853x5
+00:00:22.800 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 843x26
+00:00:22.813 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 897x474
+00:00:22.814 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 907x5
+00:00:22.815 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 907x5
+00:00:22.816 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 897x26
+00:00:22.823 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 957x474
+00:00:22.823 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 967x5
+00:00:22.824 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 967x5
+00:00:22.824 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 957x26
+00:00:22.846 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 988x474
+00:00:22.847 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 998x5
+00:00:22.847 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 998x5
+00:00:22.848 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 988x26
+00:00:22.864 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1001x474
+00:00:22.866 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1011x5
+00:00:22.867 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1011x5
+00:00:22.868 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1001x26
+00:00:22.881 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1009x474
+00:00:22.883 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1019x5
+00:00:22.884 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1019x5
+00:00:22.885 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1009x26
+00:00:23.078 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1020x474
+00:00:23.079 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1030x5
+00:00:23.080 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1030x5
+00:00:23.081 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1020x26
+00:00:23.099 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1089x474
+00:00:23.101 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1099x5
+00:00:23.101 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1099x5
+00:00:23.102 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1089x26
+00:00:23.117 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1209x474
+00:00:23.119 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1219x5
+00:00:23.119 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1219x5
+00:00:23.120 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1209x26
+00:00:23.130 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1319x474
+00:00:23.131 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1329x5
+00:00:23.132 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1329x5
+00:00:23.133 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1319x26
+00:00:23.133 [DEBUG] [wlroots/render/vulkan/renderer.c:298] Created new vk staging buffer of size 5308800
+00:00:23.144 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1383x474
+00:00:23.145 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1393x5
+00:00:23.147 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1393x5
+00:00:23.147 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1383x26
+00:00:23.161 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1431x474
+00:00:23.162 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1441x5
+00:00:23.163 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1441x5
+00:00:23.164 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1431x26
+00:00:23.177 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1450x474
+00:00:23.179 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1460x5
+00:00:23.180 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1460x5
+00:00:23.180 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1450x26
+00:00:23.201 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1461x474
+00:00:23.203 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1471x5
+00:00:23.203 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1471x5
+00:00:23.204 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1461x26
+00:00:23.386 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1462x474
+00:00:23.386 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1472x5
+00:00:23.387 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1472x5
+00:00:23.387 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1462x26
+00:00:23.392 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1468x474
+00:00:23.393 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1478x5
+00:00:23.393 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1478x5
+00:00:23.394 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1468x26
+00:00:23.415 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1498x474
+00:00:23.416 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1508x5
+00:00:23.416 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1508x5
+00:00:23.417 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1498x26
+00:00:23.424 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1533x474
+00:00:23.425 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1543x5
+00:00:23.426 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1543x5
+00:00:23.426 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1533x26
+00:00:23.441 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1564x474
+00:00:23.442 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1574x5
+00:00:23.443 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1574x5
+00:00:23.443 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1564x26
+00:00:23.459 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1579x474
+00:00:23.460 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1589x5
+00:00:23.461 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1589x5
+00:00:23.461 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1579x26
+00:00:23.477 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1589x474
+00:00:23.478 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1599x5
+00:00:23.479 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1599x5
+00:00:23.480 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1589x26
+00:00:23.495 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1600x474
+00:00:23.496 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1610x5
+00:00:23.497 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1610x5
+00:00:23.498 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1600x26
+00:00:23.511 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x474
+00:00:23.513 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1621x5
+00:00:23.514 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1621x5
+00:00:23.514 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x26
+00:00:23.670 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.678 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.685 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.692 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.700 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.707 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.714 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.722 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.729 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.736 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.744 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.751 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.758 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.766 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.773 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.780 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.788 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.795 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.803 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.810 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.817 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.825 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.832 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.839 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.847 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.854 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.861 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.869 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.876 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.883 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.891 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.898 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:23.906 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.045 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.052 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.060 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.067 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.075 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.089 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.141 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.148 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.155 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.163 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.170 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.177 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.185 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:24.193 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 15x16
+00:00:24.739 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x481
+00:00:24.740 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x507
+00:00:24.740 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x507
+00:00:24.758 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x504
+00:00:24.758 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x530
+00:00:24.759 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x530
+00:00:24.775 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x529
+00:00:24.776 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x555
+00:00:24.777 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x555
+00:00:24.802 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x560
+00:00:24.805 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x586
+00:00:24.805 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x586
+00:00:24.825 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x590
+00:00:24.828 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x616
+00:00:24.829 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x616
+00:00:24.854 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x646
+00:00:24.857 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x672
+00:00:24.858 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x672
+00:00:24.879 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x668
+00:00:24.883 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x694
+00:00:24.883 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x694
+00:00:24.895 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x723
+00:00:24.896 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x749
+00:00:24.897 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x749
+00:00:24.925 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x739
+00:00:24.929 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x765
+00:00:24.929 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x765
+00:00:24.946 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x765
+00:00:24.947 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x791
+00:00:24.948 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x791
+00:00:24.975 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x768
+00:00:24.979 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x794
+00:00:24.980 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x794
+00:00:25.007 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x771
+00:00:25.011 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x797
+00:00:25.011 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x797
+00:00:25.149 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x777
+00:00:25.150 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x803
+00:00:25.151 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x803
+00:00:25.159 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x785
+00:00:25.161 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x811
+00:00:25.162 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x811
+00:00:25.193 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x801
+00:00:25.197 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x827
+00:00:25.197 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x827
+00:00:25.226 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x855
+00:00:25.226 [DEBUG] [wlroots/render/vulkan/renderer.c:298] Created new vk staging buffer of size 11019240
+00:00:25.238 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x881
+00:00:25.239 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x881
+00:00:25.266 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x881
+00:00:25.270 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x907
+00:00:25.270 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x907
+00:00:25.286 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x902
+00:00:25.288 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x928
+00:00:25.288 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x928
+00:00:25.301 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x916
+00:00:25.303 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x942
+00:00:25.303 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x942
+00:00:25.315 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x922
+00:00:25.317 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x948
+00:00:25.318 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x948
+00:00:25.331 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x928
+00:00:25.333 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x954
+00:00:25.333 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x954
+00:00:25.358 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x937
+00:00:25.360 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x963
+00:00:25.360 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x963
+00:00:25.390 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x956
+00:00:25.392 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x982
+00:00:25.392 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x982
+00:00:25.430 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x966
+00:00:25.435 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x992
+00:00:25.435 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x992
+00:00:25.437 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:25.444 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:25.449 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 10x16
+00:00:25.458 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 1611x969
+00:00:25.461 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x995
+00:00:25.461 [DEBUG] [wlroots/render/vulkan/texture.c:225] vulkan_texture_from_pixels: AR24, 5x995
  err: wayland.c:1163: failed to read events from the Wayland socket: Broken pipe
  err: wayland.c:1690: failed to roundtrip Wayland display: Broken pipe
  err: wayland.c:1690: failed to roundtrip Wayland display: Broken pipe
@@ -152,4 +643,6 @@ info: wayland.c:1624: cursor theme: (null), size: 24, scale: 1
 warn: terminal.c:1769: slave exited with signal 1 (Hangup)
  err: wayland.c:1655: failed to flush wayland socket: Broken pipe
 info: main.c:680: goodbye
-00:00:05.717 [DEBUG] [backend/drm/drm.c:1017] connector eDP-1: De-allocating CRTC 0
+00:07:49.749 [DEBUG] [backend/drm/drm.c:1017] connector eDP-1: De-allocating CRTC 0
+00:07:50.847 [ERROR] [EGL] command: eglDestroyContext, error: EGL_BAD_DISPLAY (0x3008), message: "(null)"
+00:07:50.847 [ERROR] [EGL] command: eglTerminate, error: EGL_BAD_DISPLAY (0x3008), message: "(null)"

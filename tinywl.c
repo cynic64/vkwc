@@ -1302,7 +1302,10 @@ int main(int argc, char *argv[]) {
                 exit(1);
         }
 
+        fprintf(stderr, "Pre-vulkan create\n");
         server.renderer = wlr_vk_renderer_create_with_drm_fd(drm_fd);
+        fprintf(stderr, "Post-vulkan create\n");
+        fflush(stdout);
         wlr_renderer_init_wl_display(server.renderer, server.wl_display);
 
         /* Autocreates an allocator for us.
