@@ -18,7 +18,7 @@ xdg-shell-protocol.c: xdg-shell-protocol.h
 	$(WAYLAND_SCANNER) private-code \
 		$(WAYLAND_PROTOCOLS)/stable/xdg-shell/xdg-shell.xml $@
 
-tinywl: tinywl.c xdg-shell-protocol.h xdg-shell-protocol.c
+tinywl: tinywl.c xdg-shell-protocol.h xdg-shell-protocol.c wlroots/render/vulkan/texture.c
 	$(CC) $(CFLAGS) \
 	        -lm \
 		-g -pedantic -Wall -I. \
