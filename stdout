@@ -1,0 +1,2507 @@
+Outputting frame!
+iterator called
+Outputting frame!
+iterator called
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 26, 700, 500)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 0, 700, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (622, 0, 648, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (648, 0, 674, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (674, 0, 700, 26)
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (700, 0, 705, 500)
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 500, 705, 505)
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 26, 700, 500)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 0, 700, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (622, 0, 648, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (648, 0, 674, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (674, 0, 700, 26)
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (700, 0, 705, 500)
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 500, 705, 505)
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (2, 28, 698, 45)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 0, 700, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (622, 0, 648, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (648, 0, 674, 26)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (674, 0, 700, 26)
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (700, 0, 705, 500)
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (0, 500, 705, 505)
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 0, 26
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 0, 0
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 622, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 648, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 674, 0
+		width: 26, height: 26, role: wl_subsurface
+	Surface at -5, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 700, 0
+		width: 5, height: 500, role: wl_subsurface
+	Surface at -5, -5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at -5, 500
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 6, 29
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 6, 3
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 628, 3
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 654, 3
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 680, 3
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 1, 3
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 706, 3
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 1, -2
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 1, 503
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (6, 29, 706, 503)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (6, 3, 706, 29)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (628, 3, 654, 29)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (654, 3, 680, 29)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (680, 3, 706, 29)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (1, 3, 6, 503)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (706, 3, 711, 503)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (1, 0, 711, 3)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (1, 503, 711, 508)
+Outputting frame!
+	Surface at 27, 36
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 27, 10
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 649, 10
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 675, 10
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 701, 10
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 22, 10
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 727, 10
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 22, 5
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 22, 510
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (27, 36, 727, 510)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (27, 10, 727, 36)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (649, 10, 675, 36)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (675, 10, 701, 36)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (701, 10, 727, 36)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (22, 10, 27, 510)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (727, 10, 732, 510)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (22, 5, 732, 10)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (22, 510, 732, 515)
+Outputting frame!
+	Surface at 57, 49
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 57, 23
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 679, 23
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 705, 23
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 731, 23
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 52, 23
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 757, 23
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 52, 18
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 52, 523
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (57, 49, 757, 523)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (57, 23, 757, 49)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (679, 23, 705, 49)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (705, 23, 731, 49)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (731, 23, 757, 49)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (52, 23, 57, 523)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (757, 23, 762, 523)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (52, 18, 762, 23)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (52, 523, 762, 528)
+Outputting frame!
+	Surface at 103, 73
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 103, 47
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 725, 47
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 751, 47
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 777, 47
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 98, 47
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 803, 47
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 98, 42
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 98, 547
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (103, 73, 803, 547)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (103, 47, 803, 73)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (725, 47, 751, 73)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (751, 47, 777, 73)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (777, 47, 803, 73)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (98, 47, 103, 547)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (803, 47, 808, 547)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (98, 42, 808, 47)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (98, 547, 808, 552)
+Outputting frame!
+	Surface at 124, 81
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 124, 55
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 746, 55
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 772, 55
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 798, 55
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 119, 55
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 824, 55
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 119, 50
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 119, 555
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (124, 81, 824, 555)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (124, 55, 824, 81)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (746, 55, 772, 81)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (772, 55, 798, 81)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (798, 55, 824, 81)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (119, 55, 124, 555)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (824, 55, 829, 555)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (119, 50, 829, 55)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (119, 555, 829, 560)
+Outputting frame!
+	Surface at 145, 91
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 145, 65
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 767, 65
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 793, 65
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 819, 65
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 140, 65
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 845, 65
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 140, 60
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 140, 565
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (145, 91, 845, 565)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (145, 65, 845, 91)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (767, 65, 793, 91)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (793, 65, 819, 91)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (819, 65, 845, 91)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (140, 65, 145, 565)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (845, 65, 850, 565)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (140, 60, 850, 65)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (140, 565, 850, 570)
+Outputting frame!
+	Surface at 164, 101
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 164, 75
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 786, 75
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 812, 75
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 838, 75
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 159, 75
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 864, 75
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 159, 70
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 159, 575
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (164, 101, 864, 575)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (164, 75, 864, 101)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (786, 75, 812, 101)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (812, 75, 838, 101)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (838, 75, 864, 101)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (159, 75, 164, 575)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (864, 75, 869, 575)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (159, 70, 869, 75)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (159, 575, 869, 580)
+Outputting frame!
+	Surface at 238, 150
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 238, 124
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 860, 124
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 886, 124
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 912, 124
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 233, 124
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 938, 124
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 233, 119
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 233, 624
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (238, 150, 938, 624)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (238, 124, 938, 150)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (860, 124, 886, 150)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (886, 124, 912, 150)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (912, 124, 938, 150)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (233, 124, 238, 624)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (938, 124, 943, 624)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (233, 119, 943, 124)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (233, 624, 943, 629)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 173, 969, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 173, 969, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (271, 175, 967, 192)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (271, 175, 967, 192)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (271, 175, 967, 192)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (271, 175, 967, 192)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (271, 175, 967, 192)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+iterator called
+iterator called
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (271, 175, 967, 192)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (269, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (891, 147, 917, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (917, 147, 943, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (943, 147, 969, 173)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 147, 269, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (969, 147, 974, 647)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 142, 974, 147)
+iterator called
+iterator called
+Rendering texture at (x1, y1, x2, y2) (264, 647, 974, 652)
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+Outputting frame!
+	Surface at 269, 173
+		width: 700, height: 474, role: xdg_toplevel
+	Surface at 269, 147
+		width: 700, height: 26, role: wl_subsurface
+	Surface at 891, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 917, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 943, 147
+		width: 26, height: 26, role: wl_subsurface
+	Surface at 264, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 969, 147
+		width: 5, height: 500, role: wl_subsurface
+	Surface at 264, 142
+		width: 710, height: 5, role: wl_subsurface
+	Surface at 264, 647
+		width: 710, height: 5, role: wl_subsurface
+You pressed a modifier!
