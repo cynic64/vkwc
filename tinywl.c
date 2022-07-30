@@ -33,6 +33,9 @@
 #include "wlroots/include/wlr/util/log.h"
 #include "wlroots/include/wlr/util/region.h"
 #include "wlroots/include/wlr/render/vulkan.h"
+#include "wlroots/include/wlr/types/wlr_xcursor_manager.h"
+#include "wlroots/include/wlr/types/wlr_xcursor_manager.h"
+#include "wlroots/include/wlr/xwayland.h"
 
 // Stuff I had to clone wlroots for (not in include/wlr)
 #include "wlroots/include/render/vulkan.h"
@@ -83,6 +86,8 @@ struct tinywl_server {
         struct wlr_output_layout *output_layout;
         struct wl_list outputs;
         struct wl_listener new_output;
+
+        struct wl_listener new_xwayland_surface;
 };
 
 struct tinywl_output {
@@ -103,6 +108,15 @@ struct tinywl_view {
         struct wl_listener request_move;
         struct wl_listener request_resize;
         int x, y;
+};
+
+struct tinywl_xwayland_view {
+	struct tinywl_view view;
+	struct wlr_xwayland_surface *xwayland_surface;
+	struct wl_listener destroy;
+	struct wl_listener unmap;
+	struct wl_listener map;
+	struct wl_listener request_fullscreen;
 };
 
 struct tinywl_keyboard {
@@ -1259,6 +1273,37 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
         wl_signal_add(&toplevel->events.request_resize, &view->request_resize);
 }
 
+static void handle_xwayland_surface_map(struct wl_listener *listener, void *data) {
+        printf("Mapping xwayland surface\n");
+        fflush(stdout);
+
+        struct tinywl_xwayland_view *xwayland_view = wl_container_of(listener, xwayland_view, map);
+        struct tinywl_view *view = &xwayland_view->view;
+        struct wlr_surface *surface = xwayland_view->xwayland_surface->surface;
+
+        view->scene_node = wlr_scene_subsurface_tree_create(&view->server->scene->node, surface);
+
+        wl_list_insert(&view->server->views, &view->link);
+}
+
+static void handle_xwayland_surface_new(struct wl_listener *listener, void *data) {
+        printf("New xwayland surface!!!\n");
+        fflush(stdout);
+
+        struct tinywl_server *server = wl_container_of(listener, server, new_xwayland_surface);
+        struct wlr_xwayland_surface *xwayland_surface = data;
+
+        struct tinywl_xwayland_view *xwayland_view = calloc(1, sizeof(struct tinywl_xwayland_view));
+        assert(xwayland_view);
+
+        xwayland_view->xwayland_surface = xwayland_surface;
+
+        xwayland_view->view.server = server;
+
+        xwayland_view->map.notify = handle_xwayland_surface_map;
+        wl_signal_add(&xwayland_surface->events.map, &xwayland_view->map);
+}
+
 int main(int argc, char *argv[]) {
         wlr_log_init(WLR_DEBUG, NULL);
         char *startup_cmd = NULL;
@@ -1317,7 +1362,7 @@ int main(int argc, char *argv[]) {
          * to dig your fingers in and play with their behavior if you want. Note that
          * the clients cannot set the selection directly without compositor approval,
          * see the handling of the request_set_selection event below.*/
-        wlr_compositor_create(server.wl_display, server.renderer);
+        struct wlr_compositor *compositor = wlr_compositor_create(server.wl_display, server.renderer);
         wlr_data_device_manager_create(server.wl_display);
 
         /* Creates an output layout, which a wlroots utility for working with an
@@ -1404,6 +1449,24 @@ int main(int argc, char *argv[]) {
         server.request_set_selection.notify = seat_request_set_selection;
         wl_signal_add(&server.seat->events.request_set_selection,
                         &server.request_set_selection);
+
+        // Set up xwayland
+        struct wlr_xwayland *xwayland = wlr_xwayland_create(server.wl_display, compositor, true);
+        if (!xwayland) {
+                fprintf(stderr, "Cannot create XWayland server!\n");
+                exit(1);
+        };
+
+        server.new_xwayland_surface.notify = handle_xwayland_surface_new;
+        wl_signal_add(&xwayland->events.new_surface, &server.new_xwayland_surface);
+
+        if (setenv("DISPLAY", xwayland->display_name, true) < 0) {
+                fprintf(stderr, "Couldn't set DISPLAY for XWayland!\n");
+                exit(1);
+        } else {
+                printf("XWayland on DISPLAY=%s\n", xwayland->display_name);
+                fflush(stdout);
+        }
 
         /* Add a Unix socket to the Wayland display. */
         const char *socket = wl_display_add_socket_auto(server.wl_display);
