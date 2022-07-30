@@ -34,7 +34,7 @@
 #include "wlroots/include/wlr/util/region.h"
 #include "wlroots/include/wlr/render/vulkan.h"
 
-// Stuff I had to clone wlroots for
+// Stuff I had to clone wlroots for (not in include/wlr)
 #include "wlroots/include/render/vulkan.h"
 
 struct my_vert_pcr_data {
@@ -154,9 +154,6 @@ static void focus_view(struct tinywl_view *view, struct wlr_surface *surface) {
 
 static void keyboard_handle_modifiers(
                 struct wl_listener *listener, void *data) {
-        printf("You pressed a modifier!\n");
-        fflush(stdout);
-
         /* This event is raised when a modifier key, such as shift or alt, is
          * pressed. We simply communicate this to the client. */
         struct tinywl_keyboard *keyboard =
@@ -548,9 +545,11 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
 }
 
 void node_iterator(struct wlr_surface *node, int sx, int sy, void *_data) {
+        /*
         printf("\tSurface at %d, %d\n", sx, sy);
         struct wlr_surface_state state = node->current;
         printf("\t\twidth: %d, height: %d, role: %s\n", state.width, state.height, node->role->name);
+        */
 }
 
 struct check_scanout_data {
@@ -804,8 +803,6 @@ static void render_texture(struct wlr_output *output,
         int nrects;
         pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
         for (int i = 0; i < nrects; ++i) {
-                printf("Rendering texture at (x1, y1, x2, y2) (%d, %d, %d, %d)\n",
-                        rects[i].x1, rects[i].y1, rects[i].x2, rects[i].y2);
                 scissor_output(output, &rects[i]);
                 my_render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
         }
@@ -816,8 +813,6 @@ static void render_texture(struct wlr_output *output,
 
 static void render_node_iterator(struct wlr_scene_node *node,
                 int x, int y, void *_data) {
-        printf("iterator called\n");
-        fflush(stdout);
         struct render_data *data = _data;
         struct wlr_output *output = data->output;
         pixman_region32_t *output_damage = data->damage;
@@ -1064,7 +1059,6 @@ static void output_frame(struct wl_listener *listener, void *data) {
         struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(
                 scene, output->wlr_output);
 
-        printf("Outputting frame!\n");
         wlr_scene_node_for_each_surface(&scene->node, &node_iterator, NULL);
         fflush(stdout);
 
@@ -1132,6 +1126,8 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
         wl_list_insert(&view->server->views, &view->link);
 
         focus_view(view, view->xdg_surface->surface);
+
+        printf("Got a new XDG surface\n");
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
