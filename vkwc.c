@@ -52,7 +52,7 @@ enum vkwc_cursor_mode {
         VKWC_CURSOR_RESIZE,
 };
 
-enum view_type {
+enum vkwc_view_type {
         XDG_SHELL_VIEW,
         XWAYLAND_VIEW,
 };
@@ -113,7 +113,7 @@ struct vkwc_view {
         struct wl_listener request_resize;
         int x, y;
 
-        enum view_type type;
+        enum vkwc_view_type type;
 };
 
 struct vkwc_xwayland_view {
@@ -175,7 +175,7 @@ static void focus_view(struct vkwc_view *view, struct wlr_surface *surface) {
         }
 }
 
-static void keyboard_handle_modifiers(
+static void handle_keyboard_modifiers(
                 struct wl_listener *listener, void *data) {
         /* This event is raised when a modifier key, such as shift or alt, is
          * pressed. We simply communicate this to the client. */
@@ -220,7 +220,7 @@ static bool handle_keybinding(struct vkwc_server *server, xkb_keysym_t sym) {
         return true;
 }
 
-static void keyboard_handle_key(
+static void handle_keyboard_key(
                 struct wl_listener *listener, void *data) {
         /* This event is raised when a key is pressed or released. */
         struct vkwc_keyboard *keyboard =
@@ -274,9 +274,9 @@ static void server_new_keyboard(struct vkwc_server *server,
         wlr_keyboard_set_repeat_info(device->keyboard, 25, 600);
 
         /* Here we set up listeners for keyboard events. */
-        keyboard->modifiers.notify = keyboard_handle_modifiers;
+        keyboard->modifiers.notify = handle_keyboard_modifiers;
         wl_signal_add(&device->keyboard->events.modifiers, &keyboard->modifiers);
-        keyboard->key.notify = keyboard_handle_key;
+        keyboard->key.notify = handle_keyboard_key;
         wl_signal_add(&device->keyboard->events.key, &keyboard->key);
 
         wlr_seat_set_keyboard(server->seat, device);
@@ -294,7 +294,7 @@ static void server_new_pointer(struct vkwc_server *server,
         wlr_cursor_attach_input_device(server->cursor, device);
 }
 
-static void server_new_input(struct wl_listener *listener, void *data) {
+static void handle_new_input(struct wl_listener *listener, void *data) {
         /* This event is raised by the backend when a new input device becomes
          * available. */
         struct vkwc_server *server =
@@ -320,7 +320,7 @@ static void server_new_input(struct wl_listener *listener, void *data) {
         wlr_seat_set_capabilities(server->seat, caps);
 }
 
-static void seat_request_cursor(struct wl_listener *listener, void *data) {
+static void handle_new_cursor_image(struct wl_listener *listener, void *data) {
         struct vkwc_server *server = wl_container_of(
                         listener, server, request_cursor);
         /* This event is raised by the seat when a client provides a cursor image */
@@ -339,7 +339,7 @@ static void seat_request_cursor(struct wl_listener *listener, void *data) {
         }
 }
 
-static void seat_request_set_selection(struct wl_listener *listener, void *data) {
+static void handle_selection_request(struct wl_listener *listener, void *data) {
         /* This event is raised by the seat when a client wants to set the selection,
          * usually when the user copies something. wlroots allows compositors to
          * ignore such requests if they so choose, but in vkwc we always honor
@@ -479,7 +479,7 @@ static void process_cursor_motion(struct vkwc_server *server, uint32_t time) {
         }
 }
 
-static void server_cursor_motion(struct wl_listener *listener, void *data) {
+static void handle_cursor_motion_relative(struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits a _relative_
          * pointer motion event (i.e. a delta) */
         struct vkwc_server *server =
@@ -495,7 +495,7 @@ static void server_cursor_motion(struct wl_listener *listener, void *data) {
         process_cursor_motion(server, event->time_msec);
 }
 
-static void server_cursor_motion_absolute(
+static void handle_cursor_motion_absolute(
                 struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits an _absolute_
          * motion event, from 0..1 on each axis. This happens, for example, when
@@ -510,7 +510,7 @@ static void server_cursor_motion_absolute(
         process_cursor_motion(server, event->time_msec);
 }
 
-static void server_cursor_button(struct wl_listener *listener, void *data) {
+static void handle_cursor_button(struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits a button
          * event. */
         struct vkwc_server *server =
@@ -532,7 +532,7 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
         }
 }
 
-static void server_cursor_axis(struct wl_listener *listener, void *data) {
+static void handle_cursor_axis(struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits an axis event,
          * for example when you move the scroll wheel. */
         struct vkwc_server *server =
@@ -544,7 +544,7 @@ static void server_cursor_axis(struct wl_listener *listener, void *data) {
                         event->delta_discrete, event->source);
 }
 
-static void server_cursor_frame(struct wl_listener *listener, void *data) {
+static void handle_cursor_frame(struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits a frame
          * event. Frame events are sent after regular pointer events to group
          * multiple events together. For instance, two axis events may happen at the
@@ -556,7 +556,6 @@ static void server_cursor_frame(struct wl_listener *listener, void *data) {
 }
 
 // Begin my stuff
-
 static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
 	memset(mat4, 0, sizeof(float) * 16);
 	mat4[0][0] = mat3[0];
@@ -1075,7 +1074,7 @@ bool vkwc_scene_output_commit(struct wlr_scene_output *scene_output) {
         return wlr_output_commit(output);
 }
 
-static void output_frame(struct wl_listener *listener, void *data) {
+static void handle_output_frame(struct wl_listener *listener, void *data) {
         /* This function is called every time an output is ready to display a frame,
          * generally at the output's refresh rate (e.g. 60Hz). */
         struct vkwc_output *output = wl_container_of(listener, output, frame);
@@ -1099,7 +1098,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
 
 // End my stuff
 
-static void server_new_output(struct wl_listener *listener, void *data) {
+static void handle_new_output(struct wl_listener *listener, void *data) {
         /* This event is raised by the backend when a new output (aka a display or
          * monitor) becomes available. */
         struct vkwc_server *server =
@@ -1130,7 +1129,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
         output->wlr_output = wlr_output;
         output->server = server;
         /* Sets up a listener for the frame notify event. */
-        output->frame.notify = output_frame;
+        output->frame.notify = handle_output_frame;
         wl_signal_add(&wlr_output->events.frame, &output->frame);
         wl_list_insert(&server->outputs, &output->link);
 
@@ -1146,7 +1145,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
         wlr_output_layout_add_auto(server->output_layout, wlr_output);
 }
 
-static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
+static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
         /* Called when the surface is mapped, or ready to display on-screen. */
         struct vkwc_view *view = wl_container_of(listener, view, map);
 
@@ -1155,14 +1154,14 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
         focus_view(view, view->xdg_surface->surface);
 }
 
-static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
+static void handle_xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
         /* Called when the surface is unmapped, and should no longer be shown. */
         struct vkwc_view *view = wl_container_of(listener, view, unmap);
 
         wl_list_remove(&view->link);
 }
 
-static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
+static void handle_xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
         /* Called when the surface is destroyed and should never be shown again. */
         struct vkwc_view *view = wl_container_of(listener, view, destroy);
 
@@ -1213,7 +1212,7 @@ static void begin_interactive(struct vkwc_view *view,
         }
 }
 
-static void xdg_toplevel_request_move(
+static void handle_xdg_toplevel_request_move(
                 struct wl_listener *listener, void *data) {
         /* This event is raised when a client would like to begin an interactive
          * move, typically because the user clicked on their client-side
@@ -1224,7 +1223,7 @@ static void xdg_toplevel_request_move(
         begin_interactive(view, VKWC_CURSOR_MOVE, 0);
 }
 
-static void xdg_toplevel_request_resize(
+static void handle_xdg_toplevel_request_resize(
                 struct wl_listener *listener, void *data) {
         /* This event is raised when a client would like to begin an interactive
          * resize, typically because the user clicked on their client-side
@@ -1236,7 +1235,7 @@ static void xdg_toplevel_request_resize(
         begin_interactive(view, VKWC_CURSOR_RESIZE, event->edges);
 }
 
-static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
+static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
         /* This event is raised when wlr_xdg_shell receives a new xdg surface from a
          * client, either a toplevel (application window) or popup. */
         struct vkwc_server *server =
@@ -1270,18 +1269,18 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
         xdg_surface->data = view->scene_node;
 
         /* Listen to the various events it can emit */
-        view->map.notify = xdg_toplevel_map;
+        view->map.notify = handle_xdg_toplevel_map;
         wl_signal_add(&xdg_surface->events.map, &view->map);
-        view->unmap.notify = xdg_toplevel_unmap;
+        view->unmap.notify = handle_xdg_toplevel_unmap;
         wl_signal_add(&xdg_surface->events.unmap, &view->unmap);
-        view->destroy.notify = xdg_toplevel_destroy;
+        view->destroy.notify = handle_xdg_toplevel_destroy;
         wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
 
         /* cotd */
         struct wlr_xdg_toplevel *toplevel = xdg_surface->toplevel;
-        view->request_move.notify = xdg_toplevel_request_move;
+        view->request_move.notify = handle_xdg_toplevel_request_move;
         wl_signal_add(&toplevel->events.request_move, &view->request_move);
-        view->request_resize.notify = xdg_toplevel_request_resize;
+        view->request_resize.notify = handle_xdg_toplevel_request_resize;
         wl_signal_add(&toplevel->events.request_resize, &view->request_resize);
 }
 
@@ -1355,10 +1354,7 @@ int main(int argc, char *argv[]) {
                 exit(1);
         }
 
-        fprintf(stderr, "Pre-vulkan create\n");
         server.renderer = wlr_vk_renderer_create_with_drm_fd(drm_fd);
-        fprintf(stderr, "Post-vulkan create\n");
-        fflush(stdout);
         wlr_renderer_init_wl_display(server.renderer, server.wl_display);
 
         /* Autocreates an allocator for us.
@@ -1384,7 +1380,7 @@ int main(int argc, char *argv[]) {
         /* Configure a listener to be notified when new outputs are available on the
          * backend. */
         wl_list_init(&server.outputs);
-        server.new_output.notify = server_new_output;
+        server.new_output.notify = handle_new_output;
         wl_signal_add(&server.backend->events.new_output, &server.new_output);
 
         /* Create a scene graph. This is a wlroots abstraction that handles all
@@ -1403,7 +1399,7 @@ int main(int argc, char *argv[]) {
          */
         wl_list_init(&server.views);
         server.xdg_shell = wlr_xdg_shell_create(server.wl_display);
-        server.new_xdg_surface.notify = server_new_xdg_surface;
+        server.new_xdg_surface.notify = handle_new_xdg_surface;
         wl_signal_add(&server.xdg_shell->events.new_surface,
                         &server.new_xdg_surface);
 
@@ -1433,16 +1429,16 @@ int main(int argc, char *argv[]) {
          *
          * And more comments are sprinkled throughout the notify functions above.
          */
-        server.cursor_motion.notify = server_cursor_motion;
+        server.cursor_motion.notify = handle_cursor_motion_relative;
         wl_signal_add(&server.cursor->events.motion, &server.cursor_motion);
-        server.cursor_motion_absolute.notify = server_cursor_motion_absolute;
+        server.cursor_motion_absolute.notify = handle_cursor_motion_absolute;
         wl_signal_add(&server.cursor->events.motion_absolute,
                         &server.cursor_motion_absolute);
-        server.cursor_button.notify = server_cursor_button;
+        server.cursor_button.notify = handle_cursor_button;
         wl_signal_add(&server.cursor->events.button, &server.cursor_button);
-        server.cursor_axis.notify = server_cursor_axis;
+        server.cursor_axis.notify = handle_cursor_axis;
         wl_signal_add(&server.cursor->events.axis, &server.cursor_axis);
-        server.cursor_frame.notify = server_cursor_frame;
+        server.cursor_frame.notify = handle_cursor_frame;
         wl_signal_add(&server.cursor->events.frame, &server.cursor_frame);
 
         /*
@@ -1452,13 +1448,13 @@ int main(int argc, char *argv[]) {
          * let us know when new input devices are available on the backend.
          */
         wl_list_init(&server.keyboards);
-        server.new_input.notify = server_new_input;
+        server.new_input.notify = handle_new_input;
         wl_signal_add(&server.backend->events.new_input, &server.new_input);
         server.seat = wlr_seat_create(server.wl_display, "seat0");
-        server.request_cursor.notify = seat_request_cursor;
+        server.request_cursor.notify = handle_new_cursor_image;
         wl_signal_add(&server.seat->events.request_set_cursor,
                         &server.request_cursor);
-        server.request_set_selection.notify = seat_request_set_selection;
+        server.request_set_selection.notify = handle_selection_request;
         wl_signal_add(&server.seat->events.request_set_selection,
                         &server.request_set_selection);
 
