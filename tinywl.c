@@ -34,7 +34,6 @@
 #include "wlroots/include/wlr/util/region.h"
 #include "wlroots/include/wlr/render/vulkan.h"
 #include "wlroots/include/wlr/types/wlr_xcursor_manager.h"
-#include "wlroots/include/wlr/types/wlr_xcursor_manager.h"
 #include "wlroots/include/wlr/xwayland.h"
 
 // Stuff I had to clone wlroots for (not in include/wlr)
@@ -51,6 +50,11 @@ enum tinywl_cursor_mode {
         TINYWL_CURSOR_PASSTHROUGH,
         TINYWL_CURSOR_MOVE,
         TINYWL_CURSOR_RESIZE,
+};
+
+enum view_type {
+        XDG_SHELL_VIEW,
+        XWAYLAND_VIEW,
 };
 
 struct tinywl_server {
@@ -108,6 +112,8 @@ struct tinywl_view {
         struct wl_listener request_move;
         struct wl_listener request_resize;
         int x, y;
+
+        enum view_type type;
 };
 
 struct tinywl_xwayland_view {
@@ -156,14 +162,21 @@ static void focus_view(struct tinywl_view *view, struct wlr_surface *surface) {
         wl_list_remove(&view->link);
         wl_list_insert(&server->views, &view->link);
         /* Activate the new surface */
-        wlr_xdg_toplevel_set_activated(view->xdg_surface, true);
-        /*
-         * Tell the seat to have the keyboard enter this surface. wlroots will keep
-         * track of this and automatically send key events to the appropriate
-         * clients without additional work on your part.
-         */
-        wlr_seat_keyboard_notify_enter(seat, view->xdg_surface->surface,
-                keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+        printf("\t\t\tpre\n");
+        fflush(stdout);
+        if (view->type == XDG_SHELL_VIEW) {
+                wlr_xdg_toplevel_set_activated(view->xdg_surface, true);
+
+                /*
+                 * Tell the seat to have the keyboard enter this surface. wlroots will keep
+                 * track of this and automatically send key events to the appropriate
+                 * clients without additional work on your part.
+                 */
+                wlr_seat_keyboard_notify_enter(seat, view->xdg_surface->surface,
+                        keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+        }
+        printf("\t\t\tpost\n");
+        fflush(stdout);
 }
 
 static void keyboard_handle_modifiers(
@@ -358,7 +371,10 @@ static struct tinywl_view *desktop_view_at(
         while (node != NULL && node->data == NULL) {
                 node = node->parent;
         }
-        return node->data;
+
+        void *data = node->data;
+
+        return data;
 }
 
 static void process_cursor_move(struct tinywl_server *server, uint32_t time) {
@@ -438,6 +454,7 @@ static void process_cursor_motion(struct tinywl_server *server, uint32_t time) {
         struct wlr_surface *surface = NULL;
         struct tinywl_view *view = desktop_view_at(server,
                         server->cursor->x, server->cursor->y, &surface, &sx, &sy);
+
         if (!view) {
                 /* If there's no view under the cursor, set the cursor image to a
                  * default. This is what makes the cursor image appear when you move it
@@ -515,7 +532,11 @@ static void server_cursor_button(struct wl_listener *listener, void *data) {
                 server->cursor_mode = TINYWL_CURSOR_PASSTHROUGH;
         } else {
                 /* Focus that client if the button was _pressed_ */
+                printf("Pre-button\n");
+                fflush(stdout);
                 focus_view(view, surface);
+                printf("Post-button\n");
+                fflush(stdout);
         }
 }
 
@@ -1250,6 +1271,7 @@ static void server_new_xdg_surface(struct wl_listener *listener, void *data) {
         /* Allocate a tinywl_view for this surface */
         struct tinywl_view *view =
                 calloc(1, sizeof(struct tinywl_view));
+        view->type = XDG_SHELL_VIEW;
         view->server = server;
         view->xdg_surface = xdg_surface;
         view->scene_node = wlr_scene_xdg_surface_create(
@@ -1282,6 +1304,11 @@ static void handle_xwayland_surface_map(struct wl_listener *listener, void *data
         struct wlr_surface *surface = xwayland_view->xwayland_surface->surface;
 
         view->scene_node = wlr_scene_subsurface_tree_create(&view->server->scene->node, surface);
+        if (!view->scene_node) {
+                fprintf(stderr, "Couldn't create scene node for XWayland window!\n");
+                exit(1);
+        }
+        view->scene_node->data = view;
 
         wl_list_insert(&view->server->views, &view->link);
 }
@@ -1299,6 +1326,7 @@ static void handle_xwayland_surface_new(struct wl_listener *listener, void *data
         xwayland_view->xwayland_surface = xwayland_surface;
 
         xwayland_view->view.server = server;
+        xwayland_view->view.type = XWAYLAND_VIEW;
 
         xwayland_view->map.notify = handle_xwayland_surface_map;
         wl_signal_add(&xwayland_surface->events.map, &xwayland_view->map);
@@ -1460,6 +1488,12 @@ int main(int argc, char *argv[]) {
         server.new_xwayland_surface.notify = handle_xwayland_surface_new;
         wl_signal_add(&xwayland->events.new_surface, &server.new_xwayland_surface);
 
+        struct wlr_xcursor_manager *xcursor_manager = wlr_xcursor_manager_create("left_ptr", 24);
+        if (!xcursor_manager) {
+                fprintf(stderr, "Can't create XCursor manager!\n");
+                exit(1);
+        };
+
         if (setenv("DISPLAY", xwayland->display_name, true) < 0) {
                 fprintf(stderr, "Couldn't set DISPLAY for XWayland!\n");
                 exit(1);
@@ -1467,6 +1501,17 @@ int main(int argc, char *argv[]) {
                 printf("XWayland on DISPLAY=%s\n", xwayland->display_name);
                 fflush(stdout);
         }
+
+        if (!wlr_xcursor_manager_load(xcursor_manager, 1)) {
+                fprintf(stderr, "Can't load XCursor theme!\n");
+                exit(1);
+        }
+        struct wlr_xcursor *xcursor = wlr_xcursor_manager_get_xcursor(xcursor_manager, "left_ptr", 1);
+        if (xcursor) {
+                struct wlr_xcursor_image *image = xcursor->images[0];
+                wlr_xwayland_set_cursor(xwayland, image->buffer, image->width * 4, image->width, image->height,
+                                        image->hotspot_x, image->hotspot_y);
+        };
 
         /* Add a Unix socket to the Wayland display. */
         const char *socket = wl_display_add_socket_auto(server.wl_display);

@@ -22,7 +22,7 @@ LIBS="\
         $(pkg-config --cflags --libs vulkan) \
         $(pkg-config --cflags --libs xkbcommon)"
 
-COMMAND="gcc -o tinywl tinywl.c wlroots/render/vulkan/*.c wlroots/render/pixel_format.c $LIBS -DWLR_USE_UNSTABLE -I. -Iwlroots/include -Iwlroots/build"
+COMMAND="gcc -Wall -pedantic -g -o tinywl tinywl.c wlroots/render/vulkan/*.c wlroots/render/pixel_format.c $LIBS -DWLR_USE_UNSTABLE -I. -Iwlroots/include -Iwlroots/build"
 echo "Command: $COMMAND"
 
 $COMMAND
