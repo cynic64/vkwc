@@ -10,6 +10,7 @@
 #include <xkbcommon/xkbcommon.h>
 #include <pixman-1/pixman.h>
 #include <vulkan/vulkan.h>
+#include <math.h>
 
 #include "wlroots/include/wlr/backend.h"
 #include "wlroots/include/wlr/render/allocator.h"
@@ -39,25 +40,27 @@
 // Stuff I had to clone wlroots for (not in include/wlr)
 #include "wlroots/include/render/vulkan.h"
 
-struct vkwc_vert_pcr_data {
-	float mat4[4][4];
-	float uv_off[2];
-	float uv_size[2];
+#define M_PI 3.14159265358979323846
+
+struct VertPcrData {
+        float mat4[4][4];
+        float uv_off[2];
+        float uv_size[2];
 };
 
 /* For brevity's sake, struct members are annotated where they are used. */
-enum vkwc_cursor_mode {
+enum CursorMode {
         VKWC_CURSOR_PASSTHROUGH,
         VKWC_CURSOR_MOVE,
         VKWC_CURSOR_RESIZE,
 };
 
-enum vkwc_view_type {
+enum ViewType {
         XDG_SHELL_VIEW,
         XWAYLAND_VIEW,
 };
 
-struct vkwc_server {
+struct Server {
         struct wl_display *wl_display;
         struct wlr_backend *backend;
         struct wlr_renderer *renderer;
@@ -81,8 +84,8 @@ struct vkwc_server {
         struct wl_listener request_cursor;
         struct wl_listener request_set_selection;
         struct wl_list keyboards;
-        enum vkwc_cursor_mode cursor_mode;
-        struct vkwc_view *grabbed_view;
+        enum CursorMode cursor_mode;
+        struct View *grabbed_view;
         double grab_x, grab_y;
         struct wlr_box grab_geobox;
         uint32_t resize_edges;
@@ -94,16 +97,16 @@ struct vkwc_server {
         struct wl_listener new_xwayland_surface;
 };
 
-struct vkwc_output {
+struct Output {
         struct wl_list link;
-        struct vkwc_server *server;
+        struct Server *server;
         struct wlr_output *wlr_output;
         struct wl_listener frame;
 };
 
-struct vkwc_view {
+struct View {
         struct wl_list link;
-        struct vkwc_server *server;
+        struct Server *server;
         struct wlr_xdg_surface *xdg_surface;
         struct wlr_scene_node *scene_node;
         struct wl_listener map;
@@ -113,33 +116,33 @@ struct vkwc_view {
         struct wl_listener request_resize;
         int x, y;
 
-        enum vkwc_view_type type;
+        enum ViewType type;
 };
 
-struct vkwc_xwayland_view {
-	struct vkwc_view view;
-	struct wlr_xwayland_surface *xwayland_surface;
-	struct wl_listener destroy;
-	struct wl_listener unmap;
-	struct wl_listener map;
-	struct wl_listener request_fullscreen;
+struct XWaylandView {
+        struct View view;
+        struct wlr_xwayland_surface *xwayland_surface;
+        struct wl_listener destroy;
+        struct wl_listener unmap;
+        struct wl_listener map;
+        struct wl_listener request_fullscreen;
 };
 
-struct vkwc_keyboard {
+struct Keyboard {
         struct wl_list link;
-        struct vkwc_server *server;
+        struct Server *server;
         struct wlr_input_device *device;
 
         struct wl_listener modifiers;
         struct wl_listener key;
 };
 
-static void focus_view(struct vkwc_view *view, struct wlr_surface *surface) {
+static void focus_view(struct View *view, struct wlr_surface *surface) {
         /* Note: this function only deals with keyboard focus. */
         if (view == NULL) {
                 return;
         }
-        struct vkwc_server *server = view->server;
+        struct Server *server = view->server;
         struct wlr_seat *seat = server->seat;
         struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
         if (prev_surface == surface) {
@@ -179,7 +182,7 @@ static void handle_keyboard_modifiers(
                 struct wl_listener *listener, void *data) {
         /* This event is raised when a modifier key, such as shift or alt, is
          * pressed. We simply communicate this to the client. */
-        struct vkwc_keyboard *keyboard =
+        struct Keyboard *keyboard =
                 wl_container_of(listener, keyboard, modifiers);
         /*
          * A seat can only have one keyboard, but this is a limitation of the
@@ -193,7 +196,7 @@ static void handle_keyboard_modifiers(
                 &keyboard->device->keyboard->modifiers);
 }
 
-static bool handle_keybinding(struct vkwc_server *server, xkb_keysym_t sym) {
+static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
         /*
          * Here we handle compositor keybindings. This is when the compositor is
          * processing keys, rather than passing them on to the client for its own
@@ -210,7 +213,7 @@ static bool handle_keybinding(struct vkwc_server *server, xkb_keysym_t sym) {
                 if (wl_list_length(&server->views) < 2) {
                         break;
                 }
-                struct vkwc_view *next_view = wl_container_of(
+                struct View *next_view = wl_container_of(
                         server->views.prev, next_view, link);
                 focus_view(next_view, next_view->xdg_surface->surface);
                 break;
@@ -220,12 +223,11 @@ static bool handle_keybinding(struct vkwc_server *server, xkb_keysym_t sym) {
         return true;
 }
 
-static void handle_keyboard_key(
-                struct wl_listener *listener, void *data) {
+static void handle_keyboard_key(struct wl_listener *listener, void *data) {
         /* This event is raised when a key is pressed or released. */
-        struct vkwc_keyboard *keyboard =
+        struct Keyboard *keyboard =
                 wl_container_of(listener, keyboard, key);
-        struct vkwc_server *server = keyboard->server;
+        struct Server *server = keyboard->server;
         struct wlr_event_keyboard_key *event = data;
         struct wlr_seat *seat = server->seat;
 
@@ -255,10 +257,9 @@ static void handle_keyboard_key(
         }
 }
 
-static void server_new_keyboard(struct vkwc_server *server,
-                struct wlr_input_device *device) {
-        struct vkwc_keyboard *keyboard =
-                calloc(1, sizeof(struct vkwc_keyboard));
+static void server_new_keyboard(struct Server *server, struct wlr_input_device *device) {
+        struct Keyboard *keyboard =
+                calloc(1, sizeof(struct Keyboard));
         keyboard->server = server;
         keyboard->device = device;
 
@@ -285,7 +286,7 @@ static void server_new_keyboard(struct vkwc_server *server,
         wl_list_insert(&server->keyboards, &keyboard->link);
 }
 
-static void server_new_pointer(struct vkwc_server *server,
+static void server_new_pointer(struct Server *server,
                 struct wlr_input_device *device) {
         /* We don't do anything special with pointers. All of our pointer handling
          * is proxied through wlr_cursor. On another compositor, you might take this
@@ -297,7 +298,7 @@ static void server_new_pointer(struct vkwc_server *server,
 static void handle_new_input(struct wl_listener *listener, void *data) {
         /* This event is raised by the backend when a new input device becomes
          * available. */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, new_input);
         struct wlr_input_device *device = data;
         switch (device->type) {
@@ -321,7 +322,7 @@ static void handle_new_input(struct wl_listener *listener, void *data) {
 }
 
 static void handle_new_cursor_image(struct wl_listener *listener, void *data) {
-        struct vkwc_server *server = wl_container_of(
+        struct Server *server = wl_container_of(
                         listener, server, request_cursor);
         /* This event is raised by the seat when a client provides a cursor image */
         struct wlr_seat_pointer_request_set_cursor_event *event = data;
@@ -344,25 +345,25 @@ static void handle_selection_request(struct wl_listener *listener, void *data) {
          * usually when the user copies something. wlroots allows compositors to
          * ignore such requests if they so choose, but in vkwc we always honor
          */
-        struct vkwc_server *server = wl_container_of(
+        struct Server *server = wl_container_of(
                         listener, server, request_set_selection);
         struct wlr_seat_request_set_selection_event *event = data;
         wlr_seat_set_selection(server->seat, event->source, event->serial);
 }
 
-static struct vkwc_view *desktop_view_at(
-                struct vkwc_server *server, double lx, double ly,
+static struct View *desktop_view_at(
+                struct Server *server, double lx, double ly,
                 struct wlr_surface **surface, double *sx, double *sy) {
         /* This returns the topmost node in the scene at the given layout coords.
          * we only care about surface nodes as we are specifically looking for a
-         * surface in the surface tree of a vkwc_view. */
+         * surface in the surface tree of a View. */
         struct wlr_scene_node *node = wlr_scene_node_at(
                 &server->scene->node, lx, ly, sx, sy);
         if (node == NULL || node->type != WLR_SCENE_NODE_SURFACE) {
                 return NULL;
         }
         *surface = wlr_scene_surface_from_node(node)->surface;
-        /* Find the node corresponding to the vkwc_view at the root of this
+        /* Find the node corresponding to the View at the root of this
          * surface tree, it is the only one for which we set the data field. */
         while (node != NULL && node->data == NULL) {
                 node = node->parent;
@@ -373,15 +374,15 @@ static struct vkwc_view *desktop_view_at(
         return data;
 }
 
-static void process_cursor_move(struct vkwc_server *server, uint32_t time) {
+static void process_cursor_move(struct Server *server, uint32_t time) {
         /* Move the grabbed view to the new position. */
-        struct vkwc_view *view = server->grabbed_view;
+        struct View *view = server->grabbed_view;
         view->x = server->cursor->x - server->grab_x;
         view->y = server->cursor->y - server->grab_y;
         wlr_scene_node_set_position(view->scene_node, view->x, view->y);
 }
 
-static void process_cursor_resize(struct vkwc_server *server, uint32_t time) {
+static void process_cursor_resize(struct Server *server, uint32_t time) {
         /*
          * Resizing the grabbed view can be a little bit complicated, because we
          * could be resizing from any corner or edge. This not only resizes the view
@@ -392,7 +393,7 @@ static void process_cursor_resize(struct vkwc_server *server, uint32_t time) {
          * you'd wait for the client to prepare a buffer at the new size, then
          * commit any movement that was prepared.
          */
-        struct vkwc_view *view = server->grabbed_view;
+        struct View *view = server->grabbed_view;
         double border_x = server->cursor->x - server->grab_x;
         double border_y = server->cursor->y - server->grab_y;
         int new_left = server->grab_geobox.x;
@@ -434,7 +435,7 @@ static void process_cursor_resize(struct vkwc_server *server, uint32_t time) {
         wlr_xdg_toplevel_set_size(view->xdg_surface, new_width, new_height);
 }
 
-static void process_cursor_motion(struct vkwc_server *server, uint32_t time) {
+static void process_cursor_motion(struct Server *server, uint32_t time) {
         /* If the mode is non-passthrough, delegate to those functions. */
         if (server->cursor_mode == VKWC_CURSOR_MOVE) {
                 process_cursor_move(server, time);
@@ -448,7 +449,7 @@ static void process_cursor_motion(struct vkwc_server *server, uint32_t time) {
         double sx, sy;
         struct wlr_seat *seat = server->seat;
         struct wlr_surface *surface = NULL;
-        struct vkwc_view *view = desktop_view_at(server,
+        struct View *view = desktop_view_at(server,
                         server->cursor->x, server->cursor->y, &surface, &sx, &sy);
 
         if (!view) {
@@ -482,7 +483,7 @@ static void process_cursor_motion(struct vkwc_server *server, uint32_t time) {
 static void handle_cursor_motion_relative(struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits a _relative_
          * pointer motion event (i.e. a delta) */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, cursor_motion);
         struct wlr_event_pointer_motion *event = data;
         /* The cursor doesn't move unless we tell it to. The cursor automatically
@@ -503,7 +504,7 @@ static void handle_cursor_motion_absolute(
          * move the mouse over the window. You could enter the window from any edge,
          * so we have to warp the mouse there. There is also some hardware which
          * emits these events. */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, cursor_motion_absolute);
         struct wlr_event_pointer_motion_absolute *event = data;
         wlr_cursor_warp_absolute(server->cursor, event->device, event->x, event->y);
@@ -513,7 +514,7 @@ static void handle_cursor_motion_absolute(
 static void handle_cursor_button(struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits a button
          * event. */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, cursor_button);
         struct wlr_event_pointer_button *event = data;
         /* Notify the client with pointer focus that a button press has occurred */
@@ -521,7 +522,7 @@ static void handle_cursor_button(struct wl_listener *listener, void *data) {
                         event->time_msec, event->button, event->state);
         double sx, sy;
         struct wlr_surface *surface = NULL;
-        struct vkwc_view *view = desktop_view_at(server,
+        struct View *view = desktop_view_at(server,
                         server->cursor->x, server->cursor->y, &surface, &sx, &sy);
         if (event->state == WLR_BUTTON_RELEASED) {
                 /* If you released any buttons, we exit interactive move/resize mode. */
@@ -535,7 +536,7 @@ static void handle_cursor_button(struct wl_listener *listener, void *data) {
 static void handle_cursor_axis(struct wl_listener *listener, void *data) {
         /* This event is forwarded by the cursor when a pointer emits an axis event,
          * for example when you move the scroll wheel. */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, cursor_axis);
         struct wlr_event_pointer_axis *event = data;
         /* Notify the client with pointer focus of the axis event. */
@@ -549,7 +550,7 @@ static void handle_cursor_frame(struct wl_listener *listener, void *data) {
          * event. Frame events are sent after regular pointer events to group
          * multiple events together. For instance, two axis events may happen at the
          * same time, in which case a frame event won't be sent in between. */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, cursor_frame);
         /* Notify the client with pointer focus of the frame event. */
         wlr_seat_pointer_notify_frame(server->seat);
@@ -557,25 +558,23 @@ static void handle_cursor_frame(struct wl_listener *listener, void *data) {
 
 // Begin my stuff
 static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
-	memset(mat4, 0, sizeof(float) * 16);
-	mat4[0][0] = mat3[0];
-	mat4[0][1] = mat3[1];
-	mat4[0][3] = mat3[2];
+        memset(mat4, 0, sizeof(float) * 16);
+        mat4[0][0] = mat3[0];
+        mat4[0][1] = mat3[1];
+        mat4[0][3] = mat3[2];
 
-	mat4[1][0] = mat3[3];
-	mat4[1][1] = mat3[4];
-	mat4[1][3] = mat3[5];
+        mat4[1][0] = mat3[3];
+        mat4[1][1] = mat3[4];
+        mat4[1][3] = mat3[5];
 
-	mat4[2][2] = 1.f;
-	mat4[3][3] = 1.f;
+        mat4[2][2] = 1.f;
+        mat4[3][3] = 1.f;
 }
 
 void node_iterator(struct wlr_surface *node, int sx, int sy, void *_data) {
-        /*
         printf("\tSurface at %d, %d\n", sx, sy);
         struct wlr_surface_state state = node->current;
         printf("\t\twidth: %d, height: %d, role: %s\n", state.width, state.height, node->role->name);
-        */
 }
 
 struct check_scanout_data {
@@ -639,13 +638,6 @@ static void scissor_output(struct wlr_output *output, pixman_box32_t *rect) {
                 .width = rect->x2 - rect->x1,
                 .height = rect->y2 - rect->y1,
         };
-
-        int ow, oh;
-        wlr_output_transformed_resolution(output, &ow, &oh);
-
-        enum wl_output_transform transform =
-                wlr_output_transform_invert(output->transform);
-        wlr_box_transform(&box, &box, transform, ow, oh);
 
         wlr_renderer_scissor(renderer, &box);
 }
@@ -754,64 +746,84 @@ static void render_rect(struct wlr_output *output,
         pixman_region32_fini(&damage);
 }
 
-static bool vkwc_render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
-		struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
-		const float matrix[static 9], float alpha) {
-	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
-	VkCommandBuffer cb = renderer->cb;
+static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
+                struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
+                const float matrix[static 9], float alpha) {
+        struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
+        VkCommandBuffer cb = renderer->cb;
 
-	struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
-	assert(texture->renderer == renderer);
-	if (texture->dmabuf_imported && !texture->owned) {
-		// Store this texture in the list of textures that need to be
-		// acquired before rendering and released after rendering.
-		// We don't do it here immediately since barriers inside
-		// a renderpass are suboptimal (would require additional renderpass
-		// dependency and potentially multiple barriers) and it's
-		// better to issue one barrier for all used textures anyways.
-		texture->owned = true;
-		assert(texture->foreign_link.prev == NULL);
-		assert(texture->foreign_link.next == NULL);
-		wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
-	}
+        struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
+        assert(texture->renderer == renderer);
+        if (texture->dmabuf_imported && !texture->owned) {
+                // Store this texture in the list of textures that need to be
+                // acquired before rendering and released after rendering.
+                // We don't do it here immediately since barriers inside
+                // a renderpass are suboptimal (would require additional renderpass
+                // dependency and potentially multiple barriers) and it's
+                // better to issue one barrier for all used textures anyways.
+                texture->owned = true;
+                assert(texture->foreign_link.prev == NULL);
+                assert(texture->foreign_link.next == NULL);
+                wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
+        }
 
-	VkPipeline pipe = renderer->current_render_buffer->render_setup->tex_pipe;
-	if (pipe != renderer->bound_pipe) {
-		vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		renderer->bound_pipe = pipe;
-	}
+        VkPipeline pipe = renderer->current_render_buffer->render_setup->tex_pipe;
+        if (pipe != renderer->bound_pipe) {
+                vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+                renderer->bound_pipe = pipe;
+        }
 
-	vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
+        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
-	float final_matrix[9];
-	wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
+        float final_matrix[9];
+        wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
 
-	struct vkwc_vert_pcr_data vkwc_vert_pcr_data;
-	mat3_to_mat4(final_matrix, vkwc_vert_pcr_data.mat4);
+        /*
+        float theta = M_PI * 0.25;
+        float rotation[9] = {cosf(theta), sinf(theta), 0, -sinf(theta), cosf(theta), 0, 0, 0, 1};
+        float my_matrix[9];
+        wlr_matrix_multiply(my_matrix, rotation, final_matrix);
+        */
 
-	vkwc_vert_pcr_data.uv_off[0] = box->x / wlr_texture->width;
-	vkwc_vert_pcr_data.uv_off[1] = box->y / wlr_texture->height;
-	vkwc_vert_pcr_data.uv_size[0] = box->width / wlr_texture->width;
-	vkwc_vert_pcr_data.uv_size[1] = box->height / wlr_texture->height;
+        struct VertPcrData VertPcrData;
+        mat3_to_mat4(final_matrix, VertPcrData.mat4);
 
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkwc_vert_pcr_data), &vkwc_vert_pcr_data);
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(vkwc_vert_pcr_data), sizeof(float),
-		&alpha);
-	vkCmdDraw(cb, 4, 1, 0, 0);
-	texture->last_used = renderer->frame;
+        VertPcrData.uv_off[0] = box->x / wlr_texture->width;
+        VertPcrData.uv_off[1] = box->y / wlr_texture->height;
+        VertPcrData.uv_size[0] = box->width / wlr_texture->width;
+        VertPcrData.uv_size[1] = box->height / wlr_texture->height;
 
-	return true;
+        vkCmdPushConstants(cb, renderer->pipe_layout,
+                VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
+        vkCmdPushConstants(cb, renderer->pipe_layout,
+                VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float),
+                &alpha);
+        vkCmdDraw(cb, 4, 1, 0, 0);
+        texture->last_used = renderer->frame;
+
+        return true;
 }
 
 static void render_texture(struct wlr_output *output,
                 pixman_region32_t *output_damage, struct wlr_texture *texture,
                 const struct wlr_fbox *src_box, const struct wlr_box *dst_box,
                 const float matrix[static 9]) {
+        /* src_box: pixel coordinates, but only width and height. Also floating point.
+         * dst_box: pixel coordinates of where to render to
+         * matrix: matrix to transform 0..1 coords to where to render to
+         * 
+         * We can only re-draw the regions that are actually damaged or it won't play nice.
+         * Trying to just draw the entire texture leads to a lot of glitches. So, for each
+         * damaged region in output_damage, we scissor it and then call
+         * render_subtexture_with_matrix.
+         */
+
         struct wlr_renderer *renderer = output->renderer;
         assert(renderer);
+
+        wlr_renderer_scissor(renderer, NULL);
+        render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
 
         struct wlr_fbox default_src_box = {0};
         if (wlr_fbox_empty(src_box)) {
@@ -828,9 +840,20 @@ static void render_texture(struct wlr_output *output,
 
         int nrects;
         pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
-        for (int i = 0; i < nrects; ++i) {
+
+        for (int i = 0; i < nrects; i++) {
                 scissor_output(output, &rects[i]);
-                vkwc_render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
+                //render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
+        }
+
+        wlr_renderer_scissor(renderer, NULL);
+        for (int i = 0; i < nrects; i++) {
+                pixman_box32_t box = rects[i];
+                struct wlr_box wbox = {.x = box.x1, .y = box.y1, .width = box.x2 - box.x1, .height = box.y2 - box.y1};
+                printf("\tDamage: %4d %4d %4d %4d\n", wbox.x, wbox.y, wbox.width, wbox.height);
+                const float projection[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+                const float color[4] = {1, 0, 1, 0.5};
+                wlr_render_rect(renderer, &wbox, color, projection);
         }
         fflush(stdout);
 
@@ -907,7 +930,7 @@ static void render_node_iterator(struct wlr_scene_node *node,
         }
 }
 
-void vkwc_scene_render_output(struct wlr_scene *scene, struct wlr_output *output,
+void scene_render_output(struct wlr_scene *scene, struct wlr_output *output,
                 int lx, int ly, pixman_region32_t *damage) {
         pixman_region32_t full_region;
         pixman_region32_init_rect(&full_region, 0, 0, output->width, output->height);
@@ -932,7 +955,7 @@ void vkwc_scene_render_output(struct wlr_scene *scene, struct wlr_output *output
         pixman_region32_fini(&full_region);
 }
 
-static bool vkwc_scene_output_scanout(struct wlr_scene_output *scene_output) {
+static bool scene_output_scanout(struct wlr_scene_output *scene_output) {
         struct wlr_output *output = scene_output->output;
 
         struct wlr_box viewport_box = { .x = scene_output->x, .y = scene_output->y };
@@ -994,7 +1017,7 @@ static bool vkwc_scene_output_scanout(struct wlr_scene_output *scene_output) {
         return wlr_output_commit(output);
 }
 
-bool vkwc_scene_output_commit(struct wlr_scene_output *scene_output) {
+bool scene_output_commit(struct wlr_scene_output *scene_output) {
         // Get the output, i.e. screen
         struct wlr_output *output = scene_output->output;
 
@@ -1003,7 +1026,7 @@ bool vkwc_scene_output_commit(struct wlr_scene_output *scene_output) {
         assert(renderer != NULL);
 
         // Scanout is actually sending the pixels to the monitor (I think).
-        bool scanout = vkwc_scene_output_scanout(scene_output);
+        bool scanout = scene_output_scanout(scene_output);
         if (scanout != scene_output->prev_scanout) {
                 wlr_log(WLR_DEBUG, "Direct scan-out %s",
                         scanout ? "enabled" : "disabled");
@@ -1043,6 +1066,13 @@ bool vkwc_scene_output_commit(struct wlr_scene_output *scene_output) {
 
         wlr_renderer_begin(renderer, output->width, output->height);
 
+        wlr_renderer_scissor(renderer, NULL);
+        struct wlr_box wbox = { .x = 0, .y = 0, .width = 1920, .height = 1080 };
+        const float projection[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+        const float color[4] = {0, 0, 1, 1};
+        wlr_render_rect(renderer, &wbox, color, projection);
+
+        /*
         // Fill all damaged rectangles with a background color (I think)
         int nrects;
         pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
@@ -1050,8 +1080,9 @@ bool vkwc_scene_output_commit(struct wlr_scene_output *scene_output) {
                 scissor_output(output, &rects[i]);
                 wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
         }
+        */
 
-        vkwc_scene_render_output(scene_output->scene, output,
+        scene_render_output(scene_output->scene, output,
                 scene_output->x, scene_output->y, &damage);
         wlr_output_render_software_cursors(output, &damage);
 
@@ -1077,7 +1108,7 @@ bool vkwc_scene_output_commit(struct wlr_scene_output *scene_output) {
 static void handle_output_frame(struct wl_listener *listener, void *data) {
         /* This function is called every time an output is ready to display a frame,
          * generally at the output's refresh rate (e.g. 60Hz). */
-        struct vkwc_output *output = wl_container_of(listener, output, frame);
+        struct Output *output = wl_container_of(listener, output, frame);
         struct wlr_scene *scene = output->server->scene;
 
         // wlr_scene_output: "A viewport for an output in the scene-graph" (include/wlr/types/wlr_scene.h)
@@ -1089,7 +1120,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
         fflush(stdout);
 
         /* Render the scene if needed and commit the output */
-        vkwc_scene_output_commit(scene_output);
+        scene_output_commit(scene_output);
 
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -1101,7 +1132,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 static void handle_new_output(struct wl_listener *listener, void *data) {
         /* This event is raised by the backend when a new output (aka a display or
          * monitor) becomes available. */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, new_output);
         struct wlr_output *wlr_output = data;
 
@@ -1124,8 +1155,8 @@ static void handle_new_output(struct wl_listener *listener, void *data) {
         }
 
         /* Allocates and configures our state for this output */
-        struct vkwc_output *output =
-                calloc(1, sizeof(struct vkwc_output));
+        struct Output *output =
+                calloc(1, sizeof(struct Output));
         output->wlr_output = wlr_output;
         output->server = server;
         /* Sets up a listener for the frame notify event. */
@@ -1147,7 +1178,7 @@ static void handle_new_output(struct wl_listener *listener, void *data) {
 
 static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
         /* Called when the surface is mapped, or ready to display on-screen. */
-        struct vkwc_view *view = wl_container_of(listener, view, map);
+        struct View *view = wl_container_of(listener, view, map);
 
         wl_list_insert(&view->server->views, &view->link);
 
@@ -1156,14 +1187,14 @@ static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
 
 static void handle_xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
         /* Called when the surface is unmapped, and should no longer be shown. */
-        struct vkwc_view *view = wl_container_of(listener, view, unmap);
+        struct View *view = wl_container_of(listener, view, unmap);
 
         wl_list_remove(&view->link);
 }
 
 static void handle_xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
         /* Called when the surface is destroyed and should never be shown again. */
-        struct vkwc_view *view = wl_container_of(listener, view, destroy);
+        struct View *view = wl_container_of(listener, view, destroy);
 
         wl_list_remove(&view->map.link);
         wl_list_remove(&view->unmap.link);
@@ -1174,12 +1205,12 @@ static void handle_xdg_toplevel_destroy(struct wl_listener *listener, void *data
         free(view);
 }
 
-static void begin_interactive(struct vkwc_view *view,
-                enum vkwc_cursor_mode mode, uint32_t edges) {
+static void begin_interactive(struct View *view,
+                enum CursorMode mode, uint32_t edges) {
         /* This function sets up an interactive move or resize operation, where the
          * compositor stops propegating pointer events to clients and instead
          * consumes them itself, to move or resize windows. */
-        struct vkwc_server *server = view->server;
+        struct Server *server = view->server;
         struct wlr_surface *focused_surface =
                 server->seat->pointer_state.focused_surface;
         if (view->xdg_surface->surface !=
@@ -1219,7 +1250,7 @@ static void handle_xdg_toplevel_request_move(
          * decorations. Note that a more sophisticated compositor should check the
          * provided serial against a list of button press serials sent to this
          * client, to prevent the client from requesting this whenever they want. */
-        struct vkwc_view *view = wl_container_of(listener, view, request_move);
+        struct View *view = wl_container_of(listener, view, request_move);
         begin_interactive(view, VKWC_CURSOR_MOVE, 0);
 }
 
@@ -1231,14 +1262,14 @@ static void handle_xdg_toplevel_request_resize(
          * provided serial against a list of button press serials sent to this
          * client, to prevent the client from requesting this whenever they want. */
         struct wlr_xdg_toplevel_resize_event *event = data;
-        struct vkwc_view *view = wl_container_of(listener, view, request_resize);
+        struct View *view = wl_container_of(listener, view, request_resize);
         begin_interactive(view, VKWC_CURSOR_RESIZE, event->edges);
 }
 
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
         /* This event is raised when wlr_xdg_shell receives a new xdg surface from a
          * client, either a toplevel (application window) or popup. */
-        struct vkwc_server *server =
+        struct Server *server =
                 wl_container_of(listener, server, new_xdg_surface);
         struct wlr_xdg_surface *xdg_surface = data;
 
@@ -1257,9 +1288,9 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
         }
         assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
 
-        /* Allocate a vkwc_view for this surface */
-        struct vkwc_view *view =
-                calloc(1, sizeof(struct vkwc_view));
+        /* Allocate a View for this surface */
+        struct View *view =
+                calloc(1, sizeof(struct View));
         view->type = XDG_SHELL_VIEW;
         view->server = server;
         view->xdg_surface = xdg_surface;
@@ -1285,8 +1316,8 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 }
 
 static void handle_xwayland_surface_map(struct wl_listener *listener, void *data) {
-        struct vkwc_xwayland_view *xwayland_view = wl_container_of(listener, xwayland_view, map);
-        struct vkwc_view *view = &xwayland_view->view;
+        struct XWaylandView *xwayland_view = wl_container_of(listener, xwayland_view, map);
+        struct View *view = &xwayland_view->view;
         struct wlr_surface *surface = xwayland_view->xwayland_surface->surface;
 
         view->scene_node = wlr_scene_subsurface_tree_create(&view->server->scene->node, surface);
@@ -1300,10 +1331,10 @@ static void handle_xwayland_surface_map(struct wl_listener *listener, void *data
 }
 
 static void handle_xwayland_surface_new(struct wl_listener *listener, void *data) {
-        struct vkwc_server *server = wl_container_of(listener, server, new_xwayland_surface);
+        struct Server *server = wl_container_of(listener, server, new_xwayland_surface);
         struct wlr_xwayland_surface *xwayland_surface = data;
 
-        struct vkwc_xwayland_view *xwayland_view = calloc(1, sizeof(struct vkwc_xwayland_view));
+        struct XWaylandView *xwayland_view = calloc(1, sizeof(struct XWaylandView));
         assert(xwayland_view);
 
         xwayland_view->xwayland_surface = xwayland_surface;
@@ -1335,7 +1366,7 @@ int main(int argc, char *argv[]) {
                 return 0;
         }
 
-        struct vkwc_server server;
+        struct Server server;
         /* The Wayland display is managed by libwayland. It handles accepting
          * clients from the Unix socket, manging Wayland globals, and so on. */
         server.wl_display = wl_display_create();
