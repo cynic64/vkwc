@@ -195,7 +195,6 @@ summary(features + internal_features, bool_yn: true)
 
 if get_option('examples')
 	subdir('examples')
-	subdir('tinywl')
 endif
 
 pkgconfig = import('pkgconfig')

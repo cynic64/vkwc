@@ -1,6 +1,7 @@
-notes.txt
+notes.md
 vkwc
 stdout
 stderr
+wlroots/*
 *-protocol.c
 *-protocol.h
