@@ -776,6 +776,11 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
+        printf("Matrix: ");
+        for (int i = 0; i < 9; i++) printf("%f ", matrix[i]);
+        printf("\n");
+        fflush(stdout);
+
         float final_matrix[9];
         wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
 
@@ -822,9 +827,7 @@ static void render_texture(struct wlr_output *output,
         struct wlr_renderer *renderer = output->renderer;
         assert(renderer);
 
-        wlr_renderer_scissor(renderer, NULL);
-        render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
-
+        // If the source box is empty, make one based on the destination box
         struct wlr_fbox default_src_box = {0};
         if (wlr_fbox_empty(src_box)) {
                 default_src_box.width = dst_box->width;
@@ -832,32 +835,8 @@ static void render_texture(struct wlr_output *output,
                 src_box = &default_src_box;
         }
 
-        pixman_region32_t damage;
-        pixman_region32_init(&damage);
-        pixman_region32_init_rect(&damage, dst_box->x, dst_box->y,
-                dst_box->width, dst_box->height);
-        pixman_region32_intersect(&damage, &damage, output_damage);
-
-        int nrects;
-        pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
-
-        for (int i = 0; i < nrects; i++) {
-                scissor_output(output, &rects[i]);
-                //render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
-        }
-
         wlr_renderer_scissor(renderer, NULL);
-        for (int i = 0; i < nrects; i++) {
-                pixman_box32_t box = rects[i];
-                struct wlr_box wbox = {.x = box.x1, .y = box.y1, .width = box.x2 - box.x1, .height = box.y2 - box.y1};
-                printf("\tDamage: %4d %4d %4d %4d\n", wbox.x, wbox.y, wbox.width, wbox.height);
-                const float projection[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
-                const float color[4] = {1, 0, 1, 0.5};
-                wlr_render_rect(renderer, &wbox, color, projection);
-        }
-        fflush(stdout);
-
-        pixman_region32_fini(&damage);
+        render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
 }
 
 static void render_node_iterator(struct wlr_scene_node *node,
@@ -890,12 +869,14 @@ static void render_node_iterator(struct wlr_scene_node *node,
                         return;
                 }
 
+                // In my case (and I think basically always) both transform and output->transform_matrix
+                // are both identity matrices
                 transform = wlr_output_transform_invert(surface->current.transform);
                 wlr_matrix_project_box(matrix, &dst_box, transform, 0.0,
                         output->transform_matrix);
 
+                // The source box has the size of the surface. X and Y are always 0, as far as I can tell.
                 struct wlr_fbox src_box = {0};
-                wlr_surface_get_buffer_source_box(surface, &src_box);
 
                 render_texture(output, output_damage, texture,
                         &src_box, &dst_box, matrix);
@@ -1056,6 +1037,7 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
         }
 
         // Try to import new buffers as textures
+        // As far as I can tell this never gets called
         struct wlr_scene_buffer *scene_buffer, *scene_buffer_tmp;
         wl_list_for_each_safe(scene_buffer, scene_buffer_tmp,
                         &scene_output->scene->pending_buffers, pending_link) {
@@ -1066,21 +1048,15 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
 
         wlr_renderer_begin(renderer, output->width, output->height);
 
-        wlr_renderer_scissor(renderer, NULL);
-        struct wlr_box wbox = { .x = 0, .y = 0, .width = 1920, .height = 1080 };
-        const float projection[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
-        const float color[4] = {0, 0, 1, 1};
-        wlr_render_rect(renderer, &wbox, color, projection);
-
-        /*
-        // Fill all damaged rectangles with a background color (I think)
+        // Fill all damaged rectangles with a background color
         int nrects;
         pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
         for (int i = 0; i < nrects; ++i) {
                 scissor_output(output, &rects[i]);
                 wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
         }
-        */
+        //wlr_renderer_scissor(renderer, NULL);
+        //wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
 
         scene_render_output(scene_output->scene, output,
                 scene_output->x, scene_output->y, &damage);
