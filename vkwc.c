@@ -42,6 +42,9 @@
 
 #define M_PI 3.14159265358979323846
 
+// I want to count how many surfaces I render each frame
+int rendered_surface_count = 0;
+
 struct VertPcrData {
         float mat4[4][4];
         float uv_off[2];
@@ -749,6 +752,9 @@ static void render_rect(struct wlr_output *output,
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
                 const float matrix[static 9], float alpha) {
+        printf("\t\t\t\trender_subtexture_with_matrix\n");
+        fflush(stdout);
+
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         VkCommandBuffer cb = renderer->cb;
 
@@ -776,23 +782,19 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
-        printf("Matrix: ");
-        for (int i = 0; i < 9; i++) printf("%f ", matrix[i]);
-        printf("\n");
-        fflush(stdout);
-
         float final_matrix[9];
         wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
 
-        /*
-        float theta = M_PI * 0.25;
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+
+        float theta = M_PI * 2 * (ts.tv_nsec / 1000000000.0 + ts.tv_sec) * 0.05;
         float rotation[9] = {cosf(theta), sinf(theta), 0, -sinf(theta), cosf(theta), 0, 0, 0, 1};
         float my_matrix[9];
         wlr_matrix_multiply(my_matrix, rotation, final_matrix);
-        */
 
         struct VertPcrData VertPcrData;
-        mat3_to_mat4(final_matrix, VertPcrData.mat4);
+        mat3_to_mat4(my_matrix, VertPcrData.mat4);
 
         VertPcrData.uv_off[0] = box->x / wlr_texture->width;
         VertPcrData.uv_off[1] = box->y / wlr_texture->height;
@@ -818,11 +820,11 @@ static void render_texture(struct wlr_output *output,
          * dst_box: pixel coordinates of where to render to
          * matrix: matrix to transform 0..1 coords to where to render to
          * 
-         * We can only re-draw the regions that are actually damaged or it won't play nice.
-         * Trying to just draw the entire texture leads to a lot of glitches. So, for each
-         * damaged region in output_damage, we scissor it and then call
-         * render_subtexture_with_matrix.
+         * The original tinywl only redraws damaged regions (for efficiency, I think).
+         * But screw that.
          */
+        printf("\t\t\trender_texture\n");
+        fflush(stdout);
 
         struct wlr_renderer *renderer = output->renderer;
         assert(renderer);
@@ -841,6 +843,9 @@ static void render_texture(struct wlr_output *output,
 
 static void render_node_iterator(struct wlr_scene_node *node,
                 int x, int y, void *_data) {
+        printf("\t\trender_node_iterator\n");
+        fflush(stdout);
+
         struct render_data *data = _data;
         struct wlr_output *output = data->output;
         pixman_region32_t *output_damage = data->damage;
@@ -861,6 +866,8 @@ static void render_node_iterator(struct wlr_scene_node *node,
                 /* Root or tree node has nothing to render itself */
                 break;
         case WLR_SCENE_NODE_SURFACE:;
+                rendered_surface_count++;
+
                 struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
                 struct wlr_surface *surface = scene_surface->surface;
 
@@ -913,6 +920,8 @@ static void render_node_iterator(struct wlr_scene_node *node,
 
 void scene_render_output(struct wlr_scene *scene, struct wlr_output *output,
                 int lx, int ly, pixman_region32_t *damage) {
+        printf("\tscene_render_output\n");
+        fflush(stdout);
         pixman_region32_t full_region;
         pixman_region32_init_rect(&full_region, 0, 0, output->width, output->height);
         if (damage == NULL) {
@@ -999,6 +1008,13 @@ static bool scene_output_scanout(struct wlr_scene_output *scene_output) {
 }
 
 bool scene_output_commit(struct wlr_scene_output *scene_output) {
+        printf("scene_output_commit\n");
+        fflush(stdout);
+
+        // If I don't do this, windows aren't re-drawn when the cursor moves.
+        // So screw it.
+        wlr_output_damage_add_whole(scene_output->damage);
+
         // Get the output, i.e. screen
         struct wlr_output *output = scene_output->output;
 
@@ -1049,18 +1065,26 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
         wlr_renderer_begin(renderer, output->width, output->height);
 
         // Fill all damaged rectangles with a background color
+        /*
         int nrects;
         pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
         for (int i = 0; i < nrects; ++i) {
                 scissor_output(output, &rects[i]);
                 wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
         }
-        //wlr_renderer_scissor(renderer, NULL);
-        //wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
+        */
 
+        wlr_renderer_scissor(renderer, NULL);
+        wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
+
+        rendered_surface_count = 0;
         scene_render_output(scene_output->scene, output,
                 scene_output->x, scene_output->y, &damage);
         wlr_output_render_software_cursors(output, &damage);
+
+        struct wlr_box box = { .x = 10, .y = 10, .width = 20, .height = rendered_surface_count*2 + 1 };
+        wlr_render_rect(renderer, &box, (float[4]){ rand()%2, rand()%2, rand()%2, 1.0 },
+                (float[9]){ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 });;
 
         wlr_renderer_end(renderer);
         pixman_region32_fini(&damage);
