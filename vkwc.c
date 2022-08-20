@@ -753,8 +753,6 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
                 const float matrix[static 9], float alpha) {
         printf("\t\t\t\trender_subtexture_with_matrix\n");
-        fflush(stdout);
-
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         VkCommandBuffer cb = renderer->cb;
 
@@ -782,16 +780,45 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
+        float matrix_copy[9];
+        memcpy(matrix_copy, matrix, sizeof(float) * 9);
+        matrix_copy[2] = 0;
+        matrix_copy[5] = 0;
+
         float final_matrix[9];
-        wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
+        wlr_matrix_multiply(final_matrix, renderer->projection, matrix_copy);
 
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 
         float theta = M_PI * 2 * (ts.tv_nsec / 1000000000.0 + ts.tv_sec) * 0.05;
-        float rotation[9] = {cosf(theta), sinf(theta), 0, -sinf(theta), cosf(theta), 0, 0, 0, 1};
+        float rotation[9] = {cosf(theta), sinf(theta), 0,
+                -sinf(theta), cosf(theta), 0,
+                0, 0, 1};
         float my_matrix[9];
         wlr_matrix_multiply(my_matrix, rotation, final_matrix);
+
+        float start_x = (box->width) * 2.0 / 1920.0 * 0.5;
+        float start_y = (box->height) * 2.0 / 1080.0 * 0.5;
+        float end_x = (box->width * 0.5 + matrix[2]) * 2.0 / 1920.0 - 1.0;
+        float end_y = (box->height * 0.5 + matrix[5]) * 2.0 / 1080.0 - 1.0;
+
+        // Point at box->width * 
+
+        my_matrix[2] = end_x - start_x * my_matrix[0] - start_y * my_matrix[1];
+        my_matrix[5] = end_y - start_x * my_matrix[3] - start_y * my_matrix[4];
+        //my_matrix[2] = 0.5;
+        //my_matrix[5] = 0.5;
+
+        printf("Matrix around %f, %f: ", box->width + box->x, box->height + box->y);
+        for (int i = 0; i < 9; i++) printf("%f ", my_matrix[i]);
+        printf("\n");
+
+        printf("Point (%f %f) ends up at (%f %f), wanted (%f %f)\n", start_x, start_y, start_x * my_matrix[0] + start_y * my_matrix[1] + 1 * my_matrix[2],
+                start_x * my_matrix[3] + start_y * my_matrix[4] + 1 * my_matrix[5],
+                end_x, end_y);
+
+        fflush(stdout);
 
         struct VertPcrData VertPcrData;
         mat3_to_mat4(my_matrix, VertPcrData.mat4);
