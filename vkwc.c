@@ -790,48 +790,28 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
-        // Make a copy of the matrix so we can edit it
-        float matrix_copy[9];
-        memcpy(matrix_copy, matrix, sizeof(float) * 9);
-        // Remove the translation component of the matrix
-        matrix_copy[2] = 0;
-        matrix_copy[5] = 0;
-
         // Apply the projection matrix to the matrix we were given
         // render->projection takes 0..1920 and 0..1080 and maps them to -1..1
         // So for my resolution it's always [2/1920 0 -1    0 2/1080 -1    0 0 1]
         float final_matrix[9];
-        wlr_matrix_multiply(final_matrix, renderer->projection, matrix_copy);
+        wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
 
         // Rotate the matrix
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 
         float theta = M_PI * 2 * (ts.tv_nsec / 1000000000.0 + ts.tv_sec) * 0.05;
-        float rotation[9] = {cosf(theta), sinf(theta), 0,
-                -sinf(theta), cosf(theta), 0,
+        float rotation[9] = {cosf(theta), sinf(theta), 0.5,
+                -sinf(theta), cosf(theta), 0.5,
                 0, 0, 1};
+        float anchor_x = (matrix[2] + matrix[0] * 0.5) * 2.0 / 1920.0 - 1.0;
+        float anchor_y = (matrix[5] + matrix[4] * 0.5) * 2.0 / 1080.0 - 1.0;
+        rotation[2] = anchor_x - anchor_x * rotation[0] - anchor_y * rotation[1];
+        rotation[5] = anchor_y - anchor_x * rotation[3] - anchor_y * rotation[4];
         float my_matrix[9];
         wlr_matrix_multiply(my_matrix, rotation, final_matrix);
 
-        float start_x = (box->width) * 2.0 / 1920.0 * 0.5;
-        float start_y = (box->height) * 2.0 / 1080.0 * 0.5;
-        float end_x = (box->width * 0.5 + matrix[2]) * 2.0 / 1920.0 - 1.0;
-        float end_y = (box->height * 0.5 + matrix[5]) * 2.0 / 1080.0 - 1.0;
-
-        my_matrix[2] = end_x - start_x * my_matrix[0] - start_y * my_matrix[1];
-        my_matrix[5] = end_y - start_x * my_matrix[3] - start_y * my_matrix[4];
-
-        printf("Matrix around %f, %f: ", box->width + box->x, box->height + box->y);
-        for (int i = 0; i < 9; i++) printf("%f ", my_matrix[i]);
-        printf("\n");
-
-        printf("Point (%f %f) ends up at (%f %f), wanted (%f %f)\n", start_x, start_y, start_x * my_matrix[0] + start_y * my_matrix[1] + 1 * my_matrix[2],
-                start_x * my_matrix[3] + start_y * my_matrix[4] + 1 * my_matrix[5],
-                end_x, end_y);
-
-        fflush(stdout);
-
+        // Draw
         struct VertPcrData VertPcrData;
         mat3_to_mat4(my_matrix, VertPcrData.mat4);
 
@@ -848,6 +828,8 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdDraw(cb, 4, 1, 0, 0);
 
         // Draw a copy in the original position
+        final_matrix[2] = 0;
+        final_matrix[5] = 0;
         float copy_alpha = 0.5;
         mat3_to_mat4(final_matrix, VertPcrData.mat4);
 
@@ -860,10 +842,12 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 
         texture->last_used = renderer->frame;
 
+        /*
         int start_x_pixel = (start_x + 1) * 0.5 * 1920.0, start_y_pixel = (start_y + 1) * 0.5 * 1080.0;
         int end_x_pixel = (end_x + 1) * 0.5 * 1920.0, end_y_pixel = (end_y + 1) * 0.5 * 1080.0;
         render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, start_x_pixel - 1, start_y_pixel - 1, 2, 2);
         render_rect_simple(wlr_renderer, (float[4]){1.0, 0.0, 1.0, 1.0}, end_x_pixel - 1, end_y_pixel - 1, 2, 2);
+        */
 
         return true;
 }
