@@ -140,6 +140,12 @@ struct Keyboard {
         struct wl_listener key;
 };
 
+void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int x, int y, int width, int height) {
+        struct wlr_box box = { .x = x, .y = y, .width = width, .height = height };
+        float identity_matrix[9] = { 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 };
+        wlr_render_rect(renderer, &box, color, identity_matrix);;
+}
+
 static void focus_view(struct View *view, struct wlr_surface *surface) {
         /* Note: this function only deals with keyboard focus. */
         if (view == NULL) {
@@ -752,6 +758,10 @@ static void render_rect(struct wlr_output *output,
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
                 const float matrix[static 9], float alpha) {
+        /*
+         * Box only has the width and height (in pixel coordinates).
+         * box->x and box->y are always 0.
+         */
         printf("\t\t\t\trender_subtexture_with_matrix\n");
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         VkCommandBuffer cb = renderer->cb;
@@ -780,14 +790,20 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
+        // Make a copy of the matrix so we can edit it
         float matrix_copy[9];
         memcpy(matrix_copy, matrix, sizeof(float) * 9);
+        // Remove the translation component of the matrix
         matrix_copy[2] = 0;
         matrix_copy[5] = 0;
 
+        // Apply the projection matrix to the matrix we were given
+        // render->projection takes 0..1920 and 0..1080 and maps them to -1..1
+        // So for my resolution it's always [2/1920 0 -1    0 2/1080 -1    0 0 1]
         float final_matrix[9];
         wlr_matrix_multiply(final_matrix, renderer->projection, matrix_copy);
 
+        // Rotate the matrix
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 
@@ -803,12 +819,8 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         float end_x = (box->width * 0.5 + matrix[2]) * 2.0 / 1920.0 - 1.0;
         float end_y = (box->height * 0.5 + matrix[5]) * 2.0 / 1080.0 - 1.0;
 
-        // Point at box->width * 
-
         my_matrix[2] = end_x - start_x * my_matrix[0] - start_y * my_matrix[1];
         my_matrix[5] = end_y - start_x * my_matrix[3] - start_y * my_matrix[4];
-        //my_matrix[2] = 0.5;
-        //my_matrix[5] = 0.5;
 
         printf("Matrix around %f, %f: ", box->width + box->x, box->height + box->y);
         for (int i = 0; i < 9; i++) printf("%f ", my_matrix[i]);
@@ -834,7 +846,24 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float),
                 &alpha);
         vkCmdDraw(cb, 4, 1, 0, 0);
+
+        // Draw a copy in the original position
+        float copy_alpha = 0.5;
+        mat3_to_mat4(final_matrix, VertPcrData.mat4);
+
+        vkCmdPushConstants(cb, renderer->pipe_layout,
+                VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
+        vkCmdPushConstants(cb, renderer->pipe_layout,
+                VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float),
+                &copy_alpha);
+        vkCmdDraw(cb, 4, 1, 0, 0);
+
         texture->last_used = renderer->frame;
+
+        int start_x_pixel = (start_x + 1) * 0.5 * 1920.0, start_y_pixel = (start_y + 1) * 0.5 * 1080.0;
+        int end_x_pixel = (end_x + 1) * 0.5 * 1920.0, end_y_pixel = (end_y + 1) * 0.5 * 1080.0;
+        render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, start_x_pixel - 1, start_y_pixel - 1, 2, 2);
+        render_rect_simple(wlr_renderer, (float[4]){1.0, 0.0, 1.0, 1.0}, end_x_pixel - 1, end_y_pixel - 1, 2, 2);
 
         return true;
 }
@@ -904,8 +933,11 @@ static void render_node_iterator(struct wlr_scene_node *node,
                 }
 
                 // In my case (and I think basically always) both transform and output->transform_matrix
-                // are both identity matrices
+                // are identity matrices
                 transform = wlr_output_transform_invert(surface->current.transform);
+
+                // The resulting matrix looks like [w 0 x    0 h y    0 0 1]
+                // So it would coordinates 0..1 to the pixel coordinates of the window
                 wlr_matrix_project_box(matrix, &dst_box, transform, 0.0,
                         output->transform_matrix);
 
@@ -1109,9 +1141,8 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
                 scene_output->x, scene_output->y, &damage);
         wlr_output_render_software_cursors(output, &damage);
 
-        struct wlr_box box = { .x = 10, .y = 10, .width = 20, .height = rendered_surface_count*2 + 1 };
-        wlr_render_rect(renderer, &box, (float[4]){ rand()%2, rand()%2, rand()%2, 1.0 },
-                (float[9]){ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 });;
+        float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
+        render_rect_simple(renderer, color, 10, 10, 20, rendered_surface_count*2 + 1);
 
         wlr_renderer_end(renderer);
         pixman_region32_fini(&damage);
