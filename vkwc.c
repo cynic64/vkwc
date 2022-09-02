@@ -842,12 +842,9 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 
         texture->last_used = renderer->frame;
 
-        /*
-        int start_x_pixel = (start_x + 1) * 0.5 * 1920.0, start_y_pixel = (start_y + 1) * 0.5 * 1080.0;
-        int end_x_pixel = (end_x + 1) * 0.5 * 1920.0, end_y_pixel = (end_y + 1) * 0.5 * 1080.0;
-        render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, start_x_pixel - 1, start_y_pixel - 1, 2, 2);
-        render_rect_simple(wlr_renderer, (float[4]){1.0, 0.0, 1.0, 1.0}, end_x_pixel - 1, end_y_pixel - 1, 2, 2);
-        */
+        float anchor_x_pixel = (anchor_x + 1.0) * 0.5 * 1920.0;
+        float anchor_y_pixel = (anchor_y + 1.0) * 0.5 * 1080.0;
+        render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, anchor_x_pixel - 1, anchor_y_pixel - 1, 2, 2);
 
         return true;
 }
