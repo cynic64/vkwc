@@ -790,12 +790,6 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
-        // Apply the projection matrix to the matrix we were given
-        // render->projection takes 0..1920 and 0..1080 and maps them to -1..1
-        // So for my resolution it's always [2/1920 0 -1    0 2/1080 -1    0 0 1]
-        float final_matrix[9];
-        wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
-
         // Rotate the matrix
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
@@ -804,16 +798,22 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         float rotation[9] = {cosf(theta), sinf(theta), 0.5,
                 -sinf(theta), cosf(theta), 0.5,
                 0, 0, 1};
-        float anchor_x = (matrix[2] + matrix[0] * 0.5) * 2.0 / 1920.0 - 1.0;
-        float anchor_y = (matrix[5] + matrix[4] * 0.5) * 2.0 / 1080.0 - 1.0;
+        float anchor_x = (matrix[2] + matrix[0] * 0.5);
+        float anchor_y = (matrix[5] + matrix[4] * 0.5);
         rotation[2] = anchor_x - anchor_x * rotation[0] - anchor_y * rotation[1];
         rotation[5] = anchor_y - anchor_x * rotation[3] - anchor_y * rotation[4];
         float my_matrix[9];
-        wlr_matrix_multiply(my_matrix, rotation, final_matrix);
+        wlr_matrix_multiply(my_matrix, rotation, matrix);
+
+        // Apply the projection matrix to the matrix we were given
+        // render->projection takes 0..1920 and 0..1080 and maps them to -1..1
+        // So for my resolution it's always [2/1920 0 -1    0 2/1080 -1    0 0 1]
+        float final_matrix[9];
+        wlr_matrix_multiply(final_matrix, renderer->projection, my_matrix);
 
         // Draw
         struct VertPcrData VertPcrData;
-        mat3_to_mat4(my_matrix, VertPcrData.mat4);
+        mat3_to_mat4(final_matrix, VertPcrData.mat4);
 
         VertPcrData.uv_off[0] = box->x / wlr_texture->width;
         VertPcrData.uv_off[1] = box->y / wlr_texture->height;
@@ -842,9 +842,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 
         texture->last_used = renderer->frame;
 
-        float anchor_x_pixel = (anchor_x + 1.0) * 0.5 * 1920.0;
-        float anchor_y_pixel = (anchor_y + 1.0) * 0.5 * 1080.0;
-        render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, anchor_x_pixel - 1, anchor_y_pixel - 1, 2, 2);
+        render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, anchor_x - 1, anchor_y - 1, 2, 2);
 
         return true;
 }
