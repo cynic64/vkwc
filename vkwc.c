@@ -761,6 +761,9 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         /*
          * Box only has the width and height (in pixel coordinates).
          * box->x and box->y are always 0.
+         * 
+         * The matrix we get converts 0..1 to the pixel coordinates of the windw.
+         * It looks like [width 0 x    0 height y    0 0 1]
          */
         printf("\t\t\t\trender_subtexture_with_matrix\n");
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
@@ -798,18 +801,23 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         float rotation[9] = {cosf(theta), sinf(theta), 0.5,
                 -sinf(theta), cosf(theta), 0.5,
                 0, 0, 1};
+
+        // If we don't include a translation component, the rotation is centered around (0, 0) and
+        // will most likely put the window off screen. Instead, center it around the center of the
+        // window.
         float anchor_x = (matrix[2] + matrix[0] * 0.5);
         float anchor_y = (matrix[5] + matrix[4] * 0.5);
         rotation[2] = anchor_x - anchor_x * rotation[0] - anchor_y * rotation[1];
         rotation[5] = anchor_y - anchor_x * rotation[3] - anchor_y * rotation[4];
-        float my_matrix[9];
-        wlr_matrix_multiply(my_matrix, rotation, matrix);
+
+        float rotated_matrix[9];
+        wlr_matrix_multiply(rotated_matrix, rotation, matrix);
 
         // Apply the projection matrix to the matrix we were given
         // render->projection takes 0..1920 and 0..1080 and maps them to -1..1
         // So for my resolution it's always [2/1920 0 -1    0 2/1080 -1    0 0 1]
         float final_matrix[9];
-        wlr_matrix_multiply(final_matrix, renderer->projection, my_matrix);
+        wlr_matrix_multiply(final_matrix, renderer->projection, rotated_matrix);
 
         // Draw
         struct VertPcrData VertPcrData;
@@ -828,11 +836,11 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdDraw(cb, 4, 1, 0, 0);
 
         // Draw a copy in the original position
-        final_matrix[2] = 0;
-        final_matrix[5] = 0;
-        float copy_alpha = 0.5;
-        mat3_to_mat4(final_matrix, VertPcrData.mat4);
+        float non_rotated_final_matrix[9];
+        wlr_matrix_multiply(non_rotated_final_matrix, renderer->projection, matrix);
+        mat3_to_mat4(non_rotated_final_matrix, VertPcrData.mat4);
 
+        float copy_alpha = 0.5;
         vkCmdPushConstants(cb, renderer->pipe_layout,
                 VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
         vkCmdPushConstants(cb, renderer->pipe_layout,
