@@ -45,6 +45,9 @@
 // I want to count how many surfaces I render each frame
 int rendered_surface_count = 0;
 
+// To print scene node types as text
+const char* const SCENE_NODE_TYPE_LOOKUP[] = {"ROOT", "TREE", "SURFACE", "RECT", "BUFFER", "INVALID"};
+
 struct VertPcrData {
         float mat4[4][4];
         float uv_off[2];
@@ -581,9 +584,9 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
 }
 
 void node_iterator(struct wlr_surface *node, int sx, int sy, void *_data) {
-        printf("\tSurface at %d, %d\n", sx, sy);
+        printf("\t[node_iterator] Surface at %d, %d\n", sx, sy);
         struct wlr_surface_state state = node->current;
-        printf("\t\twidth: %d, height: %d, role: %s\n", state.width, state.height, node->role->name);
+        printf("\t[node_iterator] width: %d, height: %d, role: %s\n", state.width, state.height, node->role->name);
 }
 
 struct check_scanout_data {
@@ -617,6 +620,23 @@ static void scene_node_for_each_node(struct wlr_scene_node *node,
         struct wlr_scene_node *child;
         wl_list_for_each(child, &node->state.children, state.link) {
                 scene_node_for_each_node(child, lx, ly, user_iterator, user_data);
+        }
+}
+
+void print_scene_graph(struct wlr_scene_node *node, int level) {
+        int width = 0, height = 0;
+        if (node->type == WLR_SCENE_NODE_SURFACE) {
+                struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+                width = scene_surface->surface->current.width;
+                height = scene_surface->surface->current.height;
+        }
+
+        for (int i = 0; i < level; i++) printf("\t");
+        printf("Node type: %s, dims: %d x %d\n", SCENE_NODE_TYPE_LOOKUP[node->type], width, height);
+
+        struct wlr_scene_node *child;
+        wl_list_for_each(child, &node->state.children, state.link) {
+                print_scene_graph(child, level + 1);
         }
 }
 
@@ -765,7 +785,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
          * The matrix we get converts 0..1 to the pixel coordinates of the windw.
          * It looks like [width 0 x    0 height y    0 0 1]
          */
-        printf("\t\t\t\trender_subtexture_with_matrix\n");
+        printf("\t\t\t\t[render_subtexture_with_matrix]\n");
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         VkCommandBuffer cb = renderer->cb;
 
@@ -838,6 +858,9 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         // Draw a copy in the original position
         float non_rotated_final_matrix[9];
         wlr_matrix_multiply(non_rotated_final_matrix, renderer->projection, matrix);
+        // Remove translation so it always renders top-left
+        non_rotated_final_matrix[2] = 0;
+        non_rotated_final_matrix[5] = 0;
         mat3_to_mat4(non_rotated_final_matrix, VertPcrData.mat4);
 
         float copy_alpha = 0.5;
@@ -866,7 +889,7 @@ static void render_texture(struct wlr_output *output,
          * The original tinywl only redraws damaged regions (for efficiency, I think).
          * But screw that.
          */
-        printf("\t\t\trender_texture\n");
+        printf("\t\t\t[render_texture]\n");
         fflush(stdout);
 
         struct wlr_renderer *renderer = output->renderer;
@@ -886,9 +909,6 @@ static void render_texture(struct wlr_output *output,
 
 static void render_node_iterator(struct wlr_scene_node *node,
                 int x, int y, void *_data) {
-        printf("\t\trender_node_iterator\n");
-        fflush(stdout);
-
         struct render_data *data = _data;
         struct wlr_output *output = data->output;
         pixman_region32_t *output_damage = data->damage;
@@ -966,7 +986,9 @@ static void render_node_iterator(struct wlr_scene_node *node,
 
 void scene_render_output(struct wlr_scene *scene, struct wlr_output *output,
                 int lx, int ly, pixman_region32_t *damage) {
-        printf("\tscene_render_output\n");
+        // lx and ly are always 0 in my case. Changing them would globally offset everything on the screen by that
+        // many pixels.
+        printf("\t[scene_render_output]");
         fflush(stdout);
         pixman_region32_t full_region;
         pixman_region32_init_rect(&full_region, 0, 0, output->width, output->height);
@@ -985,6 +1007,12 @@ void scene_render_output(struct wlr_scene *scene, struct wlr_output *output,
                 };
                 scene_node_for_each_node(&scene->node, -lx, -ly,
                         render_node_iterator, &data);
+
+                printf("\t[scene_render_output]Begin scene graph\n");
+                print_scene_graph(&scene->node, 2);
+                printf("\t[scene_render_output]End scene graph\n");
+                fflush(stdout);
+
                 wlr_renderer_scissor(renderer, NULL);
         }
 
