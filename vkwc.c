@@ -623,6 +623,22 @@ static void scene_node_for_each_node(struct wlr_scene_node *node,
         }
 }
 
+void get_node_pos(struct wlr_scene_node *node, int *x, int *y) {
+        /* Returns the absolute position of a node in pixels. Necessary because each node only knows
+         * its position relative to its parent. */
+        if (node->parent == NULL) {
+                *x = 0;
+                *y = 0;
+                return;
+        }
+
+        int parent_x = 0, parent_y = 0;
+        get_node_pos(node->parent, &parent_x, &parent_y);
+
+        *x = parent_x + node->state.x;
+        *y = parent_y + node->state.y;
+}
+
 void print_scene_graph(struct wlr_scene_node *node, int level) {
         int width = 0, height = 0;
         if (node->type == WLR_SCENE_NODE_SURFACE) {
@@ -631,8 +647,12 @@ void print_scene_graph(struct wlr_scene_node *node, int level) {
                 height = scene_surface->surface->current.height;
         }
 
+        int x, y;
+        get_node_pos(node, &x, &y);
+
         for (int i = 0; i < level; i++) printf("\t");
-        printf("Node type: %s, dims: %d x %d\n", SCENE_NODE_TYPE_LOOKUP[node->type], width, height);
+        printf("Node type: %s, dims: %d x %d, pos: %d %d\n", SCENE_NODE_TYPE_LOOKUP[node->type],
+                width, height, x, y);
 
         struct wlr_scene_node *child;
         wl_list_for_each(child, &node->state.children, state.link) {
