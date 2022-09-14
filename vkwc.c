@@ -657,22 +657,68 @@ void get_node_placement(struct wlr_scene_node *node, int *x, int *y, int *width,
         }
 }
 
+struct wlr_scene_node *get_main_node(struct wlr_scene_node *node) {
+        /* If we have a node like one of the decoration surfaces, this will (hopefully) return the
+         * main surface <node> is attached to.
+         * 
+         * We do this by:
+         *      Taking the node's parent until we hit the root node, the one before this is our "branch"
+         *      Take the first child of the branch until we hit a surface
+         * That should be the main window.
+         */
+
+        struct wlr_scene_node *cur = node;
+
+        // Go up until we hit the root
+        if (cur->parent == NULL) {
+                fprintf(stderr, "[get_main_node] Got a node with no parent! :(\n");
+                exit(1);
+        };
+        while (1) {
+                cur = cur->parent;
+
+                if (cur->parent == NULL) {
+                        fprintf(stderr, "[get_main_node] Parent node is NULL, what the hell??\n");
+                        exit(1);
+                }
+
+                if (cur->parent->type == WLR_SCENE_NODE_ROOT) break;
+        }
+
+        // Go down until we hit a surface
+        while (cur->type == WLR_SCENE_NODE_TREE) {
+                cur = wl_container_of(cur->state.children.next, cur, state.link);
+                if (cur == NULL) {
+                        fprintf(stderr, "[get_main_node] Couldn't find a surface\n");
+                        exit(1);
+                }
+        }
+
+        return cur;
+}
+
 void print_scene_graph(struct wlr_scene_node *node, int level) {
         int x, y, width, height;
         get_node_placement(node, &x, &y, &width, &height);
 
+        int main_x = 0, main_y = 0, main_w = 0, main_h = 0;
+
+        if (node->type == WLR_SCENE_NODE_SURFACE) {
+                struct wlr_scene_node *main_node = get_main_node(node);
+                get_node_placement(main_node, &main_x, &main_y, &main_w, &main_h);
+        }
+
+        int center_x = main_x + main_w / 2, center_y = main_y + main_h / 2;
+
         for (int i = 0; i < level; i++) printf("\t");
-        printf("Node type: %s, dims: %d x %d, pos: %d %d\n", SCENE_NODE_TYPE_LOOKUP[node->type],
-                width, height, x, y);
+        printf("Node type: %s, dims: %d x %d, pos: %d %d, main xywh: %d %d %d %d, center %d %d\n",
+                SCENE_NODE_TYPE_LOOKUP[node->type], width, height, x, y,
+                main_x, main_y, main_w, main_h, center_x, center_y);
 
         struct wlr_scene_node *child;
         wl_list_for_each(child, &node->state.children, state.link) {
                 print_scene_graph(child, level + 1);
         }
-}
-
-void get_main_window(struct wlr_scene_node *node) {
-        // If we have a node like a 
 }
 
 static struct wlr_texture *scene_buffer_get_texture(
@@ -965,6 +1011,12 @@ static void render_node_iterator(struct wlr_scene_node *node,
                 break;
         case WLR_SCENE_NODE_SURFACE:;
                 rendered_surface_count++;
+
+                /*
+                struct wlr_scene_node *main_node = get_main_node(node);
+                int x, y, w, h;
+                get_node_placement(
+                */
 
                 struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
                 struct wlr_surface *surface = scene_surface->surface;
