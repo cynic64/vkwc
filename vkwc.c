@@ -697,23 +697,38 @@ struct wlr_scene_node *get_main_node(struct wlr_scene_node *node) {
         return cur;
 }
 
+void get_node_center(struct wlr_scene_node *node, int *x, int *y) {
+        /* Returns the coordinates a node's rotation should be centered around. Only to be used on surface
+         * nodes.
+         *
+         * For an application surface this is just the coordinates of the surface's center. For decoration,
+         * however, it will return the center of the main window so everything rotates together.
+         */
+
+        if (node->type != WLR_SCENE_NODE_SURFACE) {
+                fprintf(stderr, "[get_node_center] Got node type %s, wanted surface.\n",
+                        SCENE_NODE_TYPE_LOOKUP[node->type]);
+                exit(1);
+        }
+
+        int main_x, main_y, main_width, main_height;
+        struct wlr_scene_node *main_node = get_main_node(node);
+        get_node_placement(main_node, &main_x, &main_y, &main_width, &main_height);
+
+        *x = main_x + main_width / 2;
+        *y = main_y + main_height / 2;
+}
+
 void print_scene_graph(struct wlr_scene_node *node, int level) {
         int x, y, width, height;
         get_node_placement(node, &x, &y, &width, &height);
 
-        int main_x = 0, main_y = 0, main_w = 0, main_h = 0;
-
-        if (node->type == WLR_SCENE_NODE_SURFACE) {
-                struct wlr_scene_node *main_node = get_main_node(node);
-                get_node_placement(main_node, &main_x, &main_y, &main_w, &main_h);
-        }
-
-        int center_x = main_x + main_w / 2, center_y = main_y + main_h / 2;
+        int center_x = 0, center_y = 0;
+        if (node->type == WLR_SCENE_NODE_SURFACE) get_node_center(node, &center_x, &center_y);
 
         for (int i = 0; i < level; i++) printf("\t");
-        printf("Node type: %s, dims: %d x %d, pos: %d %d, main xywh: %d %d %d %d, center %d %d\n",
-                SCENE_NODE_TYPE_LOOKUP[node->type], width, height, x, y,
-                main_x, main_y, main_w, main_h, center_x, center_y);
+        printf("Node type: %s, dims: %d x %d, pos: %d %d, centered on %d %d\n",
+                SCENE_NODE_TYPE_LOOKUP[node->type], width, height, x, y, center_x, center_y);
 
         struct wlr_scene_node *child;
         wl_list_for_each(child, &node->state.children, state.link) {
