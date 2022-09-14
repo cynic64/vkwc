@@ -631,6 +631,10 @@ void get_node_placement(struct wlr_scene_node *node, int *x, int *y, int *width,
         if (node->parent == NULL) {
                 *x = 0;
                 *y = 0;
+                if (width != NULL && height != NULL) {
+                        *width = 0;
+                        *height = 0;
+                }
                 return;
         }
 
@@ -665,6 +669,10 @@ void print_scene_graph(struct wlr_scene_node *node, int level) {
         wl_list_for_each(child, &node->state.children, state.link) {
                 print_scene_graph(child, level + 1);
         }
+}
+
+void get_main_window(struct wlr_scene_node *node) {
+        // If we have a node like a 
 }
 
 static struct wlr_texture *scene_buffer_get_texture(
