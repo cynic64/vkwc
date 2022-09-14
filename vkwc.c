@@ -623,9 +623,11 @@ static void scene_node_for_each_node(struct wlr_scene_node *node,
         }
 }
 
-void get_node_pos(struct wlr_scene_node *node, int *x, int *y) {
+void get_node_placement(struct wlr_scene_node *node, int *x, int *y, int *width, int *height) {
         /* Returns the absolute position of a node in pixels. Necessary because each node only knows
          * its position relative to its parent. */
+
+        // Position
         if (node->parent == NULL) {
                 *x = 0;
                 *y = 0;
@@ -633,22 +635,27 @@ void get_node_pos(struct wlr_scene_node *node, int *x, int *y) {
         }
 
         int parent_x = 0, parent_y = 0;
-        get_node_pos(node->parent, &parent_x, &parent_y);
+        get_node_placement(node->parent, &parent_x, &parent_y, NULL, NULL);
 
         *x = parent_x + node->state.x;
         *y = parent_y + node->state.y;
+
+        // Dimensions
+        if (width != NULL && height != NULL) {
+                if (node->type == WLR_SCENE_NODE_SURFACE) {
+                        struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+                        *width = scene_surface->surface->current.width;
+                        *height = scene_surface->surface->current.height;
+                } else {
+                        *width = 0;
+                        *height = 0;
+                }
+        }
 }
 
 void print_scene_graph(struct wlr_scene_node *node, int level) {
-        int width = 0, height = 0;
-        if (node->type == WLR_SCENE_NODE_SURFACE) {
-                struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
-                width = scene_surface->surface->current.width;
-                height = scene_surface->surface->current.height;
-        }
-
-        int x, y;
-        get_node_pos(node, &x, &y);
+        int x, y, width, height;
+        get_node_placement(node, &x, &y, &width, &height);
 
         for (int i = 0; i < level; i++) printf("\t");
         printf("Node type: %s, dims: %d x %d, pos: %d %d\n", SCENE_NODE_TYPE_LOOKUP[node->type],
