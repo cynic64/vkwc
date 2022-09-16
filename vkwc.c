@@ -36,6 +36,8 @@
 #include "wlroots/include/wlr/render/vulkan.h"
 #include "wlroots/include/wlr/types/wlr_xcursor_manager.h"
 #include "wlroots/include/wlr/xwayland.h"
+#include "wlroots/include/wlr/types/wlr_screencopy_v1.h"
+#include "wlroots/include/wlr/types/wlr_xdg_output_v1.h"
 
 // Stuff I had to clone wlroots for (not in include/wlr)
 #include "wlroots/include/render/vulkan.h"
@@ -872,14 +874,16 @@ static void render_rect(struct wlr_output *output,
 }
 
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
-                struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
-                const float matrix[static 9], float alpha) {
+                struct wlr_scene_node *node, struct wlr_texture *wlr_texture,
+                const struct wlr_fbox *box, const float matrix[static 9], float alpha) {
         /*
          * Box only has the width and height (in pixel coordinates).
          * box->x and box->y are always 0.
          * 
          * The matrix we get converts 0..1 to the pixel coordinates of the windw.
          * It looks like [width 0 x    0 height y    0 0 1]
+         * 
+         * We require <node> to figure what coordinates to rotate around.
          */
         printf("\t\t\t\t[render_subtexture_with_matrix]\n");
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
@@ -921,10 +925,11 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         // If we don't include a translation component, the rotation is centered around (0, 0) and
         // will most likely put the window off screen. Instead, center it around the center of the
         // window.
-        float anchor_x = (matrix[2] + matrix[0] * 0.5);
-        float anchor_y = (matrix[5] + matrix[4] * 0.5);
-        rotation[2] = anchor_x - anchor_x * rotation[0] - anchor_y * rotation[1];
-        rotation[5] = anchor_y - anchor_x * rotation[3] - anchor_y * rotation[4];
+        int center_x, center_y;
+        get_node_center(node, &center_x, &center_y);
+
+        rotation[2] = center_x - center_x * rotation[0] - center_y * rotation[1];
+        rotation[5] = center_y - center_x * rotation[3] - center_y * rotation[4];
 
         float rotated_matrix[9];
         wlr_matrix_multiply(rotated_matrix, rotation, matrix);
@@ -952,6 +957,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdDraw(cb, 4, 1, 0, 0);
 
         // Draw a copy in the original position
+        /*
         float non_rotated_final_matrix[9];
         wlr_matrix_multiply(non_rotated_final_matrix, renderer->projection, matrix);
         // Remove translation so it always renders top-left
@@ -969,13 +975,15 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 
         texture->last_used = renderer->frame;
 
-        render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, anchor_x - 1, anchor_y - 1, 2, 2);
+        render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, center_x - 1, center_y - 1, 2, 2);
+        */
 
         return true;
 }
 
 static void render_texture(struct wlr_output *output,
-                pixman_region32_t *output_damage, struct wlr_texture *texture,
+                pixman_region32_t *output_damage,
+                struct wlr_scene_node *node, struct wlr_texture *texture,
                 const struct wlr_fbox *src_box, const struct wlr_box *dst_box,
                 const float matrix[static 9]) {
         /* src_box: pixel coordinates, but only width and height. Also floating point.
@@ -984,6 +992,9 @@ static void render_texture(struct wlr_output *output,
          * 
          * The original tinywl only redraws damaged regions (for efficiency, I think).
          * But screw that.
+         * 
+         * <node> is passed so render_subtexture_with_matrix knows what to rotate around (we figure out
+         * the center of rotation by going up and down the scene graph starting with the node we're drawing).
          */
         printf("\t\t\t[render_texture]\n");
         fflush(stdout);
@@ -1000,7 +1011,7 @@ static void render_texture(struct wlr_output *output,
         }
 
         wlr_renderer_scissor(renderer, NULL);
-        render_subtexture_with_matrix(renderer, texture, src_box, matrix, 1.0);
+        render_subtexture_with_matrix(renderer, node, texture, src_box, matrix, 1.0);
 }
 
 static void render_node_iterator(struct wlr_scene_node *node,
@@ -1027,12 +1038,6 @@ static void render_node_iterator(struct wlr_scene_node *node,
         case WLR_SCENE_NODE_SURFACE:;
                 rendered_surface_count++;
 
-                /*
-                struct wlr_scene_node *main_node = get_main_node(node);
-                int x, y, w, h;
-                get_node_placement(
-                */
-
                 struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
                 struct wlr_surface *surface = scene_surface->surface;
 
@@ -1053,7 +1058,7 @@ static void render_node_iterator(struct wlr_scene_node *node,
                 // The source box has the size of the surface. X and Y are always 0, as far as I can tell.
                 struct wlr_fbox src_box = {0};
 
-                render_texture(output, output_damage, texture,
+                render_texture(output, output_damage, node, texture,
                         &src_box, &dst_box, matrix);
 
                 if (data->presentation != NULL && scene_surface->primary_output == output) {
@@ -1080,7 +1085,7 @@ static void render_node_iterator(struct wlr_scene_node *node,
                 wlr_matrix_project_box(matrix, &dst_box, transform, 0.0,
                         output->transform_matrix);
 
-                render_texture(output, output_damage, texture, &scene_buffer->src_box,
+                render_texture(output, output_damage, node, texture, &scene_buffer->src_box,
                         &dst_box, matrix);
                 break;
         }
@@ -1616,6 +1621,9 @@ int main(int argc, char *argv[]) {
         server.cursor = wlr_cursor_create();
         wlr_cursor_attach_output_layout(server.cursor, server.output_layout);
 
+        // I added this so grim can figure out the screen dimensions
+        wlr_xdg_output_manager_v1_create(server.wl_display, server.output_layout);
+
         /* Creates an xcursor manager, another wlroots utility which loads up
          * Xcursor themes to source cursor images from and makes sure that cursor
          * images are available at all scale factors on the screen (necessary for
@@ -1663,6 +1671,10 @@ int main(int argc, char *argv[]) {
         server.request_set_selection.notify = handle_selection_request;
         wl_signal_add(&server.seat->events.request_set_selection,
                         &server.request_set_selection);
+
+        // Screencopy support
+        struct wlr_screencopy_manager_v1 *screencopy_manager = wlr_screencopy_manager_v1_create(server.wl_display);
+        printf("Screencopy manager: %p\n", (void *) screencopy_manager);
 
         // Set up xwayland
         struct wlr_xwayland *xwayland = wlr_xwayland_create(server.wl_display, compositor, true);

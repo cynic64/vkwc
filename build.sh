@@ -15,14 +15,14 @@ echo "XDG shell protocol .c command: $COMMAND"
 $COMMAND
 
 LIBS="\
-        -lm
+        -lm -g
         $(pkg-config --cflags --libs wlroots) \
         $(pkg-config --cflags --libs wayland-server) \
         $(pkg-config --cflags --libs pixman-1) \
         $(pkg-config --cflags --libs vulkan) \
         $(pkg-config --cflags --libs xkbcommon)"
 
-COMMAND="gcc -Wall -pedantic -g -o vkwc vkwc.c wlroots/render/vulkan/*.c wlroots/render/pixel_format.c $LIBS -DWLR_USE_UNSTABLE -I. -Iwlroots/include -Iwlroots/build"
+COMMAND="gcc -Wall -pedantic -g -o vkwc vkwc.c wlroots/render/vulkan/*.c wlroots/render/pixel_format.c wlroots/build/protocol/*.c wlroots/types/wlr_screencopy_v1.c $LIBS -DWLR_USE_UNSTABLE -I. -Iwlroots/include -Iwlroots/build -I wlroots/build/protocol"
 echo "Command: $COMMAND"
 
 $COMMAND
