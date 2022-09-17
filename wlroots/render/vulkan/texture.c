@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <assert.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -440,8 +441,9 @@ VkImage vulkan_import_dmabuf(struct wlr_vk_renderer *renderer,
 	img_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	img_info.extent = (VkExtent3D) { attribs->width, attribs->height, 1 };
+	// Maybe pass the extra bits as a parameter instead
 	img_info.usage = for_render ?
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT :
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT :
 		VK_IMAGE_USAGE_SAMPLED_BIT;
 	if (disjoint) {
 		img_info.flags = VK_IMAGE_CREATE_DISJOINT_BIT;

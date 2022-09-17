@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <math.h>
@@ -961,9 +962,124 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 		uint32_t drm_format, uint32_t *flags, uint32_t stride,
 		uint32_t width, uint32_t height, uint32_t src_x, uint32_t src_y,
 		uint32_t dst_x, uint32_t dst_y, void *data) {
+        struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
+
+        printf("[VRR] dims: %d %d\n", renderer->render_width, renderer->render_height);
+
+        printf("[VRR] current rbuf: %p\n", (void *) renderer->current_render_buffer->image);
+        printf("[VRR] mem_count: %d\n", renderer->current_render_buffer->mem_count);
+        fflush(stdout);
+
 	// TODO: implement!
 	wlr_log(WLR_ERROR, "vulkan_read_pixels not implemented");
-	return false;
+
+	// Create a buffer to copy to
+	// Create buffer handle (VkBuffer)
+	VkBuffer buffer;
+
+        VkBufferCreateInfo buf_create_info = {0};
+        buf_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buf_create_info.size = width * height * 4;
+        buf_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        buf_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VkResult res = vkCreateBuffer(renderer->dev->dev, &buf_create_info, NULL, &buffer);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Couldn't create buffer!\n");
+                exit(1);
+        }
+
+        // Get memory type index
+        VkMemoryRequirements mem_reqs;
+        vkGetBufferMemoryRequirements(renderer->dev->dev, buffer, &mem_reqs);
+
+        VkPhysicalDeviceMemoryProperties phys_dev_mems;
+        vkGetPhysicalDeviceMemoryProperties(renderer->dev->phdev, &phys_dev_mems);
+
+        VkMemoryPropertyFlagBits needed_props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        uint32_t mem_type_idx = UINT32_MAX;
+
+        for (uint32_t i = 0; i < phys_dev_mems.memoryTypeCount && mem_type_idx == UINT32_MAX; ++i) {
+                int type_ok = mem_reqs.memoryTypeBits & (1 << i);
+                int props_ok = (needed_props & phys_dev_mems.memoryTypes[i].propertyFlags) == needed_props;
+                if (type_ok && props_ok) mem_type_idx = i;
+        }
+
+        if (mem_type_idx == UINT32_MAX) {
+                fprintf(stderr, "Couldn't find a suitable memory type!\n");
+                exit(1);
+        }
+
+        // Allocate the actual memory for the buffer
+        VkDeviceMemory memory;
+
+        VkMemoryAllocateInfo mem_alloc_info = {0};
+        mem_alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        mem_alloc_info.allocationSize = mem_reqs.size;
+        mem_alloc_info.memoryTypeIndex = mem_type_idx;
+
+        res = vkAllocateMemory(renderer->dev->dev, &mem_alloc_info, NULL, &memory);
+
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Couldn't allocate memory for buffer!\n");
+                exit(1);
+        }
+
+        res = vkBindBufferMemory(renderer->dev->dev, buffer, memory, 0);
+        if (res != VK_SUCCESS) {
+                fprintf(stderr, "Couldn't bind buffer memory!\n");
+                exit(1);
+        }
+
+        // Begin command buffer
+        VkCommandBufferBeginInfo info = {0};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(renderer->screencopy_cb, &info);
+
+        // Actually copy, finally...
+        struct VkImageSubresourceLayers layers = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+        };
+
+        struct VkBufferImageCopy region = {
+                .bufferOffset = 0,
+                .bufferRowLength = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource = layers,
+                .imageOffset = { .x = 0, .y = 0, .z = 0 },
+                .imageExtent = { .width = width, .height = height, .depth = 1 }
+        };
+
+        vkCmdCopyImageToBuffer(renderer->screencopy_cb, renderer->current_render_buffer->image, VK_IMAGE_LAYOUT_GENERAL,
+                buffer, 1, &region);
+
+
+        // Finish command buffer and submit
+        vkEndCommandBuffer(renderer->screencopy_cb);
+
+        VkSubmitInfo submit_info = {0};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &renderer->screencopy_cb;
+
+        res |= vkQueueSubmit(renderer->dev->queue, 1, &submit_info, VK_NULL_HANDLE);
+        res |= vkQueueWaitIdle(renderer->dev->queue);
+
+        if (res != 0) {
+                fprintf(stderr, "Something fucked up\n");
+                exit(1);
+        }
+
+        void *mapped;
+        vkMapMemory(renderer->dev->dev, memory, 0, width * height * 4, 0, &mapped);
+        memcpy(data, mapped, width * height * 4);
+        vkUnmapMemory(renderer->dev->dev, memory);
+
+	return true;
 }
 
 static int vulkan_get_drm_fd(struct wlr_renderer *wlr_renderer) {
@@ -1147,7 +1263,7 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 }
 
 // Creates static render data, such as sampler, layouts and shader modules
-// for the given rednerer.
+// for the given renderer.
 // Cleanup is done by destroying the renderer.
 static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 	VkResult res;
@@ -1434,6 +1550,7 @@ struct wlr_renderer *vulkan_renderer_create_for_device(struct wlr_vk_device *dev
 	cbai.commandPool = renderer->command_pool;
 	cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	res = vkAllocateCommandBuffers(dev->dev, &cbai, &renderer->cb);
+	res |= vkAllocateCommandBuffers(dev->dev, &cbai, &renderer->screencopy_cb);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkAllocateCommandBuffers", res);
 		goto error;

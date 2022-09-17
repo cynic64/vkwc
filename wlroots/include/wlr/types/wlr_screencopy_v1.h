@@ -13,6 +13,8 @@
 #include <wayland-server-core.h>
 #include <wlr/util/box.h>
 
+#include <stdlib.h>
+
 struct wlr_screencopy_manager_v1 {
 	struct wl_global *global;
 	struct wl_list frames; // wlr_screencopy_frame_v1::link
@@ -63,3 +65,6 @@ struct wlr_screencopy_manager_v1 *wlr_screencopy_manager_v1_create(
 	struct wl_display *display);
 
 #endif
+
+struct wlr_screencopy_manager_v1 *my_screencopy_manager_v1_create(
+	struct wl_display *display);

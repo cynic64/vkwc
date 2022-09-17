@@ -14,6 +14,8 @@
 #include "render/pixel_format.h"
 #include "util/signal.h"
 
+#include <stdio.h>
+
 #define SCREENCOPY_MANAGER_VERSION 3
 
 struct screencopy_damage {
@@ -127,9 +129,25 @@ static void client_unref(struct wlr_screencopy_v1_client *client) {
 
 static struct wlr_screencopy_frame_v1 *frame_from_resource(
 		struct wl_resource *resource) {
+        printf("FRAME FROM RESOURCE!\n");
+        fflush(stdout);
+
 	assert(wl_resource_instance_of(resource,
 		&zwlr_screencopy_frame_v1_interface, &frame_impl));
-	return wl_resource_get_user_data(resource);
+
+	int is_ok = wl_resource_instance_of(resource,
+		&zwlr_screencopy_frame_v1_interface, &frame_impl);
+	printf("Is ok: %d, resource: %p\n", is_ok, (void *) resource);
+	fflush(stdout);
+
+        struct wlr_screencopy_frame_v1 *frame = wl_resource_get_user_data(resource);
+        printf("Check out my frame! Address: %p", (void *) frame);
+        fflush(stdout);
+
+        //printf("Box xywh: %d %d %d %d\n", frame->box.x, frame->box.y, frame->box.width, frame->box.height);
+        //fflush(stdout);
+
+	return frame;
 }
 
 static void frame_destroy(struct wlr_screencopy_frame_v1 *frame) {
@@ -191,6 +209,8 @@ static void frame_send_ready(struct wlr_screencopy_frame_v1 *frame,
 
 static bool frame_shm_copy(struct wlr_screencopy_frame_v1 *frame,
 		struct wlr_buffer *src_buffer, uint32_t *flags) {
+        printf("[frame_shm_copy] buffer width and height: %d %d \n", src_buffer->width, src_buffer->height);
+        fflush(stdout);
 	struct wl_shm_buffer *shm_buffer = frame->shm_buffer;
 	struct wlr_output *output = frame->output;
 	struct wlr_renderer *renderer = output->renderer;
@@ -205,13 +225,18 @@ static bool frame_shm_copy(struct wlr_screencopy_frame_v1 *frame,
 	int32_t height = wl_shm_buffer_get_height(shm_buffer);
 	int32_t stride = wl_shm_buffer_get_stride(shm_buffer);
 
+	printf("[frame_shm_copy] width, height, stride: %d %d %d\n", width, height, stride);
+
 	wl_shm_buffer_begin_access(shm_buffer);
 	void *data = wl_shm_buffer_get_data(shm_buffer);
+	printf("data: %p\n", data);
 	uint32_t renderer_flags = 0;
 	bool ok;
 	ok = wlr_renderer_begin_with_buffer(renderer, src_buffer);
+	printf("OK after begin_with_buffer: %d\n", ok);
 	ok = ok && wlr_renderer_read_pixels(renderer, drm_format,
 		&renderer_flags, stride, width, height, x, y, 0, 0, data);
+	printf("OK after wlr_renderer_read_pixels: %d\n", ok);
 	wlr_renderer_end(renderer);
 	*flags = renderer_flags & WLR_RENDERER_READ_PIXELS_Y_INVERT ?
 		ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT : 0;
@@ -301,15 +326,24 @@ static void frame_handle_output_commit(struct wl_listener *listener,
 	wl_list_remove(&frame->output_commit.link);
 	wl_list_init(&frame->output_commit.link);
 
+	printf("[frame_handle_output_commit] w %d, h %d, s %d, format %d\n",
+	        frame->box.width, frame->box.height, frame->stride, frame->format);
+	fflush(stdout);
 
 	uint32_t flags = 0;
 	bool ok = frame->shm_buffer ?
 		frame_shm_copy(frame, buffer, &flags) : frame_dma_copy(frame, buffer);
 	if (!ok) {
+        	printf("Failed in frame_handle_output_commit, frame->shm_buffer: %p\n",
+        	        (void *) frame->shm_buffer);
+        	fflush(stdout);
 		zwlr_screencopy_frame_v1_send_failed(frame->resource);
 		frame_destroy(frame);
 		return;
 	}
+
+	printf("handle_output_commit succecssful.\n");
+	fflush(stdout);
 
 	zwlr_screencopy_frame_v1_send_flags(frame->resource, flags);
 	frame_send_damage(frame);
@@ -322,6 +356,9 @@ static void frame_handle_output_enable(struct wl_listener *listener,
 	struct wlr_screencopy_frame_v1 *frame =
 		wl_container_of(listener, frame, output_enable);
 	if (!frame->output->enabled) {
+        	printf("Failed in frame_handle_output_enable\n");
+        	fflush(stdout);
+
 		zwlr_screencopy_frame_v1_send_failed(frame->resource);
 		frame_destroy(frame);
 	}
@@ -331,6 +368,10 @@ static void frame_handle_output_destroy(struct wl_listener *listener,
 		void *data) {
 	struct wlr_screencopy_frame_v1 *frame =
 		wl_container_of(listener, frame, output_destroy);
+
+	printf("Failed in frame_handle_output_destroy\n");
+	fflush(stdout);
+
 	zwlr_screencopy_frame_v1_send_failed(frame->resource);
 	frame_destroy(frame);
 }
@@ -339,6 +380,10 @@ static void frame_handle_buffer_destroy(struct wl_listener *listener,
 		void *data) {
 	struct wlr_screencopy_frame_v1 *frame =
 		wl_container_of(listener, frame, buffer_destroy);
+
+	printf("Failed in frame_handle_buffer_destroy\n");
+	fflush(stdout);
+
 	zwlr_screencopy_frame_v1_send_failed(frame->resource);
 	frame_destroy(frame);
 }
@@ -346,6 +391,8 @@ static void frame_handle_buffer_destroy(struct wl_listener *listener,
 static void frame_handle_copy(struct wl_client *wl_client,
 		struct wl_resource *frame_resource,
 		struct wl_resource *buffer_resource) {
+        printf("frame_handle_copy\n");
+        fflush(stdout);
 	struct wlr_screencopy_frame_v1 *frame = frame_from_resource(frame_resource);
 	if (frame == NULL) {
 		return;
@@ -354,6 +401,9 @@ static void frame_handle_copy(struct wl_client *wl_client,
 	struct wlr_output *output = frame->output;
 
 	if (!output->enabled) {
+        	printf("Failed in frame_handle_copy\n");
+        	fflush(stdout);
+
 		zwlr_screencopy_frame_v1_send_failed(frame->resource);
 		frame_destroy(frame);
 		return;
@@ -453,6 +503,8 @@ static void frame_handle_copy(struct wl_client *wl_client,
 static void frame_handle_copy_with_damage(struct wl_client *wl_client,
 		struct wl_resource *frame_resource,
 		struct wl_resource *buffer_resource) {
+        printf("frame_handle_copy_with_damage\n");
+        fflush(stdout);
 	struct wlr_screencopy_frame_v1 *frame = frame_from_resource(frame_resource);
 	if (frame == NULL) {
 		return;
@@ -473,6 +525,8 @@ static const struct zwlr_screencopy_frame_v1_interface frame_impl = {
 };
 
 static void frame_handle_resource_destroy(struct wl_resource *frame_resource) {
+        printf("frame_handle_resource_destroy\n");
+        fflush(stdout);
 	struct wlr_screencopy_frame_v1 *frame = frame_from_resource(frame_resource);
 	frame_destroy(frame);
 }
@@ -491,6 +545,9 @@ static void capture_output(struct wl_client *wl_client,
 		struct wlr_screencopy_v1_client *client, uint32_t version,
 		uint32_t id, int32_t overlay_cursor, struct wlr_output *output,
 		const struct wlr_box *box) {
+        printf("Capturing output\n");
+        fflush(stdout);
+
 	struct wlr_screencopy_frame_v1 *frame =
 		calloc(1, sizeof(struct wlr_screencopy_frame_v1));
 	if (frame == NULL) {
@@ -511,6 +568,9 @@ static void capture_output(struct wl_client *wl_client,
 		frame_handle_resource_destroy);
 
 	if (output == NULL) {
+        	printf("Failed in capture_output\n");
+        	fflush(stdout);
+
 		wl_resource_set_user_data(frame->resource, NULL);
 		zwlr_screencopy_frame_v1_send_failed(frame->resource);
 		free(frame);
@@ -571,6 +631,10 @@ static void capture_output(struct wl_client *wl_client,
 	frame->box = buffer_box;
 	frame->stride = 4 * buffer_box.width; // TODO: depends on read format
 
+	printf("Sending buffer with width %d, height %d and stride %d\n",
+		buffer_box.width, buffer_box.height, frame->stride);
+	fflush(stdout);
+
 	zwlr_screencopy_frame_v1_send_buffer(frame->resource, frame->format,
 		buffer_box.width, buffer_box.height, frame->stride);
 
@@ -584,9 +648,14 @@ static void capture_output(struct wl_client *wl_client,
 		zwlr_screencopy_frame_v1_send_buffer_done(frame->resource);
 	}
 
+        printf("Exiting nicely\n");
+        fflush(stdout);
+
 	return;
 
 error:
+        printf("Hit an error! fuck!");
+        fflush(stdout);
 	zwlr_screencopy_frame_v1_send_failed(frame->resource);
 	frame_destroy(frame);
 }
@@ -679,6 +748,32 @@ static void handle_display_destroy(struct wl_listener *listener, void *data) {
 
 struct wlr_screencopy_manager_v1 *wlr_screencopy_manager_v1_create(
 		struct wl_display *display) {
+	struct wlr_screencopy_manager_v1 *manager =
+		calloc(1, sizeof(struct wlr_screencopy_manager_v1));
+	if (manager == NULL) {
+		return NULL;
+	}
+
+	manager->global = wl_global_create(display,
+		&zwlr_screencopy_manager_v1_interface, SCREENCOPY_MANAGER_VERSION,
+		manager, manager_bind);
+	if (manager->global == NULL) {
+		free(manager);
+		return NULL;
+	}
+	wl_list_init(&manager->frames);
+
+	wl_signal_init(&manager->events.destroy);
+
+	manager->display_destroy.notify = handle_display_destroy;
+	wl_display_add_destroy_listener(display, &manager->display_destroy);
+
+	return manager;
+}
+
+struct wlr_screencopy_manager_v1 *my_screencopy_manager_v1_create(
+		struct wl_display *display) {
+        assert(false);
 	struct wlr_screencopy_manager_v1 *manager =
 		calloc(1, sizeof(struct wlr_screencopy_manager_v1));
 	if (manager == NULL) {

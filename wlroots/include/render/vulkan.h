@@ -178,6 +178,7 @@ struct wlr_vk_renderer {
 	VkRect2D scissor; // needed for clearing
 
 	VkCommandBuffer cb;
+	VkCommandBuffer screencopy_cb;
 	VkPipeline bound_pipe;
 
 	uint32_t render_width;
