@@ -1079,6 +1079,10 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         memcpy(data, mapped, width * height * 4);
         vkUnmapMemory(renderer->dev->dev, memory);
 
+        // Clean up
+        vkDestroyBuffer(renderer->dev->dev, buffer, NULL);
+        vkFreeMemory(renderer->dev->dev, memory, NULL);
+
 	return true;
 }
 
@@ -1550,6 +1554,8 @@ struct wlr_renderer *vulkan_renderer_create_for_device(struct wlr_vk_device *dev
 	cbai.commandPool = renderer->command_pool;
 	cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	res = vkAllocateCommandBuffers(dev->dev, &cbai, &renderer->cb);
+
+	// My secondary command buffer
 	res |= vkAllocateCommandBuffers(dev->dev, &cbai, &renderer->screencopy_cb);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkAllocateCommandBuffers", res);

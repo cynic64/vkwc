@@ -231,6 +231,16 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
                         server->views.prev, next_view, link);
                 focus_view(next_view, next_view->xdg_surface->surface);
                 break;
+        case XKB_KEY_F2:
+                if (fork() == 0) {
+                        const char *arg[] = {"foot", NULL };
+        		setsid();
+        		execvp(((char **)arg)[0], (char **)arg);
+        		fprintf(stderr, "dwm: execvp %s", ((char **)arg)[0]);
+        		perror(" failed");
+        		exit(EXIT_SUCCESS);
+                }
+                break;
         default:
                 return false;
         }
@@ -913,11 +923,16 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
-        // Rotate the matrix
+        // Calculate rotation angle
+        struct wlr_scene_node *main_node = get_main_node(node);
+        float seed = (((long) main_node) % 100) / 50.0;
+
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+        float theta = M_PI * 2 * (ts.tv_nsec / 1000000000.0 + ts.tv_sec) * (seed - 1.0) * 0.3 + seed;
 
-        float theta = M_PI * 2 * (ts.tv_nsec / 1000000000.0 + ts.tv_sec) * 0.05;
+        // Rotate the matrix
+
         float rotation[9] = {cosf(theta), sinf(theta), 0.5,
                 -sinf(theta), cosf(theta), 0.5,
                 0, 0, 1};
