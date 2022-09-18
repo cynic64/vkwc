@@ -962,16 +962,12 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 		uint32_t drm_format, uint32_t *flags, uint32_t stride,
 		uint32_t width, uint32_t height, uint32_t src_x, uint32_t src_y,
 		uint32_t dst_x, uint32_t dst_y, void *data) {
-        struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-
-        printf("[VRR] width, height, stride: %ud, %ud, %ud\n", width, height, stride);
-        const struct wlr_vk_format *vk_format = vulkan_get_format_from_drm(drm_format);
-        printf("[VRR] drm_format: %u, vk format: %u\n", drm_format, vk_format->vk_format);
-        fflush(stdout);
-
         // Normally we would copy the image to a buffer. But we might need to change the image format
         // depending what the user wants. So instead we create another image and use vkCmdBlitImage,
         // which will do the conversion for us.
+
+        struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
+        const struct wlr_vk_format *vk_format = vulkan_get_format_from_drm(drm_format);
 
 	// Create a image to copy to
 	VkImage dst_image;
@@ -1083,20 +1079,20 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         res |= vkQueueWaitIdle(renderer->dev->queue);
 
         if (res != 0) {
-                fprintf(stderr, "Something fucked up\n");
-                exit(1);
+                wlr_log(WLR_ERROR, "Couldn't submit command buffer");
         }
 
+        VkDeviceSize byte_count = stride * height;
         void *mapped;
-        vkMapMemory(renderer->dev->dev, memory, 0, width * height * 4, 0, &mapped);
-        memcpy(data, mapped, width * height * 4);
+        vkMapMemory(renderer->dev->dev, memory, 0, byte_count, 0, &mapped);
+        memcpy(data, mapped, byte_count);
         vkUnmapMemory(renderer->dev->dev, memory);
 
         // Clean up
         vkDestroyImage(renderer->dev->dev, dst_image, NULL);
         vkFreeMemory(renderer->dev->dev, memory, NULL);
 
-        // The GLES2 implementation of read_pixels does this too. Idk what the point is
+        // The GLES2 implementation of read_pixels does this too, not sure what it does.
         if (flags != NULL) {
                 *flags = 0;
         }
