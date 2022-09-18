@@ -91,7 +91,7 @@ const struct wlr_drm_format_set *wlr_renderer_get_dmabuf_texture_formats(
  * Reads out of pixels of the currently bound surface into data. `stride` is in
  * bytes.
  *
- * If `flags` is not NULl, the caller indicates that it accepts frame flags
+ * If `flags` is not NULL, the caller indicates that it accepts frame flags
  * defined in `enum wlr_renderer_read_pixels_flags`.
  */
 bool wlr_renderer_read_pixels(struct wlr_renderer *r, uint32_t fmt,

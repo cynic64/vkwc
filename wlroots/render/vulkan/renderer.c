@@ -964,14 +964,10 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 		uint32_t dst_x, uint32_t dst_y, void *data) {
         struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 
-        printf("[VRR] dims: %d %d\n", renderer->render_width, renderer->render_height);
-
-        printf("[VRR] current rbuf: %p\n", (void *) renderer->current_render_buffer->image);
-        printf("[VRR] mem_count: %d\n", renderer->current_render_buffer->mem_count);
+        printf("[VRR] width, height, stride: %ud, %ud, %ud\n", width, height, stride);
+        const struct wlr_vk_format *vk_format = vulkan_get_format_from_drm(drm_format);
+        printf("[VRR] drm_format: %u, vk format: %u\n", drm_format, vk_format->vk_format);
         fflush(stdout);
-
-	// TODO: implement!
-	wlr_log(WLR_ERROR, "vulkan_read_pixels not implemented");
 
 	// Create a buffer to copy to
 	// Create buffer handle (VkBuffer)
@@ -992,22 +988,11 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         // Get memory type index
         VkMemoryRequirements mem_reqs;
         vkGetBufferMemoryRequirements(renderer->dev->dev, buffer, &mem_reqs);
+        int mem_type_idx = vulkan_find_mem_type(renderer->dev,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_reqs.memoryTypeBits);
 
-        VkPhysicalDeviceMemoryProperties phys_dev_mems;
-        vkGetPhysicalDeviceMemoryProperties(renderer->dev->phdev, &phys_dev_mems);
-
-        VkMemoryPropertyFlagBits needed_props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-        uint32_t mem_type_idx = UINT32_MAX;
-
-        for (uint32_t i = 0; i < phys_dev_mems.memoryTypeCount && mem_type_idx == UINT32_MAX; ++i) {
-                int type_ok = mem_reqs.memoryTypeBits & (1 << i);
-                int props_ok = (needed_props & phys_dev_mems.memoryTypes[i].propertyFlags) == needed_props;
-                if (type_ok && props_ok) mem_type_idx = i;
-        }
-
-        if (mem_type_idx == UINT32_MAX) {
-                fprintf(stderr, "Couldn't find a suitable memory type!\n");
-                exit(1);
+        if (mem_type_idx == -1) {
+                wlr_log(WLR_ERROR, "Cannot find suitable memory type");
         }
 
         // Allocate the actual memory for the buffer
@@ -1082,6 +1067,11 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         // Clean up
         vkDestroyBuffer(renderer->dev->dev, buffer, NULL);
         vkFreeMemory(renderer->dev->dev, memory, NULL);
+
+        // The GLES2 implementation of read_pixels does this too. Idk what the point is
+        if (flags != NULL) {
+                *flags = 0;
+        }
 
 	return true;
 }
