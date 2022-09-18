@@ -1024,12 +1024,25 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 wlr_log(WLR_ERROR, "Couldn't bind destination image memory");
         }
 
-        // Blit
+        // Begin commands
         VkCommandBufferBeginInfo info = {0};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(renderer->screencopy_cb, &info);
 
+        // Transition destination image to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        vulkan_change_layout(renderer->screencopy_cb, dst_image,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT);
+
+        // Transition source image to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+        vulkan_change_layout(renderer->screencopy_cb, renderer->current_render_buffer->image,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT);
+
+        // Blit
         VkImageSubresourceLayers subresource = {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                 .mipLevel = 0,
@@ -1047,8 +1060,16 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 .dstOffsets = { offset1, offset2 }
         };
 
-        vkCmdBlitImage(renderer->screencopy_cb, renderer->current_render_buffer->image,
-                VK_IMAGE_LAYOUT_GENERAL, dst_image, VK_IMAGE_LAYOUT_GENERAL, 1, &region, VK_FILTER_LINEAR);
+        vkCmdBlitImage(renderer->screencopy_cb,
+                renderer->current_render_buffer->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &region, VK_FILTER_LINEAR);
+
+        // Transition source image back to VK_IMAGE_LAYOUT_GENERAL
+        vulkan_change_layout(renderer->screencopy_cb, renderer->current_render_buffer->image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_SHADER_WRITE_BIT);
 
         // Finish command buffer and submit
         vkEndCommandBuffer(renderer->screencopy_cb);
