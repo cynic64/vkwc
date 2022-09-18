@@ -969,25 +969,36 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         printf("[VRR] drm_format: %u, vk format: %u\n", drm_format, vk_format->vk_format);
         fflush(stdout);
 
-	// Create a buffer to copy to
-	// Create buffer handle (VkBuffer)
-	VkBuffer buffer;
+        // Normally we would copy the image to a buffer. But we might need to change the image format
+        // depending what the user wants. So instead we create another image and use vkCmdBlitImage,
+        // which will do the conversion for us.
 
-        VkBufferCreateInfo buf_create_info = {0};
-        buf_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buf_create_info.size = width * height * 4;
-        buf_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        buf_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	// Create a image to copy to
+	VkImage dst_image;
+	VkImageCreateInfo image_create_info = {0};
+	image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	image_create_info.imageType = VK_IMAGE_TYPE_2D;
+	image_create_info.extent.width = width;
+	image_create_info.extent.height = height;
+	image_create_info.extent.depth = 1;
+	image_create_info.mipLevels = 1;
+	image_create_info.arrayLayers = 1;
+	image_create_info.format = vk_format->vk_format;
+	image_create_info.tiling = VK_IMAGE_TILING_LINEAR;
+	image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	image_create_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	image_create_info.samples = 1;
 
-        VkResult res = vkCreateBuffer(renderer->dev->dev, &buf_create_info, NULL, &buffer);
-        if (res != VK_SUCCESS) {
-                fprintf(stderr, "Couldn't create buffer!\n");
-                exit(1);
-        }
+	VkResult res = vkCreateImage(renderer->dev->dev, &image_create_info, NULL, &dst_image);
+	if (res != VK_SUCCESS) {
+        	wlr_log(WLR_ERROR, "Couldn't create destination image");
+	}
 
+        // Allocate memory for the image
         // Get memory type index
         VkMemoryRequirements mem_reqs;
-        vkGetBufferMemoryRequirements(renderer->dev->dev, buffer, &mem_reqs);
+        vkGetImageMemoryRequirements(renderer->dev->dev, dst_image, &mem_reqs);
         int mem_type_idx = vulkan_find_mem_type(renderer->dev,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_reqs.memoryTypeBits);
 
@@ -995,7 +1006,6 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 wlr_log(WLR_ERROR, "Cannot find suitable memory type");
         }
 
-        // Allocate the actual memory for the buffer
         VkDeviceMemory memory;
 
         VkMemoryAllocateInfo mem_alloc_info = {0};
@@ -1006,42 +1016,39 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         res = vkAllocateMemory(renderer->dev->dev, &mem_alloc_info, NULL, &memory);
 
         if (res != VK_SUCCESS) {
-                fprintf(stderr, "Couldn't allocate memory for buffer!\n");
-                exit(1);
+                wlr_log(WLR_ERROR, "Couldn't allocate memory for destination image"); 
         }
 
-        res = vkBindBufferMemory(renderer->dev->dev, buffer, memory, 0);
+        res = vkBindImageMemory(renderer->dev->dev, dst_image, memory, 0);
         if (res != VK_SUCCESS) {
-                fprintf(stderr, "Couldn't bind buffer memory!\n");
-                exit(1);
+                wlr_log(WLR_ERROR, "Couldn't bind destination image memory");
         }
 
-        // Begin command buffer
+        // Blit
         VkCommandBufferBeginInfo info = {0};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(renderer->screencopy_cb, &info);
 
-        // Actually copy, finally...
-        struct VkImageSubresourceLayers layers = {
+        VkImageSubresourceLayers subresource = {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                 .mipLevel = 0,
                 .baseArrayLayer = 0,
                 .layerCount = 1
         };
 
-        struct VkBufferImageCopy region = {
-                .bufferOffset = 0,
-                .bufferRowLength = 0,
-                .bufferImageHeight = 0,
-                .imageSubresource = layers,
-                .imageOffset = { .x = 0, .y = 0, .z = 0 },
-                .imageExtent = { .width = width, .height = height, .depth = 1 }
+        VkOffset3D offset1 = { .x = 0, .y = 0, .z = 0 };
+        VkOffset3D offset2 = { .x = width, .y = height, .z = 1 };
+
+        struct VkImageBlit region = {
+                .srcSubresource = subresource,
+                .srcOffsets = { offset1, offset2 },
+                .dstSubresource = subresource,
+                .dstOffsets = { offset1, offset2 }
         };
 
-        vkCmdCopyImageToBuffer(renderer->screencopy_cb, renderer->current_render_buffer->image, VK_IMAGE_LAYOUT_GENERAL,
-                buffer, 1, &region);
-
+        vkCmdBlitImage(renderer->screencopy_cb, renderer->current_render_buffer->image,
+                VK_IMAGE_LAYOUT_GENERAL, dst_image, VK_IMAGE_LAYOUT_GENERAL, 1, &region, VK_FILTER_LINEAR);
 
         // Finish command buffer and submit
         vkEndCommandBuffer(renderer->screencopy_cb);
@@ -1065,7 +1072,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         vkUnmapMemory(renderer->dev->dev, memory);
 
         // Clean up
-        vkDestroyBuffer(renderer->dev->dev, buffer, NULL);
+        vkDestroyImage(renderer->dev->dev, dst_image, NULL);
         vkFreeMemory(renderer->dev->dev, memory, NULL);
 
         // The GLES2 implementation of read_pixels does this too. Idk what the point is
