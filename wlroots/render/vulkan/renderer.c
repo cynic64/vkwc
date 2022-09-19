@@ -974,8 +974,8 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	VkImageCreateInfo image_create_info = {0};
 	image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	image_create_info.imageType = VK_IMAGE_TYPE_2D;
-	image_create_info.extent.width = width;
-	image_create_info.extent.height = height;
+	image_create_info.extent.width = dst_x + width;
+	image_create_info.extent.height = dst_y + height;
 	image_create_info.extent.depth = 1;
 	image_create_info.mipLevels = 1;
 	image_create_info.arrayLayers = 1;
@@ -988,52 +988,62 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 
 	VkResult res = vkCreateImage(renderer->dev->dev, &image_create_info, NULL, &dst_image);
 	if (res != VK_SUCCESS) {
-        	wlr_log(WLR_ERROR, "Couldn't create destination image");
+        	wlr_vk_error("vkCreateImage", res);
 	}
 
         // Allocate memory for the image
-        // Get memory type index
         VkMemoryRequirements mem_reqs;
         vkGetImageMemoryRequirements(renderer->dev->dev, dst_image, &mem_reqs);
+
         int mem_type_idx = vulkan_find_mem_type(renderer->dev,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_reqs.memoryTypeBits);
-
         if (mem_type_idx == -1) {
-                wlr_log(WLR_ERROR, "Cannot find suitable memory type");
+                wlr_log_errno(WLR_ERROR, "Cannot find suitable memory type");
         }
 
         VkDeviceMemory memory;
-
         VkMemoryAllocateInfo mem_alloc_info = {0};
         mem_alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         mem_alloc_info.allocationSize = mem_reqs.size;
         mem_alloc_info.memoryTypeIndex = mem_type_idx;
 
         res = vkAllocateMemory(renderer->dev->dev, &mem_alloc_info, NULL, &memory);
-
         if (res != VK_SUCCESS) {
-                wlr_log(WLR_ERROR, "Couldn't allocate memory for destination image"); 
+                wlr_vk_error("vkAllocateMemory", res); 
         }
 
         res = vkBindImageMemory(renderer->dev->dev, dst_image, memory, 0);
         if (res != VK_SUCCESS) {
-                wlr_log(WLR_ERROR, "Couldn't bind destination image memory");
+                wlr_vk_error("vkBindImageMemory", res);
+        }
+
+        // Allocate a command buffer
+        VkCommandBuffer cbuf;
+        VkCommandBufferAllocateInfo cbuf_alloc_info = {0};
+	cbuf_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cbuf_alloc_info.commandBufferCount = 1u;
+	cbuf_alloc_info.commandPool = renderer->command_pool;
+	cbuf_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+	res = vkAllocateCommandBuffers(renderer->dev->dev, &cbuf_alloc_info, &cbuf);
+        if (res != VK_SUCCESS) {
+                wlr_vk_error("vkAllocateCommandBuffers", res);
         }
 
         // Begin commands
         VkCommandBufferBeginInfo info = {0};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(renderer->screencopy_cb, &info);
+        vkBeginCommandBuffer(cbuf, &info);
 
         // Transition destination image to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        vulkan_change_layout(renderer->screencopy_cb, dst_image,
+        vulkan_change_layout(cbuf, dst_image,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT);
 
         // Transition source image to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-        vulkan_change_layout(renderer->screencopy_cb, renderer->current_render_buffer->image,
+        vulkan_change_layout(cbuf, renderer->current_render_buffer->image,
                 VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_ACCESS_TRANSFER_READ_BIT);
@@ -1046,40 +1056,45 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 .layerCount = 1
         };
 
-        VkOffset3D offset1 = { .x = 0, .y = 0, .z = 0 };
-        VkOffset3D offset2 = { .x = width, .y = height, .z = 1 };
-
         struct VkImageBlit region = {
                 .srcSubresource = subresource,
-                .srcOffsets = { offset1, offset2 },
+                .srcOffsets = {
+                        { .x = src_x, .y = src_y, .z = 0 },
+                        { .x = src_x + width, .y = src_y + height, .z = 1 }
+                },
                 .dstSubresource = subresource,
-                .dstOffsets = { offset1, offset2 }
+                .dstOffsets = {
+                        { .x = dst_x, .y = dst_y, .z = 0 },
+                        { .x = dst_x + width, .y = dst_y + height, .z = 1 }
+                }
         };
 
-        vkCmdBlitImage(renderer->screencopy_cb,
+        vkCmdBlitImage(cbuf,
                 renderer->current_render_buffer->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 1, &region, VK_FILTER_LINEAR);
 
         // Transition source image back to VK_IMAGE_LAYOUT_GENERAL
-        vulkan_change_layout(renderer->screencopy_cb, renderer->current_render_buffer->image,
+        vulkan_change_layout(cbuf, renderer->current_render_buffer->image,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                 VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_ACCESS_SHADER_WRITE_BIT);
 
         // Finish command buffer and submit
-        vkEndCommandBuffer(renderer->screencopy_cb);
+        vkEndCommandBuffer(cbuf);
 
         VkSubmitInfo submit_info = {0};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &renderer->screencopy_cb;
+        submit_info.pCommandBuffers = &cbuf;
 
-        res |= vkQueueSubmit(renderer->dev->queue, 1, &submit_info, VK_NULL_HANDLE);
-        res |= vkQueueWaitIdle(renderer->dev->queue);
-
-        if (res != 0) {
-                wlr_log(WLR_ERROR, "Couldn't submit command buffer");
+        res = vkQueueSubmit(renderer->dev->queue, 1, &submit_info, VK_NULL_HANDLE);
+        if (res != VK_SUCCESS) {
+                wlr_vk_error("vkQueueSubmit", res);
+        }
+        res = vkQueueWaitIdle(renderer->dev->queue);
+        if (res != VK_SUCCESS) {
+                wlr_vk_error("vkQueueWaitIdle", res);
         }
 
         VkDeviceSize byte_count = stride * height;
@@ -1091,6 +1106,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         // Clean up
         vkDestroyImage(renderer->dev->dev, dst_image, NULL);
         vkFreeMemory(renderer->dev->dev, memory, NULL);
+        vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
 
         // The GLES2 implementation of read_pixels does this too, not sure what it does.
         if (flags != NULL) {
@@ -1568,12 +1584,9 @@ struct wlr_renderer *vulkan_renderer_create_for_device(struct wlr_vk_device *dev
 	cbai.commandPool = renderer->command_pool;
 	cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	res = vkAllocateCommandBuffers(dev->dev, &cbai, &renderer->cb);
-
-	// My secondary command buffer
-	res |= vkAllocateCommandBuffers(dev->dev, &cbai, &renderer->screencopy_cb);
 	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkAllocateCommandBuffers", res);
-		goto error;
+        	wlr_vk_error("vkAllocateCommandBuffers", res);
+        	goto error;
 	}
 
 	VkFenceCreateInfo fence_info = {0};
