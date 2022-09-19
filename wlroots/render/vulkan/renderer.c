@@ -999,6 +999,8 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_reqs.memoryTypeBits);
         if (mem_type_idx == -1) {
                 wlr_log_errno(WLR_ERROR, "Cannot find suitable memory type");
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                return false;
         }
 
         VkDeviceMemory memory;
@@ -1010,11 +1012,16 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         res = vkAllocateMemory(renderer->dev->dev, &mem_alloc_info, NULL, &memory);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkAllocateMemory", res); 
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                return false;
         }
 
         res = vkBindImageMemory(renderer->dev->dev, dst_image, memory, 0);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkBindImageMemory", res);
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                vkFreeMemory(renderer->dev->dev, memory, NULL);
+                return false;
         }
 
         // Allocate a command buffer
@@ -1028,6 +1035,9 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	res = vkAllocateCommandBuffers(renderer->dev->dev, &cbuf_alloc_info, &cbuf);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkAllocateCommandBuffers", res);
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                vkFreeMemory(renderer->dev->dev, memory, NULL);
+                return false;
         }
 
         // Begin commands
@@ -1091,15 +1101,31 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         res = vkQueueSubmit(renderer->dev->queue, 1, &submit_info, VK_NULL_HANDLE);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkQueueSubmit", res);
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                vkFreeMemory(renderer->dev->dev, memory, NULL);
+                vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
+                return false;
         }
         res = vkQueueWaitIdle(renderer->dev->queue);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkQueueWaitIdle", res);
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                vkFreeMemory(renderer->dev->dev, memory, NULL);
+                vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
+                return false;
         }
 
         VkDeviceSize byte_count = stride * height;
         void *mapped;
-        vkMapMemory(renderer->dev->dev, memory, 0, byte_count, 0, &mapped);
+        res = vkMapMemory(renderer->dev->dev, memory, 0, byte_count, 0, &mapped);
+        if (res != VK_SUCCESS) {
+                wlr_vk_error("vkMapMemory", res);
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                vkFreeMemory(renderer->dev->dev, memory, NULL);
+                vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
+                return false;
+        }
+
         memcpy(data, mapped, byte_count);
         vkUnmapMemory(renderer->dev->dev, memory);
 
