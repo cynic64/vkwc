@@ -969,7 +969,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
         const struct wlr_vk_format *vk_format = vulkan_get_format_from_drm(drm_format);
 
-	// Create a image to copy to
+	// Create an image to copy to
 	VkImage dst_image;
 	VkImageCreateInfo image_create_info = {0};
 	image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -989,6 +989,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	VkResult res = vkCreateImage(renderer->dev->dev, &image_create_info, NULL, &dst_image);
 	if (res != VK_SUCCESS) {
         	wlr_vk_error("vkCreateImage", res);
+        	return false;
 	}
 
         // Allocate memory for the image
@@ -999,8 +1000,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_reqs.memoryTypeBits);
         if (mem_type_idx == -1) {
                 wlr_log_errno(WLR_ERROR, "Cannot find suitable memory type");
-                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
-                return false;
+                goto error1;
         }
 
         VkDeviceMemory memory;
@@ -1012,16 +1012,13 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         res = vkAllocateMemory(renderer->dev->dev, &mem_alloc_info, NULL, &memory);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkAllocateMemory", res); 
-                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
-                return false;
+                goto error1;
         }
 
         res = vkBindImageMemory(renderer->dev->dev, dst_image, memory, 0);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkBindImageMemory", res);
-                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
-                vkFreeMemory(renderer->dev->dev, memory, NULL);
-                return false;
+                goto error2;
         }
 
         // Allocate a command buffer
@@ -1035,9 +1032,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	res = vkAllocateCommandBuffers(renderer->dev->dev, &cbuf_alloc_info, &cbuf);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkAllocateCommandBuffers", res);
-                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
-                vkFreeMemory(renderer->dev->dev, memory, NULL);
-                return false;
+                goto error2;
         }
 
         // Begin commands
@@ -1101,18 +1096,13 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         res = vkQueueSubmit(renderer->dev->queue, 1, &submit_info, VK_NULL_HANDLE);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkQueueSubmit", res);
-                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
-                vkFreeMemory(renderer->dev->dev, memory, NULL);
-                vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
-                return false;
+                goto error3;
         }
+
         res = vkQueueWaitIdle(renderer->dev->queue);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkQueueWaitIdle", res);
-                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
-                vkFreeMemory(renderer->dev->dev, memory, NULL);
-                vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
-                return false;
+                goto error3;
         }
 
         VkDeviceSize byte_count = stride * height;
@@ -1120,10 +1110,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         res = vkMapMemory(renderer->dev->dev, memory, 0, byte_count, 0, &mapped);
         if (res != VK_SUCCESS) {
                 wlr_vk_error("vkMapMemory", res);
-                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
-                vkFreeMemory(renderer->dev->dev, memory, NULL);
-                vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
-                return false;
+                goto error3;
         }
 
         memcpy(data, mapped, byte_count);
@@ -1140,6 +1127,14 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         }
 
 	return true;
+
+        error3:
+                vkFreeCommandBuffers(renderer->dev->dev, renderer->command_pool, 1, &cbuf);
+        error2:
+                vkFreeMemory(renderer->dev->dev, memory, NULL);
+	error1:
+                vkDestroyImage(renderer->dev->dev, dst_image, NULL);
+                return false;
 }
 
 static int vulkan_get_drm_fd(struct wlr_renderer *wlr_renderer) {
