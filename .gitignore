@@ -3,6 +3,6 @@ ideas.txt
 vkwc
 stdout
 stderr
-wlroots/*
+.cache
 *-protocol.c
 *-protocol.h
