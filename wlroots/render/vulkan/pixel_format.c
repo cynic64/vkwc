@@ -59,7 +59,9 @@ static const VkFormatFeatureFlags tex_features =
 	VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
 static const VkFormatFeatureFlags render_features =
 	VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
-	VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
+	VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT |
+	// To enable blitting for screencopies (see vulkan_read_pixels)
+	VK_FORMAT_FEATURE_BLIT_DST_BIT;
 static const VkFormatFeatureFlags dma_tex_features =
 	VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
 	// NOTE: we don't strictly require this, we could create a NEAREST

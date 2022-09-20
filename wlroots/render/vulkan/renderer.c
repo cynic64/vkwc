@@ -978,6 +978,15 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 return false;
         }
 
+        // Make sure the format the user selected has the feature VK_FORMAT_FEATURE_TRANSFER_DST
+        VkFormatProperties format_props;
+        vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, vk_format->vk_format, &format_props);
+
+        if ((format_props.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT) == 0) {
+                wlr_log(WLR_ERROR, "Chosen format does not support VK_FORMAT_FEATURE_BLIT_DST");
+                return false;
+        }
+
 	// Create an image to copy to
 	VkImage dst_image;
 	VkImageCreateInfo image_create_info = {0};
