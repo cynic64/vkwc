@@ -145,6 +145,41 @@ struct Keyboard {
         struct wl_listener key;
 };
 
+void write_bmp(FILE *fp, uint32_t width, uint32_t height, const void *data) {
+        // data should be width * height * 3 bytes long
+        uint32_t byte_count = width * height * 3 + 0x36;
+
+        const char header[] = {0x42, 0x4d,      // "BM"
+                // Total file size, little-endian
+                byte_count & 0xff, (byte_count & 0xff00) >> 8,
+                (byte_count & 0xff0000) >> 16, (byte_count & 0xff000000) >> 24,
+
+                0x00, 0x00, 0x00, 0x00,         // Optional stuff
+                0x36, 0x00, 0x00, 0x00,         // Will be address of pixel array
+                0x28, 0x00, 0x00, 0x00,         // DIB header is 0x28 bytes long
+                // Width in pixels, little-endian
+                width & 0xff, (width & 0xff00) >> 8, (width & 0xff0000) >> 16, (width & 0xff000000) >> 24,
+
+                // Height in pixels, little-endian
+                height & 0xff, (height & 0xff00) >> 8, (height & 0xff0000) >> 16, (height & 0xff000000) >> 24,
+
+                0x01, 0x00, 0x18, 0x00, 0x00, 0x00,     // Copied from GIMP, no idea
+                0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x23, 0x2e,
+                0x00, 0x00, 0x23, 0x2e, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+
+        if (fwrite(header, sizeof(header), 1, fp) != 1) {
+                fprintf(stderr, "Couldn't write header\n");
+                exit(1);
+        }
+
+        if (fwrite(data, width * height * 3, 1, fp) != 1) {
+                fprintf(stderr, "Couldn't write pixels\n");
+                exit(1);
+        }
+}
+
 void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int x, int y, int width, int height) {
         struct wlr_box box = { .x = x, .y = y, .width = width, .height = height };
         float identity_matrix[9] = { 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 };
@@ -241,6 +276,25 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
         		exit(EXIT_SUCCESS);
                 }
                 break;
+        case XKB_KEY_F3:
+        {
+                /* Take a screenshot directly */
+                uint8_t data[1920*1080*3];
+                wlr_renderer_read_pixels(server->renderer, 0x34324752,   // rgb888
+                        NULL, 1920 * 3, 1920, 1080, 0, 0, 0, 0, data);
+                printf("pre\n");
+                fflush(stdout);
+
+                FILE *fp = fopen("out.bmp", "w");
+                if (fp == NULL) {
+                        fprintf(stderr, "shit shit shit\n");
+                        exit(1);
+                }
+
+                write_bmp(fp, 1920, 1080, data);
+
+                fclose(fp);
+        }
         default:
                 return false;
         }

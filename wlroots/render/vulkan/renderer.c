@@ -967,7 +967,16 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         // which will do the conversion for us.
 
         struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
+        if (renderer->current_render_buffer == NULL) {
+                wlr_log(WLR_ERROR, "Can't read pixels when no render buffer bound");
+                return false;
+        };
+
         const struct wlr_vk_format *vk_format = vulkan_get_format_from_drm(drm_format);
+        if (vk_format == NULL) {
+                wlr_log(WLR_ERROR, "Couldn't get convert DRM format to Vulkan format");
+                return false;
+        }
 
 	// Create an image to copy to
 	VkImage dst_image;
@@ -991,7 +1000,6 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         	wlr_vk_error("vkCreateImage", res);
         	return false;
 	}
-
         // Allocate memory for the image
         VkMemoryRequirements mem_reqs;
         vkGetImageMemoryRequirements(renderer->dev->dev, dst_image, &mem_reqs);

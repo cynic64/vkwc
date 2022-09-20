@@ -22,6 +22,10 @@ static const struct wlr_vk_format formats[] = {
 		.drm_format = DRM_FORMAT_ABGR8888,
 		.vk_format = VK_FORMAT_R8G8B8A8_SRGB,
 	},
+	{
+        	.drm_format = DRM_FORMAT_RGB888,
+        	.vk_format = VK_FORMAT_R8G8B8_SRGB,
+	}
 };
 
 const struct wlr_vk_format *vulkan_get_format_list(size_t *len) {
