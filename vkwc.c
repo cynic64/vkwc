@@ -47,6 +47,10 @@
 // I want to count how many surfaces I render each frame
 int rendered_surface_count = 0;
 
+// If we took a screenshot the instant Alt+F3 was pressed, no render buffer would be bound.
+// We have to do it after output commit instead
+bool must_take_screenshot = false;
+
 // To print scene node types as text
 const char* const SCENE_NODE_TYPE_LOOKUP[] = {"ROOT", "TREE", "SURFACE", "RECT", "BUFFER", "INVALID"};
 
@@ -278,22 +282,8 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
                 break;
         case XKB_KEY_F3:
         {
-                /* Take a screenshot directly */
-                uint8_t data[1920*1080*3];
-                wlr_renderer_read_pixels(server->renderer, 0x34324752,   // rgb888
-                        NULL, 1920 * 3, 1920, 1080, 0, 0, 0, 0, data);
-                printf("pre\n");
-                fflush(stdout);
-
-                FILE *fp = fopen("out.bmp", "w");
-                if (fp == NULL) {
-                        fprintf(stderr, "shit shit shit\n");
-                        exit(1);
-                }
-
-                write_bmp(fp, 1920, 1080, data);
-
-                fclose(fp);
+                must_take_screenshot = true;
+                break;
         }
         default:
                 return false;
@@ -1350,6 +1340,27 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
                 transform, tr_width, tr_height);
         wlr_output_set_damage(output, &frame_damage);
         pixman_region32_fini(&frame_damage);
+
+        if (must_take_screenshot) {
+                /* Take a screenshot directly */
+                uint8_t data[1920*1080*3];
+                wlr_renderer_read_pixels(renderer, 0x34324752,   // rgb888
+                        NULL, 1920 * 3, 1920, 1080, 0, 0, 0, 0, data);
+                printf("pre\n");
+                fflush(stdout);
+
+                FILE *fp = fopen("out.bmp", "w");
+                if (fp == NULL) {
+                        fprintf(stderr, "shit shit shit\n");
+                        exit(1);
+                }
+
+                write_bmp(fp, 1920, 1080, data);
+
+                fclose(fp);
+
+                must_take_screenshot = false;
+        }
 
         return wlr_output_commit(output);
 }
