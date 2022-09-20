@@ -974,7 +974,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 
         const struct wlr_vk_format *vk_format = vulkan_get_format_from_drm(drm_format);
         if (vk_format == NULL) {
-                wlr_log(WLR_ERROR, "Couldn't get convert DRM format to Vulkan format");
+                wlr_log(WLR_ERROR, "Couldn't convert DRM format to Vulkan format");
                 return false;
         }
 
@@ -1009,6 +1009,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         	wlr_vk_error("vkCreateImage", res);
         	return false;
 	}
+
         // Allocate memory for the image
         VkMemoryRequirements mem_reqs;
         vkGetImageMemoryRequirements(renderer->dev->dev, dst_image, &mem_reqs);
