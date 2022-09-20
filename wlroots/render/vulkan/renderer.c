@@ -987,13 +987,14 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 return false;
         }
 
+	// Needed to figure out how many bits per pixel in the destination format
+	const struct wlr_pixel_format_info *dst_format_info = drm_get_pixel_format_info(drm_format);
 	// Create an image to copy to
-	// TODO: format might not be 4 bytes
 	VkImage dst_image;
 	VkImageCreateInfo image_create_info = {0};
 	image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	image_create_info.imageType = VK_IMAGE_TYPE_2D;
-	image_create_info.extent.width = stride / 4;
+	image_create_info.extent.width = stride / (dst_format_info->bpp / 8);
 	image_create_info.extent.height = dst_y + height;
 	image_create_info.extent.depth = 1;
 	image_create_info.mipLevels = 1;
