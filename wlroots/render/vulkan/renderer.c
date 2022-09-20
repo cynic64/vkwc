@@ -988,11 +988,12 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
         }
 
 	// Create an image to copy to
+	// TODO: format might not be 4 bytes
 	VkImage dst_image;
 	VkImageCreateInfo image_create_info = {0};
 	image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	image_create_info.imageType = VK_IMAGE_TYPE_2D;
-	image_create_info.extent.width = dst_x + width;
+	image_create_info.extent.width = stride / 4;
 	image_create_info.extent.height = dst_y + height;
 	image_create_info.extent.depth = 1;
 	image_create_info.mipLevels = 1;
@@ -1123,7 +1124,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 goto error3;
         }
 
-        VkDeviceSize byte_count = stride * height;
+        VkDeviceSize byte_count = stride * (height + dst_y);
         void *mapped;
         res = vkMapMemory(renderer->dev->dev, memory, 0, byte_count, 0, &mapped);
         if (res != VK_SUCCESS) {

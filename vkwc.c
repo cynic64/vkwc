@@ -11,6 +11,7 @@
 #include <pixman-1/pixman.h>
 #include <vulkan/vulkan.h>
 #include <math.h>
+#include <drm_fourcc.h>
 
 #include "wlroots/include/wlr/backend.h"
 #include "wlroots/include/wlr/render/allocator.h"
@@ -1290,16 +1291,6 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
 
         wlr_renderer_begin(renderer, output->width, output->height);
 
-        // Fill all damaged rectangles with a background color
-        /*
-        int nrects;
-        pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
-        for (int i = 0; i < nrects; ++i) {
-                scissor_output(output, &rects[i]);
-                wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
-        }
-        */
-
         wlr_renderer_scissor(renderer, NULL);
         wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1, 1.0 });
 
@@ -1329,16 +1320,32 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
 
         if (must_take_screenshot) {
                 /* Take a screenshot directly */
-                uint8_t data[1920*1080*3];
-                // Hex code is rgba8888 - Vulkan doesn't like rgb888 on my machine
-                bool result = wlr_renderer_read_pixels(renderer, 0x34324152,   
-                        NULL, 1920 * 3, 1920, 1080, 0, 0, 0, 0, data);
-                assert(result == true);
+                uint8_t *data_xrgb = malloc(1920 * 1080 * 4);
+                assert(data_xrgb != NULL);
+
+                bool result = wlr_renderer_read_pixels(renderer, DRM_FORMAT_XRGB8888,
+                        NULL, 1920 * 4, 300, 300, 50, 50, 300, 50, data_xrgb);
+                assert((result == true) && "Couldn't read pixels");
+
+                // Get rid of the extra channel
+                // Also flip vertically cause BMP is the other way around
+                uint8_t *data_rgb = malloc(1920 * 1080 * 3);
+                assert(data_rgb != NULL);
+
+                for (int y = 0; y < 1080; y++) {
+                        for (int x = 0; x < 1920; x++) {
+                                size_t idx_rgb = (1080 - y - 1) * 1920 + x;
+                                size_t idx_xrgb = y * 1920 + x;
+                                data_rgb[3 * idx_rgb + 0] = data_xrgb[4 * idx_xrgb + 0];
+                                data_rgb[3 * idx_rgb + 1] = data_xrgb[4 * idx_xrgb + 1];
+                                data_rgb[3 * idx_rgb + 2] = data_xrgb[4 * idx_xrgb + 2];
+                        }
+                }
 
                 FILE *fp = fopen("out.bmp", "w");
-                assert(fp != NULL);
+                assert((fp != NULL) && "Couldn't open file for writing");
 
-                write_bmp(fp, 1920, 1080, data);
+                write_bmp(fp, 1920, 1080, data_rgb);
 
                 fclose(fp);
 
