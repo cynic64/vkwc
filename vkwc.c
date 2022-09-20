@@ -726,17 +726,10 @@ struct wlr_scene_node *get_main_node(struct wlr_scene_node *node) {
         struct wlr_scene_node *cur = node;
 
         // Go up until we hit the root
-        if (cur->parent == NULL) {
-                fprintf(stderr, "[get_main_node] Got a node with no parent! :(\n");
-                exit(1);
-        };
+        assert(cur->parent != NULL);
         while (1) {
                 cur = cur->parent;
-
-                if (cur->parent == NULL) {
-                        fprintf(stderr, "[get_main_node] Parent node is NULL, what the hell??\n");
-                        exit(1);
-                }
+                assert(cur->parent != NULL);
 
                 if (cur->parent->type == WLR_SCENE_NODE_ROOT) break;
         }
@@ -744,10 +737,7 @@ struct wlr_scene_node *get_main_node(struct wlr_scene_node *node) {
         // Go down until we hit a surface
         while (cur->type == WLR_SCENE_NODE_TREE) {
                 cur = wl_container_of(cur->state.children.next, cur, state.link);
-                if (cur == NULL) {
-                        fprintf(stderr, "[get_main_node] Couldn't find a surface\n");
-                        exit(1);
-                }
+                assert(cur != NULL);    // Couldn't find a surface
         }
 
         return cur;
@@ -761,11 +751,7 @@ void get_node_center(struct wlr_scene_node *node, int *x, int *y) {
          * however, it will return the center of the main window so everything rotates together.
          */
 
-        if (node->type != WLR_SCENE_NODE_SURFACE) {
-                fprintf(stderr, "[get_node_center] Got node type %s, wanted surface.\n",
-                        SCENE_NODE_TYPE_LOOKUP[node->type]);
-                exit(1);
-        }
+        assert(node->type == WLR_SCENE_NODE_SURFACE);           // We can only handle surface nodes
 
         int main_x, main_y, main_width, main_height;
         struct wlr_scene_node *main_node = get_main_node(node);
@@ -1344,16 +1330,13 @@ bool scene_output_commit(struct wlr_scene_output *scene_output) {
         if (must_take_screenshot) {
                 /* Take a screenshot directly */
                 uint8_t data[1920*1080*3];
-                wlr_renderer_read_pixels(renderer, 0x34324752,   // rgb888
+                // Hex code is rgba8888 - Vulkan doesn't like rgb888 on my machine
+                bool result = wlr_renderer_read_pixels(renderer, 0x34324152,   
                         NULL, 1920 * 3, 1920, 1080, 0, 0, 0, 0, data);
-                printf("pre\n");
-                fflush(stdout);
+                assert(result == true);
 
                 FILE *fp = fopen("out.bmp", "w");
-                if (fp == NULL) {
-                        fprintf(stderr, "shit shit shit\n");
-                        exit(1);
-                }
+                assert(fp != NULL);
 
                 write_bmp(fp, 1920, 1080, data);
 
@@ -1581,10 +1564,7 @@ static void handle_xwayland_surface_map(struct wl_listener *listener, void *data
         struct wlr_surface *surface = xwayland_view->xwayland_surface->surface;
 
         view->scene_node = wlr_scene_subsurface_tree_create(&view->server->scene->node, surface);
-        if (!view->scene_node) {
-                fprintf(stderr, "Couldn't create scene node for XWayland window!\n");
-                exit(1);
-        }
+        assert(view->scene_node != NULL);       // Couldn't create scene node for XWayland window
         view->scene_node->data = view;
 
         wl_list_insert(&view->server->views, &view->link);
