@@ -1019,7 +1019,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	int mem_type_idx = vulkan_find_mem_type(renderer->dev,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_reqs.memoryTypeBits);
 	if (mem_type_idx == -1) {
-		wlr_log_errno(WLR_ERROR, "Cannot find suitable memory type");
+		wlr_log(WLR_ERROR, "Cannot find suitable memory type");
 		goto error1;
 	}
 
