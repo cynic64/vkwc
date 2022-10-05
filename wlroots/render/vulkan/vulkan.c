@@ -470,7 +470,7 @@ struct wlr_vk_device *vulkan_device_create(struct wlr_vk_instance *ini,
 	}
 
 	const float prio = 1.f;
-	VkDeviceQueueCreateInfo qinfo = {};
+	VkDeviceQueueCreateInfo qinfo = {0};
 	qinfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	qinfo.queueFamilyIndex = dev->queue_family;
 	qinfo.queueCount = 1;

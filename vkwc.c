@@ -276,7 +276,7 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			const char *arg[] = {"foot", NULL };
 			setsid();
 			execvp(((char **)arg)[0], (char	**)arg);
-			fprintf(stderr,	"dwm: execvp %s", ((char **)arg)[0]);
+			fprintf(stderr,	"vkwc: execvp %s", ((char **)arg)[0]);
 			perror(" failed");
 			exit(EXIT_SUCCESS);
 		}
@@ -288,7 +288,15 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 	}
 	case XKB_KEY_F4:
 	{
-
+		if (fork() == 0) {
+			const char *arg[] = {"my-chvt", "1", NULL };
+			setsid();
+			execvp(((char **)arg)[0], (char	**)arg);
+			fprintf(stderr,	"vkwc: execvp %s", ((char **)arg)[0]);
+			perror(" failed");
+			exit(EXIT_SUCCESS);
+		}
+		break;
 	}
 	default:
 		return false;

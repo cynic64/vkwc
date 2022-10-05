@@ -12,6 +12,8 @@
 
 struct wlr_vk_descriptor_pool;
 
+double get_time(void);
+
 // Central vulkan state that should only be needed once per compositor.
 struct wlr_vk_instance {
 	VkInstance instance;
