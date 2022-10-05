@@ -360,7 +360,6 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	 * 
 	 * We require <node> to	figure what coordinates	to rotate around.
 	 */
-	printf("\t\t\t\t[render_subtexture_with_matrix]\n");
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
 	VkCommandBuffer	cb = renderer->cb;
 
@@ -395,6 +394,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	struct timespec	ts;
 	clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 	float theta = M_PI * 2 * (ts.tv_nsec / 1000000000.0 + ts.tv_sec) * (seed - 1.0)	* 0.3 +	seed;
+	theta = 0;
 
 	// Rotate the matrix
 
@@ -476,9 +476,6 @@ static void render_texture(struct wlr_output *output,
 	 * <node> is passed so render_subtexture_with_matrix knows what	to rotate around (we figure out
 	 * the center of rotation by going up and down the scene graph starting	with the node we're drawing).
 	 */
-	printf("\t\t\t[render_texture]\n");
-	fflush(stdout);
-
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
@@ -575,8 +572,6 @@ void scene_render_output(struct	wlr_scene *scene, struct wlr_output *output,
 		int lx,	int ly,	pixman_region32_t *damage) {
 	// lx and ly are always	0 in my	case. Changing them would globally offset everything on	the screen by that
 	// many	pixels.
-	printf("\t[scene_render_output]");
-	fflush(stdout);
 	pixman_region32_t full_region;
 	pixman_region32_init_rect(&full_region,	0, 0, output->width, output->height);
 	if (damage == NULL) {
@@ -595,10 +590,7 @@ void scene_render_output(struct	wlr_scene *scene, struct wlr_output *output,
 		scene_node_for_each_node(&scene->node, -lx, -ly,
 			render_node_iterator, &data);
 
-		printf("\t[scene_render_output]Begin scene graph\n");
-		print_scene_graph(&scene->node,	2);
-		printf("\t[scene_render_output]End scene graph\n");
-		fflush(stdout);
+		print_scene_graph(&scene->node,	0);
 
 		wlr_renderer_scissor(renderer, NULL);
 	}
