@@ -590,7 +590,7 @@ void scene_render_output(struct	wlr_scene *scene, struct wlr_output *output,
 		scene_node_for_each_node(&scene->node, -lx, -ly,
 			render_node_iterator, &data);
 
-		print_scene_graph(&scene->node,	0);
+		//print_scene_graph(&scene->node,	0);
 
 		wlr_renderer_scissor(renderer, NULL);
 	}
@@ -661,9 +661,6 @@ static bool scene_output_scanout(struct	wlr_scene_output *scene_output)	{
 }
 
 bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
-	printf("scene_output_commit\n");
-	fflush(stdout);
-
 	// If I	don't do this, windows aren't re-drawn when the	cursor moves.
 	// So screw it.
 	wlr_output_damage_add_whole(scene_output->damage);

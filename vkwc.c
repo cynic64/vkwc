@@ -57,6 +57,10 @@ enum ViewType {
 	XWAYLAND_VIEW,
 };
 
+struct Window {
+	struct wl_list link;
+};
+
 struct Server {
 	struct wl_display *wl_display;
 	struct wlr_backend *backend;
@@ -87,11 +91,17 @@ struct Server {
 	struct wlr_box grab_geobox;
 	uint32_t resize_edges;
 
+	struct wl_listener new_surface;
+	struct wl_listener destroy_surface;
+	int surface_count;
+
 	struct wlr_output_layout *output_layout;
 	struct wl_list outputs;
 	struct wl_listener new_output;
 
 	struct wl_listener new_xwayland_surface;
+
+	struct wl_list windows;
 };
 
 struct Output {
@@ -173,6 +183,39 @@ static void focus_view(struct View *view, struct wlr_surface *surface) {
 		wlr_seat_keyboard_notify_enter(seat, view->xdg_surface->surface,
 			keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
 	}
+}
+
+static void handle_destroy_surface(struct wl_listener *listener, void *data) {
+	printf("before destroy\n");
+	fflush(stdout);
+
+	struct Server *server;
+	server = wl_container_of(listener, server, destroy_surface);
+	server->surface_count--;
+
+	printf("Surface destroyed! There are now %d\n", server->surface_count);
+	fflush(stdout);
+
+	printf("after destroy\n");
+	fflush(stdout);
+}
+
+static void handle_new_surface(struct wl_listener *listener, void *data) {
+	printf("before new\n");
+	fflush(stdout);
+
+	struct Server *server;
+	server = wl_container_of(listener, server, new_surface);
+	server->surface_count++;
+
+	struct wlr_surface *surface = data;
+	wl_signal_add(&surface->events.destroy, &server->destroy_surface);
+
+	printf("New surface! There are now %d\n", server->surface_count);
+	fflush(stdout);
+
+	printf("after new\n");
+	fflush(stdout);
 }
 
 static void handle_keyboard_modifiers(
@@ -866,6 +909,12 @@ int main(int argc, char	*argv[]) {
 	struct wlr_compositor *compositor = wlr_compositor_create(server.wl_display, server.renderer);
 	wlr_data_device_manager_create(server.wl_display);
 
+	// Stuff for keeping track of surfaces
+	server.surface_count = 0;
+	server.new_surface.notify = handle_new_surface;
+	server.destroy_surface.notify = handle_destroy_surface;
+	wl_signal_add(&compositor->events.new_surface, &server.new_surface);
+
 	/* Creates an output layout, which a wlroots utility for working with an
 	 * arrangement of screens in a physical	layout.	*/
 	server.output_layout = wlr_output_layout_create();
@@ -955,8 +1004,7 @@ int main(int argc, char	*argv[]) {
 			&server.request_set_selection);
 
 	// Screencopy support
-	struct wlr_screencopy_manager_v1 *screencopy_manager = wlr_screencopy_manager_v1_create(server.wl_display);
-	printf("Screencopy manager: %p\n", (void *) screencopy_manager);
+	wlr_screencopy_manager_v1_create(server.wl_display);
 
 	// Set up xwayland
 	struct wlr_xwayland *xwayland =	wlr_xwayland_create(server.wl_display, compositor, true);
