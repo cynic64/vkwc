@@ -22,7 +22,7 @@ LIBS="\
         $(pkg-config --cflags --libs vulkan) \
         $(pkg-config --cflags --libs xkbcommon)"
 
-COMMAND="gcc -Wall -pedantic -ggdb -o vkwc vkwc.c render.c $LIBS -DWLR_USE_UNSTABLE -I."
+COMMAND="gcc -Wall -pedantic -ggdb -o vkwc vkwc.c render.c vulkan/*.c misc/pixel_format.c $LIBS -DWLR_USE_UNSTABLE -I."
 echo "Command: $COMMAND"
 
 $COMMAND

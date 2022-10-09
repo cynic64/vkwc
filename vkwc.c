@@ -34,12 +34,12 @@
 #include <wlr/render/interface.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
-#include <wlr/render/vulkan.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/xwayland.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 
+#include "vulkan.h"
 #include "render.h"
 
 /* For brevity's sake, struct members are annotated where they are used. */

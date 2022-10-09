@@ -40,6 +40,8 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/render/vulkan.h>
 
+#include "render/vulkan.h"
+
 #define	M_PI 3.14159265358979323846
 
 // If we took a	screenshot the instant Alt+F3 was pressed, no render buffer would be bound.
