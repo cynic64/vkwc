@@ -13,35 +13,32 @@
 #include <math.h>
 #include <drm_fourcc.h>
 
-#include "wlroots/include/wlr/backend.h"
-#include "wlroots/include/wlr/render/allocator.h"
-#include "wlroots/include/wlr/render/wlr_renderer.h"
-#include "wlroots/include/wlr/types/wlr_cursor.h"
-#include "wlroots/include/wlr/types/wlr_compositor.h"
-#include "wlroots/include/wlr/types/wlr_data_device.h"
-#include "wlroots/include/wlr/types/wlr_input_device.h"
-#include "wlroots/include/wlr/types/wlr_keyboard.h"
-#include "wlroots/include/wlr/types/wlr_output.h"
-#include "wlroots/include/wlr/types/wlr_output_layout.h"
-#include "wlroots/include/wlr/types/wlr_pointer.h"
-#include "wlroots/include/wlr/types/wlr_scene.h"
-#include "wlroots/include/wlr/types/wlr_seat.h"
-#include "wlroots/include/wlr/types/wlr_xcursor_manager.h"
-#include "wlroots/include/wlr/types/wlr_xdg_shell.h"
-#include "wlroots/include/wlr/types/wlr_presentation_time.h"
-#include "wlroots/include/wlr/types/wlr_output_damage.h"
-#include "wlroots/include/wlr/types/wlr_matrix.h"
-#include "wlroots/include/wlr/render/interface.h"
-#include "wlroots/include/wlr/util/log.h"
-#include "wlroots/include/wlr/util/region.h"
-#include "wlroots/include/wlr/render/vulkan.h"
-#include "wlroots/include/wlr/types/wlr_xcursor_manager.h"
-#include "wlroots/include/wlr/xwayland.h"
-#include "wlroots/include/wlr/types/wlr_screencopy_v1.h"
-#include "wlroots/include/wlr/types/wlr_xdg_output_v1.h"
-
-// Stuff I had to clone	wlroots	for (not in include/wlr)
-#include "wlroots/include/render/vulkan.h"
+#include <wlr/backend.h>
+#include <wlr/render/allocator.h>
+#include <wlr/render/wlr_renderer.h>
+#include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_input_device.h>
+#include <wlr/types/wlr_keyboard.h>
+#include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_pointer.h>
+#include <wlr/types/wlr_scene.h>
+#include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_xcursor_manager.h>
+#include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_presentation_time.h>
+#include <wlr/types/wlr_output_damage.h>
+#include <wlr/types/wlr_matrix.h>
+#include <wlr/render/interface.h>
+#include <wlr/util/log.h>
+#include <wlr/util/region.h>
+#include <wlr/render/vulkan.h>
+#include <wlr/types/wlr_xcursor_manager.h>
+#include <wlr/xwayland.h>
+#include <wlr/types/wlr_screencopy_v1.h>
+#include <wlr/types/wlr_xdg_output_v1.h>
 
 #include "render.h"
 
