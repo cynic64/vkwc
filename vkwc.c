@@ -88,10 +88,6 @@ struct Server {
 	struct wlr_box grab_geobox;
 	uint32_t resize_edges;
 
-	struct wl_listener new_surface;
-	struct wl_listener destroy_surface;
-	int surface_count;
-
 	struct wlr_output_layout *output_layout;
 	struct wl_list outputs;
 	struct wl_listener new_output;
@@ -141,6 +137,10 @@ struct Keyboard	{
 	struct wl_listener key;
 };
 
+struct Surface {
+	struct wl_listener destroy;
+};
+
 static void focus_view(struct View *view, struct wlr_surface *surface) {
 	/* Note: this function only deals with keyboard	focus. */
 	if (view == NULL) {
@@ -180,39 +180,6 @@ static void focus_view(struct View *view, struct wlr_surface *surface) {
 		wlr_seat_keyboard_notify_enter(seat, view->xdg_surface->surface,
 			keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
 	}
-}
-
-static void handle_destroy_surface(struct wl_listener *listener, void *data) {
-	printf("before destroy\n");
-	fflush(stdout);
-
-	struct Server *server;
-	server = wl_container_of(listener, server, destroy_surface);
-	server->surface_count--;
-
-	printf("Surface destroyed! There are now %d\n", server->surface_count);
-	fflush(stdout);
-
-	printf("after destroy\n");
-	fflush(stdout);
-}
-
-static void handle_new_surface(struct wl_listener *listener, void *data) {
-	printf("before new\n");
-	fflush(stdout);
-
-	struct Server *server;
-	server = wl_container_of(listener, server, new_surface);
-	server->surface_count++;
-
-	struct wlr_surface *surface = data;
-	wl_signal_add(&surface->events.destroy, &server->destroy_surface);
-
-	printf("New surface! There are now %d\n", server->surface_count);
-	fflush(stdout);
-
-	printf("after new\n");
-	fflush(stdout);
 }
 
 static void handle_keyboard_modifiers(
@@ -869,6 +836,7 @@ int main(int argc, char	*argv[]) {
 	}
 
 	struct Server server;
+	printf("[main] Server is really at %p\n", (void *) &server);
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from	the Unix socket, manging Wayland globals, and so on. */
 	server.wl_display = wl_display_create();
@@ -905,12 +873,6 @@ int main(int argc, char	*argv[]) {
 	 * see the handling of the request_set_selection event below.*/
 	struct wlr_compositor *compositor = wlr_compositor_create(server.wl_display, server.renderer);
 	wlr_data_device_manager_create(server.wl_display);
-
-	// Stuff for keeping track of surfaces
-	server.surface_count = 0;
-	server.new_surface.notify = handle_new_surface;
-	server.destroy_surface.notify = handle_destroy_surface;
-	wl_signal_add(&compositor->events.new_surface, &server.new_surface);
 
 	/* Creates an output layout, which a wlroots utility for working with an
 	 * arrangement of screens in a physical	layout.	*/
