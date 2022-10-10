@@ -81,14 +81,6 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4])	{
 	mat4[3][3] = 1.f;
 }
 
-struct check_scanout_data {
-	// in
-	struct wlr_box viewport_box;
-	// out
-	struct wlr_scene_node *node;
-	size_t n;
-};
-
 struct render_data {
 	struct wlr_output *output;
 	pixman_region32_t *damage;
@@ -292,28 +284,6 @@ static void scene_node_get_size(struct wlr_scene_node *node,
 			}
 		}
 		break;
-	}
-}
-
-static void check_scanout_iterator(struct wlr_scene_node *node,
-		int x, int y, void *_data) {
-	struct check_scanout_data *data	= _data;
-
-	struct wlr_box node_box	= { .x = x, .y = y };
-	scene_node_get_size(node, &node_box.width, &node_box.height);
-
-	struct wlr_box intersection;
-	if (!wlr_box_intersection(&intersection, &data->viewport_box, &node_box)) {
-		return;
-	}
-
-	data->n++;
-
-	if (data->viewport_box.x == node_box.x &&
-			data->viewport_box.y ==	node_box.y &&
-			data->viewport_box.width == node_box.width &&
-			data->viewport_box.height == node_box.height) {
-		data->node = node;
 	}
 }
 
@@ -597,68 +567,6 @@ void scene_render_output(struct	wlr_scene *scene, struct wlr_output *output,
 	pixman_region32_fini(&full_region);
 }
 
-static bool scene_output_scanout(struct	wlr_scene_output *scene_output)	{
-	struct wlr_output *output = scene_output->output;
-
-	struct wlr_box viewport_box = {	.x = scene_output->x, .y = scene_output->y };
-	wlr_output_effective_resolution(output,
-		&viewport_box.width, &viewport_box.height);
-
-	struct check_scanout_data check_scanout_data = {
-		.viewport_box =	viewport_box,
-	};
-	scene_node_for_each_node(&scene_output->scene->node, 0,	0,
-		check_scanout_iterator,	&check_scanout_data);
-	if (check_scanout_data.n != 1 || check_scanout_data.node == NULL) {
-		return false;
-	}
-
-	struct wlr_scene_node *node = check_scanout_data.node;
-	struct wlr_buffer *buffer;
-	switch (node->type) {
-	case WLR_SCENE_NODE_SURFACE:;
-		struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
-		if (scene_surface->surface->buffer == NULL ||
-				scene_surface->surface->current.viewport.has_src ||
-				scene_surface->surface->current.transform != output->transform)	{
-			return false;
-		}
-		buffer = &scene_surface->surface->buffer->base;
-		break;
-	case WLR_SCENE_NODE_BUFFER:;
-		struct wlr_scene_buffer	*scene_buffer =	scene_buffer_from_node(node);
-		if (scene_buffer->buffer == NULL ||
-				!wlr_fbox_empty(&scene_buffer->src_box)	||
-				scene_buffer->transform	!= output->transform) {
-			return false;
-		}
-		buffer = scene_buffer->buffer;
-		break;
-	default:
-		return false;
-	}
-
-	wlr_output_attach_buffer(output, buffer);
-	if (!wlr_output_test(output)) {
-		wlr_output_rollback(output);
-		return false;
-	}
-
-	struct wlr_presentation	*presentation =	scene_output->scene->presentation;
-	if (presentation != NULL && node->type == WLR_SCENE_NODE_SURFACE) {
-		struct wlr_scene_surface *scene_surface	=
-			wlr_scene_surface_from_node(node);
-		// Since outputs may overlap, we still need to check this even though
-		// we know that	the surface size matches the size of this output.
-		if (scene_surface->primary_output == output) {
-			wlr_presentation_surface_sampled_on_output(presentation,
-				scene_surface->surface,	output);
-		}
-	}
-
-	return wlr_output_commit(output);
-}
-
 bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 	// If I	don't do this, windows aren't re-drawn when the	cursor moves.
 	// So screw it.
@@ -671,24 +579,15 @@ bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer	!= NULL);
 
-	// Scanout is actually sending the pixels to the monitor (I think).
-	bool scanout = scene_output_scanout(scene_output);
-	if (scanout != scene_output->prev_scanout) {
-		wlr_log(WLR_DEBUG, "Direct scan-out %s",
-			scanout	? "enabled" : "disabled");
-		// When	exiting	direct scan-out, damage	everything
-		wlr_output_damage_add_whole(scene_output->damage);
-	}
-	scene_output->prev_scanout = scanout;
-	if (scanout) {
-		return true;
-	}
+	// TinyWL used to try to do direct scanout here. But I think there's no point because
+	// we want fancy effects that aren't possible with that.
 
 	bool needs_frame;
 	pixman_region32_t damage;
 	pixman_region32_init(&damage);
 	// wlr_output_damage_attach_render: "Attach the	renderer's buffer to the output"
-	// "Must call this before rendering, then `wlr_output_set_damage` then `wlr_output_commit`
+	// "Must call this before rendering, then `wlr_output_set_damage` then `wlr_output_commit`"
+	// "needs_frame will be set to true if a frame should be submitted"
 	if (!wlr_output_damage_attach_render(scene_output->damage,
 			&needs_frame, &damage))	{
 		pixman_region32_fini(&damage);
@@ -696,6 +595,10 @@ bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 	}
 
 	if (!needs_frame) {
+		fprintf(stderr, "wlr_output_damage_attach_render says we don't need to draw a frame. This shouldn't "
+			" happen.\n");
+		exit(1);
+
 		pixman_region32_fini(&damage);
 		wlr_output_rollback(output);
 		return true;
