@@ -40,6 +40,7 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/render/vulkan.h>
 
+#include "render.h"
 #include "render/vulkan.h"
 
 #define	M_PI 3.14159265358979323846
@@ -51,6 +52,13 @@ struct VertPcrData {
 	float mat4[4][4];
 	float uv_off[2];
 	float uv_size[2];
+};
+
+struct RenderData {
+	struct wlr_output *output;
+	pixman_region32_t *damage;
+	struct wlr_presentation	*presentation; // May be NULL
+	struct wl_list *surfaces;
 };
 
 void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int x, int	y, int width, int height) {
@@ -73,14 +81,6 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4])	{
 	mat4[2][2] = 1.f;
 	mat4[3][3] = 1.f;
 }
-
-struct render_data {
-	struct wlr_output *output;
-	pixman_region32_t *damage;
-
-	// May be NULL
-	struct wlr_presentation	*presentation;
-};
 
 static void scene_node_for_each_node(struct wlr_scene_node *node,
 		int lx,	int ly,	wlr_scene_node_iterator_func_t user_iterator,
@@ -183,15 +183,33 @@ void get_node_center(struct wlr_scene_node *node, int *x, int *y) {
 }
 
 void print_scene_graph(struct wlr_scene_node *node, int	level) {
-	int x, y, width, height;
-	get_node_placement(node, &x, &y, &width, &height);
-
-	int center_x = 0, center_y = 0;
-	if (node->type == WLR_SCENE_NODE_SURFACE) get_node_center(node,	&center_x, &center_y);
+	for (int i = 0;	i < level; i++)	printf("\t");
+	printf("Node type: %s, %d children, xy relative to parent: %d %d\n",
+		SCENE_NODE_TYPE_LOOKUP[node->type], wl_list_length(&node->state.children),
+		node->state.x, node->state.y);
 
 	for (int i = 0;	i < level; i++)	printf("\t");
-	printf("Node type: %s, dims: %d	x %d, pos: %d %d, centered on %d %d\n",
-		SCENE_NODE_TYPE_LOOKUP[node->type], width, height, x, y, center_x, center_y);
+	if (node->type == WLR_SCENE_NODE_ROOT) {
+		struct wlr_scene *scene = (struct wlr_scene *) node;
+		printf("Cast as ROOT. %d outputs\n", wl_list_length(&scene->outputs));
+	} else if (node->type == WLR_SCENE_NODE_TREE) {
+	} else if (node->type == WLR_SCENE_NODE_SURFACE) {
+		struct wlr_scene_surface *scene_surface = (struct wlr_scene_surface *) node;
+		struct wlr_surface_state surface_state = scene_surface->surface->current;
+		printf("Cast as SURFACE. Dims: %d x %d\n", surface_state.width, surface_state.height);
+	} else if (node->type == WLR_SCENE_NODE_RECT) {
+		struct wlr_scene_rect *scene_rect = (struct wlr_scene_rect *) node;
+		printf("Cast as RECT. Dims: %d x %d, color: %f %f %f %f\n",
+			scene_rect->width, scene_rect->height,
+			scene_rect->color[0], scene_rect->color[1],scene_rect->color[2], scene_rect->color[3]);
+	} else if (node->type == WLR_SCENE_NODE_BUFFER) {
+		struct wlr_scene_buffer *scene_buffer = (struct wlr_scene_buffer *) node;
+		printf("Cast as BUFFER. Destination dims: %d x %d\n",
+		scene_buffer->dst_width, scene_buffer->dst_height);
+	} else {
+		fprintf(stderr, "Weird node type\n");
+		exit(1);
+	}
 
 	struct wlr_scene_node *child;
 	wl_list_for_each(child,	&node->state.children, state.link) {
@@ -314,7 +332,7 @@ static void render_rect(struct wlr_output *output,
 
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		struct wlr_scene_node *node, struct wlr_texture	*wlr_texture,
-		const struct wlr_fbox *box, const float	matrix[static 9], float	alpha) {
+		const struct wlr_fbox *box, const float	matrix[static 9], float	alpha, float theta) {
 	/*
 	 * Box only has	the width and height (in pixel coordinates).
 	 * box->x and box->y are always	0.
@@ -351,17 +369,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
-	// Calculate rotation angle
-	struct wlr_scene_node *main_node = get_main_node(node);
-	float seed = (((long) main_node) % 100)	/ 50.0;
-
-	struct timespec	ts;
-	clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-	float theta = M_PI * 2 * (ts.tv_nsec / 1000000000.0 + ts.tv_sec) * (seed - 1.0)	* 0.3 +	seed;
-	theta = 0;
-
 	// Rotate the matrix
-
 	float rotation[9] = {cosf(theta), sinf(theta), 0.5,
 		-sinf(theta), cosf(theta), 0.5,
 		0, 0, 1};
@@ -429,7 +437,7 @@ static void render_texture(struct wlr_output *output,
 		pixman_region32_t *output_damage,
 		struct wlr_scene_node *node, struct wlr_texture	*texture,
 		const struct wlr_fbox *src_box,	const struct wlr_box *dst_box,
-		const float matrix[static 9]) {
+		const float matrix[static 9], float theta) {
 	/* src_box: pixel coordinates, but only	width and height. Also floating	point.
 	 * dst_box: pixel coordinates of where to render to
 	 * matrix: matrix to transform 0..1 coords to where to render to
@@ -452,12 +460,27 @@ static void render_texture(struct wlr_output *output,
 	}
 
 	wlr_renderer_scissor(renderer, NULL);
-	render_subtexture_with_matrix(renderer,	node, texture, src_box,	matrix,	1.0);
+	render_subtexture_with_matrix(renderer,	node, texture, src_box,	matrix,	1.0, theta);
+}
+
+// Find a Surface given a corresponding wlr_surface and a wl_list of Surfaces. Great naming, I know.
+// Dies on failure.
+struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack) {
+	struct Surface *cur;
+	wl_list_for_each(cur, haystack, link) {
+		if (cur->wlr_surface == needle) {
+			return cur;
+		}
+	}
+
+	fprintf(stderr, "Couldn't find surface. Looked through %d using needle %p\n",
+		wl_list_length(haystack), (void *) needle);
+	exit(1);
 }
 
 static void render_node_iterator(struct	wlr_scene_node *node,
 		int x, int y, void *_data) {
-	struct render_data *data = _data;
+	struct RenderData *data = _data;
 	struct wlr_output *output = data->output;
 	pixman_region32_t *output_damage = data->damage;
 
@@ -478,31 +501,30 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 		break;
 	case WLR_SCENE_NODE_SURFACE:;
 		struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
-		struct wlr_surface *surface = scene_surface->surface;
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, data->surfaces);
 
-		texture	= wlr_surface_get_texture(surface);
+		texture	= wlr_surface_get_texture(wlr_surface);
 		if (texture == NULL) {
 			return;
 		}
 
 		// In my case (and I think basically always) both transform and	output->transform_matrix
 		// are identity	matrices
-		transform = wlr_output_transform_invert(surface->current.transform);
+		transform = wlr_output_transform_invert(wlr_surface->current.transform);
 
 		// The resulting matrix	looks like [w 0	x    0 h y    0	0 1]
 		// So it would coordinates 0..1	to the pixel coordinates of the	window
-		wlr_matrix_project_box(matrix, &dst_box, transform, 0.0,
-			output->transform_matrix);
+		wlr_matrix_project_box(matrix, &dst_box, transform, 0.0, output->transform_matrix);
 
 		// The source box has the size of the surface. X and Y are always 0, as	far as I can tell.
 		struct wlr_fbox	src_box	= {0};
 
 		render_texture(output, output_damage, node, texture,
-			&src_box, &dst_box, matrix);
+			&src_box, &dst_box, matrix, surface->rotation);
 
 		if (data->presentation != NULL && scene_surface->primary_output	== output) {
-			wlr_presentation_surface_sampled_on_output(data->presentation,
-				surface, output);
+			wlr_presentation_surface_sampled_on_output(data->presentation, wlr_surface, output);
 		}
 		break;
 	case WLR_SCENE_NODE_RECT:;
@@ -525,12 +547,13 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 			output->transform_matrix);
 
 		render_texture(output, output_damage, node, texture, &scene_buffer->src_box,
-			&dst_box, matrix);
+			&dst_box, matrix, 0);
 		break;
 	}
 }
 
-bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
+// surfaces should be a list of struct Surface, defined in vkwc.c
+bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces) {
 	// If I	don't do this, windows aren't re-drawn when the	cursor moves.
 	// So just damage everything instead. It's inefficient, but I don't care for now.
 	wlr_output_damage_add_whole(scene_output->damage);
@@ -586,10 +609,11 @@ bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 	struct wlr_scene *scene = scene_output->scene;
 
 	if (output->enabled && pixman_region32_not_empty(&damage)) {
-		struct render_data data	= {
+		struct RenderData data = {
 			.output	= output,
 			.damage	= &damage,
 			.presentation =	scene->presentation,
+			.surfaces = surfaces
 		};
 		// scene_output->[xy] determines offset, useful for multiple outputs
 		scene_node_for_each_node(&scene->node, -scene_output->x, -scene_output->y,
@@ -597,7 +621,7 @@ bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 
 		wlr_renderer_scissor(renderer, NULL);
 	} else {
-		fprintf(stderr, "Output was is disabled, dunno what to do\n");
+		fprintf(stderr, "Output is disabled, dunno what to do\n");
 		exit(1);
 	}
 

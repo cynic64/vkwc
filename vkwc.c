@@ -10,7 +10,6 @@
 #include <xkbcommon/xkbcommon.h>
 #include <pixman-1/pixman.h>
 #include <vulkan/vulkan.h>
-#include <math.h>
 #include <drm_fourcc.h>
 
 #include <wlr/backend.h>
@@ -100,13 +99,6 @@ struct Server {
 	struct wl_list surfaces;
 };
 
-struct Surface {
-	struct Server *server;
-	struct wl_list link;
-
-	struct wl_listener destroy;
-};
-
 struct Output {
 	struct wl_list link;
 	struct Server *server;
@@ -161,9 +153,15 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 
 static void server_handle_new_surface(struct wl_listener *listener,
 		void *data) {
+	printf("New surface\n");
+	fflush(stdout);printf("New surface\n");
+	fflush(stdout);
 	struct wlr_surface *wlr_surface = data;
 
 	struct Surface *surface = calloc(1, sizeof(struct Surface));
+	memset(surface, 0, sizeof(*surface));
+	surface->wlr_surface = wlr_surface;
+	surface->rotation = (rand() % 256) / 256.0 * 4;
 
 	struct Server *server;
 	server = wl_container_of(listener, server, new_surface);
@@ -631,7 +629,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 		scene, output->wlr_output);
 
 	/* Render the scene if needed and commit the output */
-	scene_output_commit(scene_output);
+	draw_frame(scene_output, &output->server->surfaces);
 
 	struct timespec	now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
@@ -686,12 +684,17 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 }
 
 static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
+	printf("XDG toplevel map\n");
+	fflush(stdout);
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct View *view = wl_container_of(listener, view, map);
 
 	wl_list_insert(&view->server->views, &view->link);
 
 	focus_view(view, view->xdg_surface->surface);
+
+	print_scene_graph(&view->server->scene->node, 0);
+	fflush(stdout);
 }
 
 static void handle_xdg_toplevel_unmap(struct wl_listener *listener, void *data)	{
