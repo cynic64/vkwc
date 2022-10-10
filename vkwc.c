@@ -202,7 +202,8 @@ void relink_node(struct wl_list *surfaces, struct wlr_scene_node *node) {
 // When windows are resized, their projection matrices in their Surfaces must be updated.
 // This will recalculate the matrices of the specified node and all children
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
-void calc_projections(float output_matrix[9], struct wl_list *surfaces, struct wlr_scene_node *node, int x, int y) {
+void calc_projections(struct wl_list *surfaces, struct wlr_scene_node *node,
+		int x, int y, int output_width, int output_height) {
 	x += node->state.x;
 	y += node->state.y;
 
@@ -220,15 +221,15 @@ void calc_projections(float output_matrix[9], struct wl_list *surfaces, struct w
 		wlr_matrix_scale(surface->matrix, wlr_surface->current.width, wlr_surface->current.height);
 		printf("Size: %d %d\n", wlr_surface->current.width, wlr_surface->current.height);
 
-		// Project 1920x1080 to -1..1, -1..1
+		// Project 1920x1080 to -1..1, -1..1 (flip because Vulkan is upside down)
 		float projection[9];
-		wlr_matrix_projection(projection, 1920, 1080, WL_OUTPUT_TRANSFORM_FLIPPED_180);
+		wlr_matrix_projection(projection, output_width, output_height, WL_OUTPUT_TRANSFORM_FLIPPED_180);
 		wlr_matrix_multiply(surface->matrix, projection, surface->matrix);
 	}
 
 	struct wlr_scene_node *cur;
 	wl_list_for_each(cur, &node->state.children, state.link) {
-		calc_projections(output_matrix, surfaces, cur, x, y);
+		calc_projections(surfaces, cur, x, y, output_width, output_height);
 	};
 }
 
@@ -683,7 +684,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct wlr_scene_node *root_node = &output->server->scene->node;
 	struct wl_list *surfaces = &output->server->surfaces;
 	relink_node(surfaces, root_node);
-	calc_projections(output->wlr_output->transform_matrix, surfaces, root_node, 0, 0);
+	calc_projections(surfaces, root_node, 0, 0, output->wlr_output->width, output->wlr_output->height);
 
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene
