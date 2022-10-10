@@ -97,14 +97,15 @@ struct Server {
 	struct wl_list windows;
 
 	struct wl_listener new_surface;
-	int surface_count;
+	struct wl_list surfaces;
 };
 
 struct Surface {
-	struct wl_listener destroy;
 	struct Server *server;
-};
+	struct wl_list link;
 
+	struct wl_listener destroy;
+};
 
 struct Output {
 	struct wl_list link;
@@ -149,8 +150,10 @@ struct Keyboard	{
 static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	struct Surface *surface = wl_container_of(listener, surface, destroy);
 
-	surface->server->surface_count--;
-	printf("Surface destroyed! There are now %d\n", surface->server->surface_count);
+	wl_list_remove(&surface->link);
+	wl_list_remove(&surface->destroy.link);
+
+	printf("Surface destroyed! There are now %d\n", wl_list_length(&surface->server->surfaces));
 	fflush(stdout);
 
 	free(surface);
@@ -169,8 +172,9 @@ static void server_handle_new_surface(struct wl_listener *listener,
 	surface->destroy.notify = surface_handle_destroy;
 	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
 
-	server->surface_count++;
-	printf("Surface created! There are now %d\n", server->surface_count);
+	wl_list_insert(server->surfaces.prev, &surface->link);
+
+	printf("Surface created! There are now %d\n", wl_list_length(&server->surfaces));
 	fflush(stdout);
 }
 
@@ -907,7 +911,7 @@ int main(int argc, char	*argv[]) {
 	wlr_data_device_manager_create(server.wl_display);
 
 	// Surface counting stuff
-	server.surface_count = 0;
+	wl_list_init(&server.surfaces);
 	server.new_surface.notify = server_handle_new_surface;
 	wl_signal_add(&compositor->events.new_surface, &server.new_surface);
 

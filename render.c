@@ -591,8 +591,6 @@ void scene_render_output(struct	wlr_scene *scene, struct wlr_output *output,
 		scene_node_for_each_node(&scene->node, -lx, -ly,
 			render_node_iterator, &data);
 
-		//print_scene_graph(&scene->node,	0);
-
 		wlr_renderer_scissor(renderer, NULL);
 	}
 
