@@ -159,7 +159,8 @@ static void surface_handle_new(struct wl_listener *listener,
 	struct Surface *surface = calloc(1, sizeof(struct Surface));
 	memset(surface, 0, sizeof(*surface));
 	surface->wlr_surface = wlr_surface;
-	surface->rotation = (rand() % 256) / 256.0 * 4;
+	//surface->rotation = (rand() % 256) / 256.0 * 4;
+	surface->rotation = 0;
 	surface->toplevel = NULL;
 
 	struct Server *server;
@@ -175,7 +176,7 @@ static void surface_handle_new(struct wl_listener *listener,
 	fflush(stdout);
 }
 
-void relink_node(struct Server *server, struct wlr_scene_node *node) {
+void relink_node(struct wl_list *surfaces, struct wlr_scene_node *node) {
 	// Each Surface contains a reference to the Surface of its main window. Whenever surfaces are added or
 	// removed, these links need to be rebuilt.
 	// This will rebuild all links on the specified node and its children
@@ -183,22 +184,27 @@ void relink_node(struct Server *server, struct wlr_scene_node *node) {
 		// Find the Surface this node corresponds to
 		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
 		struct wlr_surface *wlr_surface = scene_surface->surface;
-		struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+		struct Surface *surface = find_surface(wlr_surface, surfaces);
 
 		// Find the main node and its Surface
 		struct wlr_scene_node *main_node = get_main_node(node);
 		struct wlr_scene_surface *main_scene_surface = wlr_scene_surface_from_node(main_node);
 		struct wlr_surface *main_wlr_surface = main_scene_surface->surface;
-		struct Surface *main_surface = find_surface(main_wlr_surface, &server->surfaces);
+		struct Surface *main_surface = find_surface(main_wlr_surface, surfaces);
 
 		surface->toplevel = main_surface;
 	}
 
 	struct wlr_scene_node *cur;
 	wl_list_for_each(cur, &node->state.children, state.link) {
-		relink_node(server, cur);
+		relink_node(surfaces, cur);
 	};
 }
+
+/*
+// When windows are resized, their projection matrices must be updated.
+void calc_projections(
+*/
 
 static void focus_view(struct View *view, struct wlr_surface *surface) {
 	/* Note: this function only deals with keyboard	focus. */
@@ -464,7 +470,7 @@ static void process_cursor_move(struct Server *server, uint32_t	time) {
 	struct View *view = server->grabbed_view;
 	view->x	= server->cursor->x - server->grab_x;
 	view->y	= server->cursor->y - server->grab_y;
-	wlr_scene_node_set_position(view->scene_node, view->x, view->y);
+	wlr_scene_node_set_position(view->scene_node, view->x, view->y + 50);
 }
 
 static void process_cursor_resize(struct Server	*server, uint32_t time)	{
@@ -648,7 +654,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct wlr_scene *scene	= output->server->scene;
 
 	// Relink surfaces
-	relink_node(output->server, &output->server->scene->node);
+	relink_node(&output->server->surfaces, &output->server->scene->node);
 
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene

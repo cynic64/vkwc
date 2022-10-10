@@ -380,7 +380,7 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 		transform = wlr_output_transform_invert(wlr_surface->current.transform);
 
 		// The resulting matrix	looks like [w 0	x    0 h y    0	0 1]
-		// So it would coordinates 0..1	to the pixel coordinates of the	window
+		// So it would project coordinates 0..1 to the pixel coordinates of the window
 		wlr_matrix_project_box(matrix, &dst_box, transform, 0.0, output->transform_matrix);
 
 		// The source box has the size of the surface. X and Y are always 0, as	far as I can tell.
