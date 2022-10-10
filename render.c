@@ -44,13 +44,6 @@
 
 #define	M_PI 3.14159265358979323846
 
-// If we took a	screenshot the instant Alt+F3 was pressed, no render buffer would be bound.
-// We have to do it after output commit	instead
-bool must_take_screenshot = false;
-
-// I want to count how many surfaces I render each frame
-int rendered_surface_count = 0;
-
 // To print scene node types as	text
 const char* const SCENE_NODE_TYPE_LOOKUP[] = {"ROOT", "TREE", "SURFACE", "RECT", "BUFFER", "INVALID"};
 
@@ -484,8 +477,6 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 		/* Root	or tree	node has nothing to render itself */
 		break;
 	case WLR_SCENE_NODE_SURFACE:;
-		rendered_surface_count++;
-
 		struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
 		struct wlr_surface *surface = scene_surface->surface;
 
@@ -539,37 +530,9 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 	}
 }
 
-void scene_render_output(struct	wlr_scene *scene, struct wlr_output *output,
-		int lx,	int ly,	pixman_region32_t *damage) {
-	// lx and ly are always	0 in my	case. Changing them would globally offset everything on	the screen by that
-	// many	pixels.
-	pixman_region32_t full_region;
-	pixman_region32_init_rect(&full_region,	0, 0, output->width, output->height);
-	if (damage == NULL) {
-		damage = &full_region;
-	}
-
-	struct wlr_renderer *renderer =	output->renderer;
-	assert(renderer);
-
-	if (output->enabled && pixman_region32_not_empty(damage)) {
-		struct render_data data	= {
-			.output	= output,
-			.damage	= damage,
-			.presentation =	scene->presentation,
-		};
-		scene_node_for_each_node(&scene->node, -lx, -ly,
-			render_node_iterator, &data);
-
-		wlr_renderer_scissor(renderer, NULL);
-	}
-
-	pixman_region32_fini(&full_region);
-}
-
 bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 	// If I	don't do this, windows aren't re-drawn when the	cursor moves.
-	// So screw it.
+	// So just damage everything instead. It's inefficient, but I don't care for now.
 	wlr_output_damage_add_whole(scene_output->damage);
 
 	// Get the output, i.e.	screen
@@ -598,10 +561,6 @@ bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 		fprintf(stderr, "wlr_output_damage_attach_render says we don't need to draw a frame. This shouldn't "
 			" happen.\n");
 		exit(1);
-
-		pixman_region32_fini(&damage);
-		wlr_output_rollback(output);
-		return true;
 	}
 
 	// Try to import new buffers as	textures
@@ -614,19 +573,43 @@ bool scene_output_commit(struct	wlr_scene_output *scene_output)	{
 		wl_list_init(&scene_buffer->pending_link);
 	}
 
+	// Begin rendering
 	wlr_renderer_begin(renderer, output->width, output->height);
 
 	wlr_renderer_scissor(renderer, NULL);
 	wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1,	1.0 });
 
-	rendered_surface_count = 0;
-	scene_render_output(scene_output->scene, output,
-		scene_output->x, scene_output->y, &damage);
+	// Actually draw stuff
+	pixman_region32_t full_region;
+	pixman_region32_init_rect(&full_region,	0, 0, output->width, output->height);
+
+	struct wlr_scene *scene = scene_output->scene;
+
+	if (output->enabled && pixman_region32_not_empty(&damage)) {
+		struct render_data data	= {
+			.output	= output,
+			.damage	= &damage,
+			.presentation =	scene->presentation,
+		};
+		// scene_output->[xy] determines offset, useful for multiple outputs
+		scene_node_for_each_node(&scene->node, -scene_output->x, -scene_output->y,
+			render_node_iterator, &data);
+
+		wlr_renderer_scissor(renderer, NULL);
+	} else {
+		fprintf(stderr, "Output was is disabled, dunno what to do\n");
+		exit(1);
+	}
+
+	pixman_region32_fini(&full_region);
+
 	wlr_output_render_software_cursors(output, &damage);
 
+	// Draw frame counter
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	render_rect_simple(renderer, color, 10,	10, 20,	rendered_surface_count*2 + 1);
+	render_rect_simple(renderer, color, 10,	10, 10,	10);
 
+	// Finish
 	wlr_renderer_end(renderer);
 	pixman_region32_fini(&damage);
 
