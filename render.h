@@ -3,15 +3,9 @@
 
 #include <wayland-server-core.h>
 
-struct Surface {
-	struct Server *server;
-	struct wl_list link;
-	struct wl_listener destroy;
-	struct wlr_surface *wlr_surface;
+#include "surface.h"
 
-	float rotation;		// In radians
-};
-
+// surfaces has type struct Surface from surface.h
 bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces);
 
 void print_scene_graph(struct wlr_scene_node *node, int	level);

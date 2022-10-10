@@ -40,6 +40,7 @@
 
 #include "vulkan.h"
 #include "render.h"
+#include "util.h"
 
 /* For brevity's sake, struct members are annotated where they are used. */
 enum CursorMode	{
@@ -151,17 +152,15 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	free(surface);
 }
 
-static void server_handle_new_surface(struct wl_listener *listener,
+static void surface_handle_new(struct wl_listener *listener,
 		void *data) {
-	printf("New surface\n");
-	fflush(stdout);printf("New surface\n");
-	fflush(stdout);
 	struct wlr_surface *wlr_surface = data;
 
 	struct Surface *surface = calloc(1, sizeof(struct Surface));
 	memset(surface, 0, sizeof(*surface));
 	surface->wlr_surface = wlr_surface;
 	surface->rotation = (rand() % 256) / 256.0 * 4;
+	surface->toplevel = NULL;
 
 	struct Server *server;
 	server = wl_container_of(listener, server, new_surface);
@@ -174,6 +173,31 @@ static void server_handle_new_surface(struct wl_listener *listener,
 
 	printf("Surface created! There are now %d\n", wl_list_length(&server->surfaces));
 	fflush(stdout);
+}
+
+void relink_node(struct Server *server, struct wlr_scene_node *node) {
+	// Each Surface contains a reference to the Surface of its main window. Whenever surfaces are added or
+	// removed, these links need to be rebuilt.
+	// This will rebuild all links on the specified node and its children
+	if (node->type == WLR_SCENE_NODE_SURFACE) {
+		// Find the Surface this node corresponds to
+		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+
+		// Find the main node and its Surface
+		struct wlr_scene_node *main_node = get_main_node(node);
+		struct wlr_scene_surface *main_scene_surface = wlr_scene_surface_from_node(main_node);
+		struct wlr_surface *main_wlr_surface = main_scene_surface->surface;
+		struct Surface *main_surface = find_surface(main_wlr_surface, &server->surfaces);
+
+		surface->toplevel = main_surface;
+	}
+
+	struct wlr_scene_node *cur;
+	wl_list_for_each(cur, &node->state.children, state.link) {
+		relink_node(server, cur);
+	};
 }
 
 static void focus_view(struct View *view, struct wlr_surface *surface) {
@@ -623,6 +647,9 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct Output *output =	wl_container_of(listener, output, frame);
 	struct wlr_scene *scene	= output->server->scene;
 
+	// Relink surfaces
+	relink_node(output->server, &output->server->scene->node);
+
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene
 	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(
@@ -685,7 +712,6 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 
 static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
 	printf("XDG toplevel map\n");
-	fflush(stdout);
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct View *view = wl_container_of(listener, view, map);
 
@@ -915,7 +941,7 @@ int main(int argc, char	*argv[]) {
 
 	// Surface counting stuff
 	wl_list_init(&server.surfaces);
-	server.new_surface.notify = server_handle_new_surface;
+	server.new_surface.notify = surface_handle_new;
 	wl_signal_add(&compositor->events.new_surface, &server.new_surface);
 
 	/* Creates an output layout, which a wlroots utility for working with an
