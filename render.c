@@ -213,7 +213,7 @@ static void render_rect(struct wlr_output *output,
 
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		struct wlr_scene_node *node, struct wlr_texture	*wlr_texture,
-		const struct wlr_fbox *box, const float	matrix[static 9], float	alpha, float theta) {
+		const struct wlr_fbox *box, const float	matrix[static 9], float	alpha) {
 	/*
 	 * Box only has	the width and height (in pixel coordinates).
 	 * box->x and box->y are always	0.
@@ -250,32 +250,9 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
-	// Rotate the matrix
-	float rotation[9] = {cosf(theta), sinf(theta), 0.5,
-		-sinf(theta), cosf(theta), 0.5,
-		0, 0, 1};
-
-	// If we don't include a translation component,	the rotation is	centered around	(0, 0) and
-	// will	most likely put	the window off screen. Instead,	center it around the center of the
-	// window.
-	int center_x, center_y;
-	get_node_center(node, &center_x, &center_y);
-
-	rotation[2] = center_x - center_x * rotation[0]	- center_y * rotation[1];
-	rotation[5] = center_y - center_x * rotation[3]	- center_y * rotation[4];
-
-	float rotated_matrix[9];
-	wlr_matrix_multiply(rotated_matrix, rotation, matrix);
-
-	// Apply the projection	matrix to the matrix we	were given
-	// render->projection takes 0..1920 and	0..1080	and maps them to -1..1
-	// So for my resolution	it's always [2/1920 0 -1    0 2/1080 -1	   0 0 1]
-	float final_matrix[9];
-	wlr_matrix_multiply(final_matrix, renderer->projection,	rotated_matrix);
-
 	// Draw
 	struct VertPcrData VertPcrData;
-	mat3_to_mat4(final_matrix, VertPcrData.mat4);
+	mat3_to_mat4(matrix, VertPcrData.mat4);
 
 	VertPcrData.uv_off[0] =	box->x / wlr_texture->width;
 	VertPcrData.uv_off[1] =	box->y / wlr_texture->height;
@@ -289,28 +266,6 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		&alpha);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 
-	// Draw	a copy in the original position
-	/*
-	float non_rotated_final_matrix[9];
-	wlr_matrix_multiply(non_rotated_final_matrix, renderer->projection, matrix);
-	// Remove translation so it always renders top-left
-	non_rotated_final_matrix[2] = 0;
-	non_rotated_final_matrix[5] = 0;
-	mat3_to_mat4(non_rotated_final_matrix, VertPcrData.mat4);
-
-	float copy_alpha = 0.5;
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float),
-		&copy_alpha);
-	vkCmdDraw(cb, 4, 1, 0, 0);
-
-	texture->last_used = renderer->frame;
-
-	render_rect_simple(wlr_renderer, (float[4]){1.0, 1.0, 0.0, 1.0}, center_x - 1, center_y	- 1, 2,	2);
-	*/
-
 	return true;
 }
 
@@ -318,7 +273,7 @@ static void render_texture(struct wlr_output *output,
 		pixman_region32_t *output_damage,
 		struct wlr_scene_node *node, struct wlr_texture	*texture,
 		const struct wlr_fbox *src_box,	const struct wlr_box *dst_box,
-		const float matrix[static 9], float theta) {
+		const float matrix[static 9]) {
 	/* src_box: pixel coordinates, but only	width and height. Also floating	point.
 	 * dst_box: pixel coordinates of where to render to
 	 * matrix: matrix to transform 0..1 coords to where to render to
@@ -341,7 +296,7 @@ static void render_texture(struct wlr_output *output,
 	}
 
 	wlr_renderer_scissor(renderer, NULL);
-	render_subtexture_with_matrix(renderer,	node, texture, src_box,	matrix,	1.0, theta);
+	render_subtexture_with_matrix(renderer,	node, texture, src_box,	matrix,	1.0);
 }
 
 static void render_node_iterator(struct	wlr_scene_node *node,
@@ -388,7 +343,7 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 
 		assert(surface->toplevel != NULL);
 		render_texture(output, output_damage, node, texture,
-			&src_box, &dst_box, matrix, surface->toplevel->rotation);
+			&src_box, &dst_box, surface->matrix);
 
 		if (data->presentation != NULL && scene_surface->primary_output	== output) {
 			wlr_presentation_surface_sampled_on_output(data->presentation, wlr_surface, output);
@@ -414,7 +369,7 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 			output->transform_matrix);
 
 		render_texture(output, output_damage, node, texture, &scene_buffer->src_box,
-			&dst_box, matrix, 0);
+			&dst_box, matrix);
 		break;
 	}
 }

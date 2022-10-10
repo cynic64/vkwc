@@ -123,3 +123,10 @@ void print_scene_graph(struct wlr_scene_node *node, int	level) {
 		print_scene_graph(child, level + 1);
 	}
 }
+
+void print_matrix(float matrix[9]) {
+	for (int i = 0; i < 9; i++) {
+		printf("%f ", matrix[i]);
+	}
+	printf("\n");
+}

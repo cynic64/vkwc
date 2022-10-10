@@ -159,8 +159,6 @@ static void surface_handle_new(struct wl_listener *listener,
 	struct Surface *surface = calloc(1, sizeof(struct Surface));
 	memset(surface, 0, sizeof(*surface));
 	surface->wlr_surface = wlr_surface;
-	//surface->rotation = (rand() % 256) / 256.0 * 4;
-	surface->rotation = 0;
 	surface->toplevel = NULL;
 
 	struct Server *server;
@@ -201,10 +199,38 @@ void relink_node(struct wl_list *surfaces, struct wlr_scene_node *node) {
 	};
 }
 
-/*
-// When windows are resized, their projection matrices must be updated.
-void calc_projections(
-*/
+// When windows are resized, their projection matrices in their Surfaces must be updated.
+// This will recalculate the matrices of the specified node and all children
+// x and y is the position of the parent node, since a surface only knows its position relative to its parent
+void calc_projections(float output_matrix[9], struct wl_list *surfaces, struct wlr_scene_node *node, int x, int y) {
+	x += node->state.x;
+	y += node->state.y;
+
+	if (node->type == WLR_SCENE_NODE_SURFACE) {
+		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, surfaces);
+
+		wlr_matrix_identity(surface->matrix);
+
+		// Translate
+		wlr_matrix_translate(surface->matrix, x, y);
+
+		// Scale 0..1, 0..1 to 0..width, 0..height
+		wlr_matrix_scale(surface->matrix, wlr_surface->current.width, wlr_surface->current.height);
+		printf("Size: %d %d\n", wlr_surface->current.width, wlr_surface->current.height);
+
+		// Project 1920x1080 to -1..1, -1..1
+		float projection[9];
+		wlr_matrix_projection(projection, 1920, 1080, WL_OUTPUT_TRANSFORM_FLIPPED_180);
+		wlr_matrix_multiply(surface->matrix, projection, surface->matrix);
+	}
+
+	struct wlr_scene_node *cur;
+	wl_list_for_each(cur, &node->state.children, state.link) {
+		calc_projections(output_matrix, surfaces, cur, x, y);
+	};
+}
 
 static void focus_view(struct View *view, struct wlr_surface *surface) {
 	/* Note: this function only deals with keyboard	focus. */
@@ -653,8 +679,11 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct Output *output =	wl_container_of(listener, output, frame);
 	struct wlr_scene *scene	= output->server->scene;
 
-	// Relink surfaces
-	relink_node(&output->server->surfaces, &output->server->scene->node);
+	// Pre-frame processing
+	struct wlr_scene_node *root_node = &output->server->scene->node;
+	struct wl_list *surfaces = &output->server->surfaces;
+	relink_node(surfaces, root_node);
+	calc_projections(output->wlr_output->transform_matrix, surfaces, root_node, 0, 0);
 
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene

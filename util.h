@@ -11,5 +11,7 @@ void get_node_center(struct wlr_scene_node *node, int *x, int *y);
 
 void print_scene_graph(struct wlr_scene_node *node, int	level);
 
+void print_matrix(float matrix[9]);
+
 #endif // util_h_INCLUDED
 

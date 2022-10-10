@@ -11,7 +11,7 @@ struct Surface {
 	// This points to the Surface data associated with the "main window" a surface belongs to. So all the titlebars and such can easily access the surface data of the main window.
 	struct Surface *toplevel;
 
-	float rotation;		// In radians
+	float matrix[9];
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);
