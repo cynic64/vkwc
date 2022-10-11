@@ -491,8 +491,6 @@ static void process_cursor_move(struct Server *server, uint32_t	time) {
 	view->x	= server->cursor->x - server->grab_x;
 	view->y	= server->cursor->y - server->grab_y;
 	wlr_scene_node_set_position(view->scene_node, view->x, view->y);
-
-	// Transform cursor position to -1..1, invert matrix, multiply by width and height
 }
 
 static void process_cursor_resize(struct Server	*server, uint32_t time)	{
@@ -561,9 +559,9 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 	/* Otherwise, find the view under the pointer and send the event along.	*/
 	double sx, sy;
 	struct wlr_seat	*seat =	server->seat;
-	struct wlr_surface *surface = NULL;
+	struct wlr_surface *wlr_surface = NULL;
 	struct View *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &surface,	&sx, &sy);
+			server->cursor->x, server->cursor->y, &wlr_surface,	&sx, &sy);
 
 	if (!view) {
 		/* If there's no view under the	cursor,	set the	cursor image to	a
@@ -572,7 +570,7 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		wlr_xcursor_manager_set_cursor_image(
 				server->cursor_mgr, "left_ptr",	server->cursor);
 	}
-	if (surface) {
+	if (wlr_surface) {
 		/*
 		 * Send	pointer	enter and motion events.
 		 *
@@ -584,8 +582,26 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		 * the surface has already has pointer focus or	if the client is already
 		 * aware of the	coordinates passed.
 		 */
-		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
-		wlr_seat_pointer_notify_motion(seat, time, sx, sy);
+		// Transform cursor position to -1..1, invert matrix, multiply by width and height
+		struct wlr_output *cur_output = ((struct Output *) server->outputs.next)->wlr_output;
+		assert(cur_output != NULL);
+
+		float cursor_x_norm = server->cursor->x * 2.0 / cur_output->width - 1.0;
+		float cursor_y_norm = server->cursor->y * 2.0 / cur_output->height - 1.0;
+		printf("Cursor is at %.03f %.03f\n", cursor_x_norm, cursor_y_norm);
+
+		struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+		mat4 inverted;
+		glm_mat4_inv(surface->matrix, inverted);
+		vec4 pos;
+		glm_mat4_mulv(inverted, (vec4) {cursor_x_norm, cursor_y_norm, 0.0, 1.0}, pos);
+		printf("Relative to focused surface: %.03f %.03f\n", pos[0], pos[1]);
+
+		float surface_x = pos[0] * wlr_surface->current.width;
+		float surface_y = pos[1] * wlr_surface->current.height;
+
+		wlr_seat_pointer_notify_enter(seat, wlr_surface, surface_x, surface_y);
+		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
 	} else {
 		/* Clear pointer focus so future button	events and such	are not	sent to
 		 * the last client to have the cursor over it. */
