@@ -1,4 +1,5 @@
 #define	_POSIX_C_SOURCE	200112L
+#define CGLM_DEFINE_PRINTS
 #include <assert.h>
 #include <getopt.h>
 #include <stdbool.h>
@@ -11,6 +12,7 @@
 #include <pixman-1/pixman.h>
 #include <vulkan/vulkan.h>
 #include <drm_fourcc.h>
+#include <cglm/cglm.h>
 
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
@@ -212,19 +214,10 @@ void calc_projections(struct wl_list *surfaces, struct wlr_scene_node *node,
 		struct wlr_surface *wlr_surface = scene_surface->surface;
 		struct Surface *surface = find_surface(wlr_surface, surfaces);
 
-		wlr_matrix_identity(surface->matrix);
-
-		// Translate
-		wlr_matrix_translate(surface->matrix, x, y);
-
-		// Scale 0..1, 0..1 to 0..width, 0..height
-		wlr_matrix_scale(surface->matrix, wlr_surface->current.width, wlr_surface->current.height);
-		printf("Size: %d %d\n", wlr_surface->current.width, wlr_surface->current.height);
-
-		// Project 1920x1080 to -1..1, -1..1 (flip because Vulkan is upside down)
-		float projection[9];
-		wlr_matrix_projection(projection, output_width, output_height, WL_OUTPUT_TRANSFORM_FLIPPED_180);
-		wlr_matrix_multiply(surface->matrix, projection, surface->matrix);
+		glm_translate_make(surface->matrix, (vec3) {-1, -1, 0});
+		glm_scale(surface->matrix, (vec3) {2.0/output_width, 2.0/output_height, 1.0});
+		glm_translate(surface->matrix, (vec3) {x, y, 0});
+		glm_scale(surface->matrix, (vec3) {wlr_surface->current.width, wlr_surface->current.height, 1.0});
 	}
 
 	struct wlr_scene_node *cur;
@@ -497,7 +490,9 @@ static void process_cursor_move(struct Server *server, uint32_t	time) {
 	struct View *view = server->grabbed_view;
 	view->x	= server->cursor->x - server->grab_x;
 	view->y	= server->cursor->y - server->grab_y;
-	wlr_scene_node_set_position(view->scene_node, view->x, view->y + 50);
+	wlr_scene_node_set_position(view->scene_node, view->x, view->y);
+
+	// Transform cursor position to -1..1, invert matrix, multiply by width and height
 }
 
 static void process_cursor_resize(struct Server	*server, uint32_t time)	{

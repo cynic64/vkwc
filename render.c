@@ -66,20 +66,6 @@ void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int
 }
 
 // Begin my stuff
-static void mat3_to_mat4(const float mat3[9], float mat4[4][4])	{
-	memset(mat4, 0,	sizeof(float) *	16);
-	mat4[0][0] = mat3[0];
-	mat4[0][1] = mat3[1];
-	mat4[0][3] = mat3[2];
-
-	mat4[1][0] = mat3[3];
-	mat4[1][1] = mat3[4];
-	mat4[1][3] = mat3[5];
-
-	mat4[2][2] = 1.f;
-	mat4[3][3] = 1.f;
-}
-
 static void scene_node_for_each_node(struct wlr_scene_node *node,
 		int lx,	int ly,	wlr_scene_node_iterator_func_t user_iterator,
 		void *user_data) {
@@ -213,7 +199,7 @@ static void render_rect(struct wlr_output *output,
 
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		struct wlr_scene_node *node, struct wlr_texture	*wlr_texture,
-		const struct wlr_fbox *box, const float	matrix[static 9], float	alpha) {
+		const struct wlr_fbox *box, mat4 matrix, float alpha) {
 	/*
 	 * Box only has	the width and height (in pixel coordinates).
 	 * box->x and box->y are always	0.
@@ -251,8 +237,14 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
 	// Draw
+	// Unfortunately the rest of wlroots is row-major, otherwise I would set column-major in the shader
+	// and avoid this
 	struct VertPcrData VertPcrData;
-	mat3_to_mat4(matrix, VertPcrData.mat4);
+	for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			VertPcrData.mat4[i][j] = matrix[j][i];
+		}
+	};
 
 	VertPcrData.uv_off[0] =	box->x / wlr_texture->width;
 	VertPcrData.uv_off[1] =	box->y / wlr_texture->height;
@@ -273,7 +265,7 @@ static void render_texture(struct wlr_output *output,
 		pixman_region32_t *output_damage,
 		struct wlr_scene_node *node, struct wlr_texture	*texture,
 		const struct wlr_fbox *src_box,	const struct wlr_box *dst_box,
-		const float matrix[static 9]) {
+		mat4 matrix) {
 	/* src_box: pixel coordinates, but only	width and height. Also floating	point.
 	 * dst_box: pixel coordinates of where to render to
 	 * matrix: matrix to transform 0..1 coords to where to render to
@@ -356,20 +348,8 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 			output->transform_matrix);
 		break;
 	case WLR_SCENE_NODE_BUFFER:;
-		struct wlr_scene_buffer	*scene_buffer =	scene_buffer_from_node(node);
-
-		struct wlr_renderer *renderer =	output->renderer;
-		texture	= scene_buffer_get_texture(scene_buffer, renderer);
-		if (texture == NULL) {
-			return;
-		}
-
-		transform = wlr_output_transform_invert(scene_buffer->transform);
-		wlr_matrix_project_box(matrix, &dst_box, transform, 0.0,
-			output->transform_matrix);
-
-		render_texture(output, output_damage, node, texture, &scene_buffer->src_box,
-			&dst_box, matrix);
+		fprintf(stderr, "Buffer rendering unimplemented\n");
+		exit(1);
 		break;
 	}
 }

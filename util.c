@@ -100,6 +100,7 @@ void print_scene_graph(struct wlr_scene_node *node, int	level) {
 		struct wlr_scene *scene = (struct wlr_scene *) node;
 		printf("Cast as ROOT. %d outputs\n", wl_list_length(&scene->outputs));
 	} else if (node->type == WLR_SCENE_NODE_TREE) {
+		printf("Cast as TREE. Nothing interesting\n");
 	} else if (node->type == WLR_SCENE_NODE_SURFACE) {
 		struct wlr_scene_surface *scene_surface = (struct wlr_scene_surface *) node;
 		struct wlr_surface_state surface_state = scene_surface->surface->current;
@@ -122,11 +123,4 @@ void print_scene_graph(struct wlr_scene_node *node, int	level) {
 	wl_list_for_each(child,	&node->state.children, state.link) {
 		print_scene_graph(child, level + 1);
 	}
-}
-
-void print_matrix(float matrix[9]) {
-	for (int i = 0; i < 9; i++) {
-		printf("%f ", matrix[i]);
-	}
-	printf("\n");
 }
