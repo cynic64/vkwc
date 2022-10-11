@@ -11,8 +11,10 @@ struct Surface {
 	struct wlr_surface *wlr_surface;
 	// This points to the Surface data associated with the "main window" a surface belongs to. So all the titlebars and such can easily access the surface data of the main window.
 	struct Surface *toplevel;
+	bool is_toplevel;
 
 	mat4 matrix;
+	int x, y, width, height;
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);

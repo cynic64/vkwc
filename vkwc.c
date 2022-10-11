@@ -176,7 +176,7 @@ static void surface_handle_new(struct wl_listener *listener,
 	fflush(stdout);
 }
 
-void relink_node(struct wl_list *surfaces, struct wlr_scene_node *node) {
+void relink_nodes(struct wl_list *surfaces, struct wlr_scene_node *node) {
 	// Each Surface contains a reference to the Surface of its main window. Whenever surfaces are added or
 	// removed, these links need to be rebuilt.
 	// This will rebuild all links on the specified node and its children
@@ -193,18 +193,41 @@ void relink_node(struct wl_list *surfaces, struct wlr_scene_node *node) {
 		struct Surface *main_surface = find_surface(main_wlr_surface, surfaces);
 
 		surface->toplevel = main_surface;
+		surface->is_toplevel = main_surface == surface;
 	}
 
 	struct wlr_scene_node *cur;
 	wl_list_for_each(cur, &node->state.children, state.link) {
-		relink_node(surfaces, cur);
+		relink_nodes(surfaces, cur);
+	};
+}
+
+// Surfaces track their position and dimensions so these must be updated
+void calc_placements(struct wl_list *surfaces, struct wlr_scene_node *node, int x, int y) {
+	x += node->state.x;
+	y += node->state.y;
+
+	if (node->type == WLR_SCENE_NODE_SURFACE) {
+		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, surfaces);
+
+		surface->x = x;
+		surface->y = y;
+		surface->width = wlr_surface->current.width;
+		surface->height = wlr_surface->current.height;
+	}
+
+	struct wlr_scene_node *cur;
+	wl_list_for_each(cur, &node->state.children, state.link) {
+		calc_placements(surfaces, cur, x, y);
 	};
 }
 
 // When windows are resized, their projection matrices in their Surfaces must be updated.
 // This will recalculate the matrices of the specified node and all children
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
-void calc_projections(struct wl_list *surfaces, struct wlr_scene_node *node,
+void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node,
 		int x, int y, int output_width, int output_height) {
 	x += node->state.x;
 	y += node->state.y;
@@ -214,15 +237,40 @@ void calc_projections(struct wl_list *surfaces, struct wlr_scene_node *node,
 		struct wlr_surface *wlr_surface = scene_surface->surface;
 		struct Surface *surface = find_surface(wlr_surface, surfaces);
 
-		glm_translate_make(surface->matrix, (vec3) {-1, -1, 0});
-		glm_scale(surface->matrix, (vec3) {2.0/output_width, 2.0/output_height, 1.0});
-		glm_translate(surface->matrix, (vec3) {x, y, 0});
-		glm_scale(surface->matrix, (vec3) {wlr_surface->current.width, wlr_surface->current.height, 1.0});
+		if (surface->is_toplevel) {
+			// These are in backwards order
+			// Turn 0..2 into -1..1
+			glm_translate_make(surface->matrix, (vec3) {-1, -1, 0});
+			// Turn 0..1920, 0..1080 into 0..2, 0..2
+			glm_scale(surface->matrix, (vec3) {2.0/output_width, 2.0/output_height, 1.0});
+			// Move it
+			glm_translate(surface->matrix, (vec3) {x, y, 0});
+			// Rotate it
+			glm_rotate_z(surface->matrix, 0.5, surface->matrix);
+			// Scale from 0..1, 0..1 to surface->width, surface->height
+			glm_scale(surface->matrix,
+				(vec3) {wlr_surface->current.width, wlr_surface->current.height, 1.0});
+		} else {
+			// First we translate ourselves relative to toplevel, then apply toplevel transform
+			// This allows for child transforms to be relative to parent transform
+			struct Surface *toplevel = surface->toplevel;
+			assert(toplevel != NULL);
+
+			glm_translate_make(surface->matrix, (vec3) {
+				((float) surface->x - toplevel->x) * (1.0/toplevel->width),
+				((float) surface->y - toplevel->y) * (1.0/toplevel->height),
+				0
+			});
+			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
+				(float) surface->height / toplevel->height, 0});
+
+			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
+		}
 	}
 
 	struct wlr_scene_node *cur;
 	wl_list_for_each(cur, &node->state.children, state.link) {
-		calc_projections(surfaces, cur, x, y, output_width, output_height);
+		calc_matrices(surfaces, cur, x, y, output_width, output_height);
 	};
 }
 
@@ -588,14 +636,12 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 		float cursor_x_norm = server->cursor->x * 2.0 / cur_output->width - 1.0;
 		float cursor_y_norm = server->cursor->y * 2.0 / cur_output->height - 1.0;
-		printf("Cursor is at %.03f %.03f\n", cursor_x_norm, cursor_y_norm);
 
 		struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
 		mat4 inverted;
 		glm_mat4_inv(surface->matrix, inverted);
 		vec4 pos;
 		glm_mat4_mulv(inverted, (vec4) {cursor_x_norm, cursor_y_norm, 0.0, 1.0}, pos);
-		printf("Relative to focused surface: %.03f %.03f\n", pos[0], pos[1]);
 
 		float surface_x = pos[0] * wlr_surface->current.width;
 		float surface_y = pos[1] * wlr_surface->current.height;
@@ -694,8 +740,9 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	// Pre-frame processing
 	struct wlr_scene_node *root_node = &output->server->scene->node;
 	struct wl_list *surfaces = &output->server->surfaces;
-	relink_node(surfaces, root_node);
-	calc_projections(surfaces, root_node, 0, 0, output->wlr_output->width, output->wlr_output->height);
+	relink_nodes(surfaces, root_node);
+	calc_placements(surfaces, root_node, 0, 0);
+	calc_matrices(surfaces, root_node, 0, 0, output->wlr_output->width, output->wlr_output->height);
 
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene

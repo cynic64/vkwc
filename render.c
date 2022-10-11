@@ -305,7 +305,6 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 	scale_box(&dst_box, output->scale);
 
 	struct wlr_texture *texture;
-	float matrix[9];
 	enum wl_output_transform transform;
 	switch (node->type) {
 	case WLR_SCENE_NODE_ROOT:
@@ -316,24 +315,16 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 		struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
 		struct wlr_surface *wlr_surface = scene_surface->surface;
 		struct Surface *surface = find_surface(wlr_surface, data->surfaces);
+		assert(surface->toplevel != NULL);
 
 		texture	= wlr_surface_get_texture(wlr_surface);
 		if (texture == NULL) {
 			return;
 		}
 
-		// In my case (and I think basically always) both transform and	output->transform_matrix
-		// are identity	matrices
-		transform = wlr_output_transform_invert(wlr_surface->current.transform);
-
-		// The resulting matrix	looks like [w 0	x    0 h y    0	0 1]
-		// So it would project coordinates 0..1 to the pixel coordinates of the window
-		wlr_matrix_project_box(matrix, &dst_box, transform, 0.0, output->transform_matrix);
-
 		// The source box has the size of the surface. X and Y are always 0, as	far as I can tell.
 		struct wlr_fbox	src_box	= {0};
 
-		assert(surface->toplevel != NULL);
 		render_texture(output, output_damage, node, texture,
 			&src_box, &dst_box, surface->matrix);
 
