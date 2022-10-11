@@ -65,7 +65,6 @@ void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int
 	wlr_render_rect(renderer, &box,	color, identity_matrix);;
 }
 
-// Begin my stuff
 static void scene_node_for_each_node(struct wlr_scene_node *node,
 		int lx,	int ly,	wlr_scene_node_iterator_func_t user_iterator,
 		void *user_data) {
@@ -101,105 +100,8 @@ static struct wlr_texture *scene_buffer_get_texture(
 	return scene_buffer->texture;
 }
 
-static void scissor_output(struct wlr_output *output, pixman_box32_t *rect) {
-	struct wlr_renderer *renderer =	output->renderer;
-	assert(renderer);
-
-	struct wlr_box box = {
-		.x = rect->x1,
-		.y = rect->y1,
-		.width = rect->x2 - rect->x1,
-		.height	= rect->y2 - rect->y1,
-	};
-
-	wlr_renderer_scissor(renderer, &box);
-}
-
-static struct wlr_scene_buffer *scene_buffer_from_node(
-		struct wlr_scene_node *node) {
-	assert(node->type == WLR_SCENE_NODE_BUFFER);
-	return (struct wlr_scene_buffer	*)node;
-}
-
-static struct wlr_scene_rect *scene_rect_from_node(
-		struct wlr_scene_node *node) {
-	assert(node->type == WLR_SCENE_NODE_RECT);
-	return (struct wlr_scene_rect *)node;
-}
-
-static void scene_node_get_size(struct wlr_scene_node *node,
-		int *width, int	*height) {
-	*width = 0;
-	*height	= 0;
-
-	switch (node->type) {
-	case WLR_SCENE_NODE_ROOT:
-	case WLR_SCENE_NODE_TREE:
-		return;
-	case WLR_SCENE_NODE_SURFACE:;
-		struct wlr_scene_surface *scene_surface	=
-			wlr_scene_surface_from_node(node);
-		*width = scene_surface->surface->current.width;
-		*height	= scene_surface->surface->current.height;
-		break;
-	case WLR_SCENE_NODE_RECT:;
-		struct wlr_scene_rect *scene_rect = scene_rect_from_node(node);
-		*width = scene_rect->width;
-		*height	= scene_rect->height;
-		break;
-	case WLR_SCENE_NODE_BUFFER:;
-		struct wlr_scene_buffer	*scene_buffer =	scene_buffer_from_node(node);
-		if (scene_buffer->dst_width > 0	&& scene_buffer->dst_height > 0) {
-			*width = scene_buffer->dst_width;
-			*height	= scene_buffer->dst_height;
-		} else {
-			if (scene_buffer->transform & WL_OUTPUT_TRANSFORM_90) {
-				*height	= scene_buffer->buffer->width;
-				*width = scene_buffer->buffer->height;
-			} else {
-				*width = scene_buffer->buffer->width;
-				*height	= scene_buffer->buffer->height;
-			}
-		}
-		break;
-	}
-}
-
-static int scale_length(int length, int	offset,	float scale) {
-	return round((offset + length) * scale)	- round(offset * scale);
-}
-
-static void scale_box(struct wlr_box *box, float scale)	{
-	box->width = scale_length(box->width, box->x, scale);
-	box->height = scale_length(box->height,	box->y,	scale);
-	box->x = round(box->x *	scale);
-	box->y = round(box->y *	scale);
-}
-
-static void render_rect(struct wlr_output *output,
-		pixman_region32_t *output_damage, const	float color[static 4],
-		const struct wlr_box *box, const float matrix[static 9]) {
-	struct wlr_renderer *renderer =	output->renderer;
-	assert(renderer);
-
-	pixman_region32_t damage;
-	pixman_region32_init(&damage);
-	pixman_region32_init_rect(&damage, box->x, box->y, box->width, box->height);
-	pixman_region32_intersect(&damage, &damage, output_damage);
-
-	int nrects;
-	pixman_box32_t *rects =	pixman_region32_rectangles(&damage, &nrects);
-	for (int i = 0;	i < nrects; ++i) {
-		scissor_output(output, &rects[i]);
-		wlr_render_rect(renderer, box, color, matrix);
-	}
-
-	pixman_region32_fini(&damage);
-}
-
-static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
-		struct wlr_scene_node *node, struct wlr_texture	*wlr_texture,
-		const struct wlr_fbox *box, mat4 matrix, float alpha) {
+static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, struct wlr_texture	*wlr_texture,
+		mat4 matrix, float alpha) {
 	/*
 	 * Box only has	the width and height (in pixel coordinates).
 	 * box->x and box->y are always	0.
@@ -246,10 +148,11 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		}
 	};
 
-	VertPcrData.uv_off[0] =	box->x / wlr_texture->width;
-	VertPcrData.uv_off[1] =	box->y / wlr_texture->height;
-	VertPcrData.uv_size[0] = box->width / wlr_texture->width;
-	VertPcrData.uv_size[1] = box->height / wlr_texture->height;
+	// This used to be more complicated. Go back to TinyWL's way if something breaks.
+	VertPcrData.uv_off[0] =	0;
+	VertPcrData.uv_off[1] =	0;
+	VertPcrData.uv_size[0] = 1;
+	VertPcrData.uv_size[1] = 1;
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
@@ -261,11 +164,8 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	return true;
 }
 
-static void render_texture(struct wlr_output *output,
-		pixman_region32_t *output_damage,
-		struct wlr_scene_node *node, struct wlr_texture	*texture,
-		const struct wlr_fbox *src_box,	const struct wlr_box *dst_box,
-		mat4 matrix) {
+static void render_texture(struct wlr_output *output, pixman_region32_t *output_damage,
+		struct wlr_texture *texture, mat4 matrix) {
 	/* src_box: pixel coordinates, but only	width and height. Also floating	point.
 	 * dst_box: pixel coordinates of where to render to
 	 * matrix: matrix to transform 0..1 coords to where to render to
@@ -279,33 +179,16 @@ static void render_texture(struct wlr_output *output,
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
-	// If the source box is	empty, make one	based on the destination box
-	struct wlr_fbox	default_src_box	= {0};
-	if (wlr_fbox_empty(src_box)) {
-		default_src_box.width =	dst_box->width;
-		default_src_box.height = dst_box->height;
-		src_box	= &default_src_box;
-	}
-
 	wlr_renderer_scissor(renderer, NULL);
-	render_subtexture_with_matrix(renderer,	node, texture, src_box,	matrix,	1.0);
+	render_subtexture_with_matrix(renderer, texture, matrix, 1.0);
 }
 
-static void render_node_iterator(struct	wlr_scene_node *node,
-		int x, int y, void *_data) {
+static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, void *_data) {
 	struct RenderData *data = _data;
 	struct wlr_output *output = data->output;
 	pixman_region32_t *output_damage = data->damage;
 
-	struct wlr_box dst_box = {
-		.x = x,
-		.y = y,
-	};
-	scene_node_get_size(node, &dst_box.width, &dst_box.height);
-	scale_box(&dst_box, output->scale);
-
 	struct wlr_texture *texture;
-	enum wl_output_transform transform;
 	switch (node->type) {
 	case WLR_SCENE_NODE_ROOT:
 	case WLR_SCENE_NODE_TREE:
@@ -322,26 +205,18 @@ static void render_node_iterator(struct	wlr_scene_node *node,
 			return;
 		}
 
-		// The source box has the size of the surface. X and Y are always 0, as	far as I can tell.
-		struct wlr_fbox	src_box	= {0};
-
-		render_texture(output, output_damage, node, texture,
-			&src_box, &dst_box, surface->matrix);
+		render_texture(output, output_damage, texture, surface->matrix);
 
 		if (data->presentation != NULL && scene_surface->primary_output	== output) {
 			wlr_presentation_surface_sampled_on_output(data->presentation, wlr_surface, output);
 		}
 		break;
 	case WLR_SCENE_NODE_RECT:;
-		struct wlr_scene_rect *scene_rect = scene_rect_from_node(node);
-
-		render_rect(output, output_damage, scene_rect->color, &dst_box,
-			output->transform_matrix);
-		break;
+		fprintf(stderr, "Rect rendering unimplemented\n");
+		exit(1);
 	case WLR_SCENE_NODE_BUFFER:;
 		fprintf(stderr, "Buffer rendering unimplemented\n");
 		exit(1);
-		break;
 	}
 }
 

@@ -227,11 +227,7 @@ void calc_placements(struct wl_list *surfaces, struct wlr_scene_node *node, int 
 // When windows are resized, their projection matrices in their Surfaces must be updated.
 // This will recalculate the matrices of the specified node and all children
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
-void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node,
-		int x, int y, int output_width, int output_height) {
-	x += node->state.x;
-	y += node->state.y;
-
+void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int output_width, int output_height) {
 	if (node->type == WLR_SCENE_NODE_SURFACE) {
 		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
 		struct wlr_surface *wlr_surface = scene_surface->surface;
@@ -244,12 +240,11 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node,
 			// Turn 0..1920, 0..1080 into 0..2, 0..2
 			glm_scale(surface->matrix, (vec3) {2.0/output_width, 2.0/output_height, 1.0});
 			// Move it
-			glm_translate(surface->matrix, (vec3) {x, y, 0});
+			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, 0});
 			// Rotate it
 			glm_rotate_z(surface->matrix, 0.5, surface->matrix);
 			// Scale from 0..1, 0..1 to surface->width, surface->height
-			glm_scale(surface->matrix,
-				(vec3) {wlr_surface->current.width, wlr_surface->current.height, 1.0});
+			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
 		} else {
 			// First we translate ourselves relative to toplevel, then apply toplevel transform
 			// This allows for child transforms to be relative to parent transform
@@ -257,8 +252,8 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node,
 			assert(toplevel != NULL);
 
 			glm_translate_make(surface->matrix, (vec3) {
-				((float) surface->x - toplevel->x) * (1.0/toplevel->width),
-				((float) surface->y - toplevel->y) * (1.0/toplevel->height),
+				((float) surface->x - toplevel->x) / toplevel->width,
+				((float) surface->y - toplevel->y) / toplevel->height,
 				0
 			});
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
@@ -270,7 +265,7 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node,
 
 	struct wlr_scene_node *cur;
 	wl_list_for_each(cur, &node->state.children, state.link) {
-		calc_matrices(surfaces, cur, x, y, output_width, output_height);
+		calc_matrices(surfaces, cur, output_width, output_height);
 	};
 }
 
@@ -742,12 +737,11 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct wl_list *surfaces = &output->server->surfaces;
 	relink_nodes(surfaces, root_node);
 	calc_placements(surfaces, root_node, 0, 0);
-	calc_matrices(surfaces, root_node, 0, 0, output->wlr_output->width, output->wlr_output->height);
+	calc_matrices(surfaces, root_node, output->wlr_output->width, output->wlr_output->height);
 
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene
-	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(
-		scene, output->wlr_output);
+	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(scene, output->wlr_output);
 
 	/* Render the scene if needed and commit the output */
 	draw_frame(scene_output, &output->server->surfaces);
