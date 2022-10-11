@@ -7,48 +7,14 @@
 // To print scene node types as	text
 const char* const SCENE_NODE_TYPE_LOOKUP[] = {"ROOT", "TREE", "SURFACE", "RECT", "BUFFER", "INVALID"};
 
-void get_node_placement(struct wlr_scene_node *node, int *x, int *y, int *width, int *height) {
-	/* Returns the absolute	position of a node in pixels. Necessary	because	each node only knows
-	 * its position	relative to its	parent.	*/
-
-	// Position
-	if (node->parent == NULL) {
-		*x = 0;
-		*y = 0;
-		if (width != NULL && height != NULL) {
-			*width = 0;
-			*height	= 0;
-		}
-		return;
-	}
-
-	int parent_x = 0, parent_y = 0;
-	get_node_placement(node->parent, &parent_x, &parent_y, NULL, NULL);
-
-	*x = parent_x +	node->state.x;
-	*y = parent_y +	node->state.y;
-
-	// Dimensions
-	if (width != NULL && height != NULL) {
-		if (node->type == WLR_SCENE_NODE_SURFACE) {
-			struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
-			*width = scene_surface->surface->current.width;
-			*height	= scene_surface->surface->current.height;
-		} else {
-			*width = 0;
-			*height	= 0;
-		}
-	}
-}
-
-struct wlr_scene_node *get_main_node(struct wlr_scene_node *node) {
+struct wlr_scene_node *get_toplevel_node(struct wlr_scene_node *node) {
 	/* If we have a	node like one of the decoration	surfaces, this will (hopefully)	return the
-	 * main	surface	<node> is attached to.
+	 * toplevel surface <node> is attached to.
 	 * 
 	 * We do this by:
 	 *	Taking the node's parent until we hit the root node, the one before this is our	"branch"
 	 *	Take the first child of	the branch until we hit	a surface
-	 * That	should be the main window.
+	 * That	should be the toplevel window.
 	 */
 
 	struct wlr_scene_node *cur = node;
@@ -69,24 +35,6 @@ struct wlr_scene_node *get_main_node(struct wlr_scene_node *node) {
 	}
 
 	return cur;
-}
-
-void get_node_center(struct wlr_scene_node *node, int *x, int *y) {
-	/* Returns the coordinates a node's rotation should be centered	around.	Only to	be used	on surface
-	 * nodes.
-	 *
-	 * For an application surface this is just the coordinates of the surface's center. For	decoration,
-	 * however, it will return the center of the main window so everything rotates together.
-	 */
-
-	assert(node->type == WLR_SCENE_NODE_SURFACE);		// We can only handle surface nodes
-
-	int main_x, main_y, main_width,	main_height;
-	struct wlr_scene_node *main_node = get_main_node(node);
-	get_node_placement(main_node, &main_x, &main_y,	&main_width, &main_height);
-
-	*x = main_x + main_width / 2;
-	*y = main_y + main_height / 2;
 }
 
 void print_scene_graph(struct wlr_scene_node *node, int	level) {

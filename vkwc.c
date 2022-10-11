@@ -177,7 +177,7 @@ static void surface_handle_new(struct wl_listener *listener,
 }
 
 void relink_nodes(struct wl_list *surfaces, struct wlr_scene_node *node) {
-	// Each Surface contains a reference to the Surface of its main window. Whenever surfaces are added or
+	// Each Surface contains a reference to the Surface of its toplevel window. Whenever surfaces are added or
 	// removed, these links need to be rebuilt.
 	// This will rebuild all links on the specified node and its children
 	if (node->type == WLR_SCENE_NODE_SURFACE) {
@@ -186,14 +186,14 @@ void relink_nodes(struct wl_list *surfaces, struct wlr_scene_node *node) {
 		struct wlr_surface *wlr_surface = scene_surface->surface;
 		struct Surface *surface = find_surface(wlr_surface, surfaces);
 
-		// Find the main node and its Surface
-		struct wlr_scene_node *main_node = get_main_node(node);
-		struct wlr_scene_surface *main_scene_surface = wlr_scene_surface_from_node(main_node);
-		struct wlr_surface *main_wlr_surface = main_scene_surface->surface;
-		struct Surface *main_surface = find_surface(main_wlr_surface, surfaces);
+		// Find the toplevel node and its Surface
+		struct wlr_scene_node *toplevel_node = get_toplevel_node(node);
+		struct wlr_scene_surface *toplevel_scene_surface = wlr_scene_surface_from_node(toplevel_node);
+		struct wlr_surface *toplevel_wlr_surface = toplevel_scene_surface->surface;
+		struct Surface *toplevel_surface = find_surface(toplevel_wlr_surface, surfaces);
 
-		surface->toplevel = main_surface;
-		surface->is_toplevel = main_surface == surface;
+		surface->toplevel = toplevel_surface;
+		surface->is_toplevel = toplevel_surface == surface;
 	}
 
 	struct wlr_scene_node *cur;
