@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <drm_fourcc.h>
 #include <vulkan/vulkan.h>
 #include <wlr/render/interface.h>
