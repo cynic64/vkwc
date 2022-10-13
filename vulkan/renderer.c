@@ -695,7 +695,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	renderer->scissor = rect;
 
 	VkClearValue clear_values[2];
-	clear_values[1].depthStencil.depth = 1;
+	clear_values[1].depthStencil.depth = 0;
 	clear_values[1].depthStencil.stencil = 0;
 
 	VkRenderPassBeginInfo rp_info = {0};

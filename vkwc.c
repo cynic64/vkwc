@@ -508,29 +508,6 @@ static void handle_selection_request(struct wl_listener	*listener, void	*data) {
 	wlr_seat_set_selection(server->seat, event->source, event->serial);
 }
 
-static struct View *desktop_view_at(
-		struct Server *server, double lx, double ly,
-		struct wlr_surface **surface, double *sx, double *sy) {
-	/* This	returns	the topmost node in the	scene at the given layout coords.
-	 * we only care	about surface nodes as we are specifically looking for a
-	 * surface in the surface tree of a View. */
-	struct wlr_scene_node *node = wlr_scene_node_at(
-		&server->scene->node, lx, ly, sx, sy);
-	if (node == NULL || node->type != WLR_SCENE_NODE_SURFACE) {
-		return NULL;
-	}
-	*surface = wlr_scene_surface_from_node(node)->surface;
-	/* Find	the node corresponding to the View at the root of this
-	 * surface tree, it is the only	one for	which we set the data field. */
-	while (node != NULL && node->data == NULL) {
-		node = node->parent;
-	}
-
-	void *data = node->data;
-
-	return data;
-}
-
 static void process_cursor_move(struct Server *server, uint32_t	time) {
 	/* Move	the grabbed view to the	new position. */
 	struct View *view = server->grabbed_view;
@@ -592,19 +569,8 @@ static void process_cursor_resize(struct Server	*server, uint32_t time)	{
 	wlr_xdg_toplevel_set_size(view->xdg_surface, new_width,	new_height);
 }
 
-static void process_cursor_motion(struct Server	*server, uint32_t time)	{
-	/* If the mode is non-passthrough, delegate to those functions.	*/
-	if (server->cursor_mode	== VKWC_CURSOR_MOVE) {
-		process_cursor_move(server, time);
-		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_RESIZE) {
-		process_cursor_resize(server, time);
-		return;
-	}
-
-	/* Otherwise, find the view under the pointer and send the event along.	*/
-	struct wlr_seat	*seat =	server->seat;
-
+struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
+	// x and y are the absolute position of the cursor
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
 	struct wlr_vk_render_buffer *render_buffer = NULL;
 	struct Output *output = (struct Output *) server->outputs.next;
@@ -625,7 +591,6 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 	assert(render_buffer != NULL);
 
 	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
-	printf("dims: %d %d\n", width, height);
 	VkDeviceSize depth_buf_byte_count = width * height * 4;
 	void *depth_buf_mem;
 
@@ -640,7 +605,7 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 	for (size_t y = 0; y < height; y += 16) {
 		for (size_t x = 0; x < width; x += 16) {
-			printf("%c ", a[y * width + x] == 1.0 ? '.' : '#');
+			printf("%c ", a[y * width + x] == 0 ? '.' : '#');
 		}
 		printf("\n");
 	}
@@ -650,7 +615,41 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->depth_dst_mem);
 
-	if (pixel == 1.0) {
+	if (pixel == 0) {
+		return NULL;
+	}
+
+	struct Surface *surface = NULL;
+	wl_list_for_each(surface, &server->surfaces, link) {
+		if (surface->id == pixel) {
+			break;
+		}
+	}
+	assert(surface != NULL);
+	if (surface->id != pixel) {
+		fprintf(stderr, "Troublesome pixel: %f\n", pixel);
+		exit(1);
+	}
+
+	return surface;
+}
+
+static void process_cursor_motion(struct Server	*server, uint32_t time)	{
+	/* If the mode is non-passthrough, delegate to those functions.	*/
+	if (server->cursor_mode	== VKWC_CURSOR_MOVE) {
+		process_cursor_move(server, time);
+		return;
+	} else if (server->cursor_mode == VKWC_CURSOR_RESIZE) {
+		process_cursor_resize(server, time);
+		return;
+	}
+
+	/* Otherwise, find the Surface under the pointer and send the event along.	*/
+	struct wlr_seat	*seat =	server->seat;
+
+	struct Surface *surface = get_surface_at_pos(server, server->cursor->x, server->cursor->y);
+
+	if (surface == NULL) {
 		// If there's no view under the	cursor,	set the	cursor image to	a
 		// default. This is what makes the cursor image	appear when you	move it
 		// around the screen, not over any views.
@@ -676,14 +675,6 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		float cursor_x_norm = server->cursor->x * 2.0 / cur_output->width - 1.0;
 		float cursor_y_norm = server->cursor->y * 2.0 / cur_output->height - 1.0;
 
-		struct Surface *surface = NULL;
-		wl_list_for_each(surface, &server->surfaces, link) {
-			if (surface->id == pixel) {
-				break;
-			}
-		}
-		assert(surface != NULL && surface->id == pixel);
-
 		struct wlr_surface *wlr_surface = surface->wlr_surface;
 
 		//struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
@@ -697,11 +688,7 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 		wlr_seat_pointer_notify_enter(seat, wlr_surface, surface_x, surface_y);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
-	} //else {
-		// Clear pointer focus so future button	events and such	are not	sent to
-		// the last client to have the cursor over it.
-		//wlr_seat_pointer_clear_focus(seat);
-	//}
+	}
 }
 
 static void handle_cursor_motion_relative(struct wl_listener *listener,	void *data) {
@@ -744,17 +731,30 @@ static void handle_cursor_button(struct	wl_listener *listener, void *data) {
 	/* Notify the client with pointer focus	that a button press has	occurred */
 	wlr_seat_pointer_notify_button(server->seat,
 			event->time_msec, event->button, event->state);
-	double sx, sy;
-	struct wlr_surface *surface = NULL;
-	struct View *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &surface,	&sx, &sy);
+
 	if (event->state == WLR_BUTTON_RELEASED) {
 		/* If you released any buttons,	we exit	interactive move/resize	mode. */
 		server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
-	} else {
-		/* Focus that client if	the button was _pressed_ */
-		focus_view(view, surface);
+		return;
 	}
+
+	struct Surface *surface = get_surface_at_pos(server, server->cursor->x, server->cursor->y);
+	if (surface == NULL) {
+		// Nothing under cursor
+		return;
+	};
+
+	// Focus view
+	struct View *view;
+	wl_list_for_each(view, &server->views, link) {
+		if (view->xdg_surface->surface == surface->wlr_surface) {
+			break;
+		}
+	}
+	assert(view->xdg_surface->surface == surface->wlr_surface);
+
+	/* Focus that client if	the button was _pressed_ */
+	focus_view(view, view->xdg_surface->surface);
 }
 
 static void handle_cursor_axis(struct wl_listener *listener, void *data) {
