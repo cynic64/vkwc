@@ -603,11 +603,7 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 	}
 
 	/* Otherwise, find the view under the pointer and send the event along.	*/
-	double sx, sy;
 	struct wlr_seat	*seat =	server->seat;
-	struct wlr_surface *wlr_surface = NULL;
-	struct View *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &wlr_surface, &sx, &sy);
 
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
 	struct wlr_vk_render_buffer *render_buffer = NULL;
@@ -654,14 +650,12 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->depth_dst_mem);
 
-	if (1) {
+	if (pixel == 1.0) {
 		// If there's no view under the	cursor,	set the	cursor image to	a
 		// default. This is what makes the cursor image	appear when you	move it
 		// around the screen, not over any views.
 		wlr_xcursor_manager_set_cursor_image(
 				server->cursor_mgr, "left_ptr",	server->cursor);
-	}
-	/*
 	} else {
 		//
 		// Send	pointer	enter and motion events.
@@ -682,16 +676,15 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		float cursor_x_norm = server->cursor->x * 2.0 / cur_output->width - 1.0;
 		float cursor_y_norm = server->cursor->y * 2.0 / cur_output->height - 1.0;
 
-		struct Surface *surface;
+		struct Surface *surface = NULL;
 		wl_list_for_each(surface, &server->surfaces, link) {
 			if (surface->id == pixel) {
 				break;
 			}
 		}
-		if (surface->id != pixel) {
-			fprintf(stderr, "%f causing problems\n", pixel);
-			exit(1);
-		}
+		assert(surface != NULL && surface->id == pixel);
+
+		struct wlr_surface *wlr_surface = surface->wlr_surface;
 
 		//struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
 		mat4 inverted;
@@ -709,7 +702,6 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		// the last client to have the cursor over it.
 		//wlr_seat_pointer_clear_focus(seat);
 	//}
-	*/
 }
 
 static void handle_cursor_motion_relative(struct wl_listener *listener,	void *data) {
