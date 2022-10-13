@@ -153,6 +153,10 @@ struct wlr_vk_render_buffer {
 	VkImageView depth_view;
 	VkDeviceMemory depth_mem;
 
+	// These are host-visible and can be mapped
+	VkBuffer depth_dst_buf;
+	VkDeviceMemory depth_dst_mem;
+
 	struct wl_listener buffer_destroy;
 };
 

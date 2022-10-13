@@ -43,6 +43,7 @@
 #include "vulkan.h"
 #include "render.h"
 #include "util.h"
+#include "render/vulkan.h"
 
 /* For brevity's sake, struct members are annotated where they are used. */
 enum CursorMode	{
@@ -162,6 +163,7 @@ static void surface_handle_new(struct wl_listener *listener,
 	memset(surface, 0, sizeof(*surface));
 	surface->wlr_surface = wlr_surface;
 	surface->toplevel = NULL;
+	surface->id = (double) rand() / RAND_MAX;
 
 	struct Server *server;
 	server = wl_container_of(listener, server, new_surface);
@@ -261,6 +263,7 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 
 			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
 		}
+		glm_translate_z(surface->matrix, surface->id);
 	}
 
 	struct wlr_scene_node *cur;
@@ -604,7 +607,55 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 	struct wlr_seat	*seat =	server->seat;
 	struct wlr_surface *wlr_surface = NULL;
 	struct View *view = desktop_view_at(server,
-			server->cursor->x, server->cursor->y, &wlr_surface,	&sx, &sy);
+			server->cursor->x, server->cursor->y, &wlr_surface, &sx, &sy);
+
+	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
+	struct wlr_vk_render_buffer *render_buffer = NULL;
+	struct Output *output = (struct Output *) server->outputs.next;
+	assert(output != NULL);
+
+	// Find the screen render buffer
+	wl_list_for_each(render_buffer, &renderer->render_buffers, link) {
+		assert(render_buffer != NULL);
+		if (render_buffer->wlr_buffer->width == output->wlr_output->width
+				&& render_buffer->wlr_buffer->height == output->wlr_output->height) {
+			break;
+		}
+	};
+
+	assert(render_buffer != NULL);
+
+	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
+	VkDeviceSize depth_buf_byte_count = width * height * 4;
+	void *depth_buf_mem;
+
+	VkResult res = vkMapMemory(renderer->dev->dev,
+		render_buffer->depth_dst_mem, 0, depth_buf_byte_count, 0, &depth_buf_mem);
+	if (res != VK_SUCCESS) {
+		fprintf(stderr, "Couldn't map depth buffer memory for reading\n");
+		exit(1);
+	}
+
+	float *a = depth_buf_mem;
+
+	size_t idx = ((size_t) (server->cursor->y * width + server->cursor->x));
+	for (size_t y = 0; y < height; y += 32) {
+		for (size_t x = 0; x < width; x += 32) {
+			size_t i = y * width + x;
+			if (i == idx) {
+				printf("--");
+			} else {
+				float pixel = a[y * width + x];
+				printf("%c ", pixel < 1 ? '#' : '.');
+			}
+		}
+		printf("\n");
+	}
+
+	printf("Surface under cursor has id %f\n", a[idx]);
+	printf("Cursor x y idx: %f %f %zu\n", server->cursor->x, server->cursor->y, idx);
+
+	vkUnmapMemory(renderer->dev->dev, render_buffer->depth_dst_mem);
 
 	if (!view) {
 		/* If there's no view under the	cursor,	set the	cursor image to	a

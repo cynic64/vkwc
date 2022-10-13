@@ -9,6 +9,8 @@ struct Surface {
 	struct wl_list link;
 	struct wl_listener destroy;
 	struct wlr_surface *wlr_surface;
+	// Is a float since it gets written to the depth buffer
+	float id;
 	// This points to the Surface data associated with the "main window" a surface belongs to. So all the titlebars and such can easily access the surface data of the main window.
 	struct Surface *toplevel;
 	bool is_toplevel;

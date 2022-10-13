@@ -395,6 +395,9 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyImageView(dev, buffer->depth_view, NULL);
 	vkFreeMemory(dev, buffer->depth_mem, NULL);
 
+	vkDestroyBuffer(dev, buffer->depth_dst_buf, NULL);
+	vkFreeMemory(dev, buffer->depth_dst_mem, NULL);
+
 	for (size_t i = 0u; i < buffer->mem_count; ++i) {
 		vkFreeMemory(dev, buffer->memories[i], NULL);
 	}
@@ -482,13 +485,14 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	// Create depth buffer
 	// Make sure D32_SFLOAT is supported
-	VkFormatProperties format_props;
-	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, DEPTH_FORMAT, &format_props);
+	VkFormatProperties depth_format_props;
+	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, DEPTH_FORMAT, &depth_format_props);
 	VkFormatFeatureFlagBits needed_features = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-		| VK_FORMAT_FEATURE_BLIT_SRC_BIT;
-	if ((format_props.optimalTilingFeatures & needed_features) != needed_features) {
-		wlr_log(WLR_ERROR, "D32_SFLOAT doesn't support required features");
-		goto error_view;
+		| VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
+	if ((depth_format_props.optimalTilingFeatures & needed_features) != needed_features) {
+		fprintf(stderr, "VK_FORMAT_D32_SFLOAT doesn't float necessary features as rendering"
+			"destination\n");
+		exit(1);
 	}
 
 	struct VkImageCreateInfo depth_image_info = {
@@ -507,8 +511,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	};
 	res = vkCreateImage(renderer->dev->dev, &depth_image_info, NULL, &buffer->depth_image);
 	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreateImage failed", res);
-		goto error_view;
+		fprintf(stderr, "Couldn't create depth buffer image\n");
+		exit(1);
 	}
 	
 	// Allocate memory
@@ -518,7 +522,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		depth_mem_reqs.memoryTypeBits);
 	if (depth_mem_type < 0) {
 		wlr_log(WLR_ERROR, "Couldn't find memory type suitable for depth buffer");
-		goto error_depth_image;
+		exit(1);
 	}
 
 	VkMemoryAllocateInfo depth_alloc_info = {
@@ -530,13 +534,13 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkAllocateMemory(renderer->dev->dev, &depth_alloc_info, NULL, &buffer->depth_mem);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkAllocateMemory failed", res);
-		goto error_depth_image;
+		exit(1);
 	}
 
 	res = vkBindImageMemory(renderer->dev->dev, buffer->depth_image, buffer->depth_mem, 0);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkBindImageMemory failed", res);
-		goto error_depth_mem;
+		exit(1);
 	}
 
 	// Create image view
@@ -556,7 +560,53 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkCreateImageView(renderer->dev->dev, &depth_view_info, NULL, &buffer->depth_view);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkCreateImageView failed", res);
-		goto error_depth_mem;
+		exit(1);
+	}
+
+	// Create host-visible buffer that depth buffer will be copied into upon completion
+	// D32_SFLOAT doesn't support TRANSFER_DST on my machine, so we use whatever 32-bit format
+	VkBufferCreateInfo depth_dst_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = dmabuf.width * dmabuf.height * 4,
+		.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+	};
+
+	res = vkCreateBuffer(renderer->dev->dev, &depth_dst_info, NULL, &buffer->depth_dst_buf);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("Couldn't create buffer to copy depth buffer into", res);
+		exit(1);
+	}
+
+	// Allocate memory
+	VkMemoryRequirements depth_dst_mem_reqs;
+	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->depth_dst_buf, &depth_dst_mem_reqs);
+	int depth_dst_mem_type = vulkan_find_mem_type(renderer->dev,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+	        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+	        | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		depth_dst_mem_reqs.memoryTypeBits);
+	if (depth_dst_mem_type < 0) {
+		wlr_log(WLR_ERROR, "Couldn't find memory type suitable for depth buffer destination");
+		exit(1);
+	}
+
+	VkMemoryAllocateInfo depth_dst_alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = depth_dst_mem_reqs.size,
+		.memoryTypeIndex = depth_dst_mem_type
+	};
+
+	res = vkAllocateMemory(renderer->dev->dev, &depth_dst_alloc_info, NULL, &buffer->depth_dst_mem);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("Couldn't allocate memory for depth buffer destination", res);
+		exit(1);
+	}
+
+	res = vkBindBufferMemory(renderer->dev->dev, buffer->depth_dst_buf, buffer->depth_dst_mem, 0);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("Couldn't bind buffer memory for depth buffer destination", res);
+		exit(1);
 	}
 
 	// Create framebuffer
@@ -585,9 +635,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 error_depth_view:
 	vkDestroyImageView(renderer->dev->dev, buffer->depth_view, NULL);
-error_depth_mem:
 	vkFreeMemory(renderer->dev->dev, buffer->depth_mem, NULL);
-error_depth_image:
 	vkDestroyImage(renderer->dev->dev, buffer->depth_image, NULL);
 error_view:
 	vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
@@ -778,6 +826,49 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 
 	free(acquire_barriers);
 	free(release_barriers);
+
+	// Transition depth buffer to TRANSFER_SRC_OPTIMAL
+	VkImageMemoryBarrier depth_barrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		.newLayout= VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		.image = renderer->current_render_buffer->depth_image,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+			.layerCount = 1,
+			.levelCount = 1
+		},
+		.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT
+	};
+	vkCmdPipelineBarrier(renderer->cb, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &depth_barrier);
+
+	// Copy depth buffer to host-visible memory
+	VkBufferImageCopy depth_copy_region = {
+		.bufferOffset = 0,
+		.bufferRowLength = renderer->current_render_buffer->wlr_buffer->width,
+		.bufferImageHeight = renderer->current_render_buffer->wlr_buffer->height,
+		.imageSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		},
+		.imageOffset = { .x = 0, .y = 0, .z = 0 },
+		.imageExtent = {
+			.width = renderer->current_render_buffer->wlr_buffer->width,
+			.height = renderer->current_render_buffer->wlr_buffer->height,
+			.depth = 1,
+		},
+	};
+
+	vkCmdCopyImageToBuffer(renderer->cb,
+		renderer->current_render_buffer->depth_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	        renderer->current_render_buffer->depth_dst_buf,
+	        1, &depth_copy_region);
+	// I think we don't have to transition back to VK_IMAGE_LAYOUT_UNDEFINED because the render pass takes care
+	// of that
 
 	vkEndCommandBuffer(renderer->cb);
 
@@ -1221,7 +1312,7 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthCompareOp = VK_COMPARE_OP_ALWAYS,
 		.depthBoundsTestEnable = VK_FALSE,
 		.stencilTestEnable = VK_FALSE,
 	};
@@ -1494,7 +1585,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthCompareOp = VK_COMPARE_OP_ALWAYS,
 		.depthBoundsTestEnable = VK_FALSE,
 		.stencilTestEnable = VK_FALSE,
 	};
