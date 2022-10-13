@@ -434,6 +434,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	}
 	buffer->wlr_buffer = wlr_buffer;
 	buffer->renderer = renderer;
+	buffer->frame = 0;
 
 	struct wlr_dmabuf_attributes dmabuf = {0};
 	if (!wlr_buffer_get_dmabuf(wlr_buffer, &dmabuf)) {
@@ -914,6 +915,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	}
 
 	++renderer->frame;
+	renderer->current_render_buffer->frame = renderer->frame;
 	release_stage_allocations(renderer);
 
 	// destroy pending textures

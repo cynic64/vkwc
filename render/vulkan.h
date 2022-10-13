@@ -157,6 +157,9 @@ struct wlr_vk_render_buffer {
 	VkBuffer depth_dst_buf;
 	VkDeviceMemory depth_dst_mem;
 
+	// Lets us know which render buffer was in use last (corresponds to frame in wlr_vk_renderer)
+	uint32_t frame;
+
 	struct wl_listener buffer_destroy;
 };
 

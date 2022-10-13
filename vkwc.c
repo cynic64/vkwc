@@ -615,17 +615,21 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 	assert(output != NULL);
 
 	// Find the screen render buffer
-	wl_list_for_each(render_buffer, &renderer->render_buffers, link) {
-		assert(render_buffer != NULL);
-		if (render_buffer->wlr_buffer->width == output->wlr_output->width
-				&& render_buffer->wlr_buffer->height == output->wlr_output->height) {
-			break;
+	struct wlr_vk_render_buffer *cur;
+	wl_list_for_each(cur, &renderer->render_buffers, link) {
+		if (cur->wlr_buffer->width == output->wlr_output->width
+				&& cur->wlr_buffer->height == output->wlr_output->height) {
+			if (render_buffer == NULL || render_buffer->frame < cur->frame) {
+				// Always choose the most recent one
+				render_buffer = cur;
+			}
 		}
 	};
 
 	assert(render_buffer != NULL);
 
 	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
+	printf("dims: %d %d\n", width, height);
 	VkDeviceSize depth_buf_byte_count = width * height * 4;
 	void *depth_buf_mem;
 
@@ -638,52 +642,58 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 	float *a = depth_buf_mem;
 
-	size_t idx = ((size_t) (server->cursor->y * width + server->cursor->x));
-	for (size_t y = 0; y < height; y += 32) {
-		for (size_t x = 0; x < width; x += 32) {
-			size_t i = y * width + x;
-			if (i == idx) {
-				printf("--");
-			} else {
-				float pixel = a[y * width + x];
-				printf("%c ", pixel < 1 ? '#' : '.');
-			}
+	for (size_t y = 0; y < height; y += 16) {
+		for (size_t x = 0; x < width; x += 16) {
+			printf("%c ", a[y * width + x] == 1.0 ? '.' : '#');
 		}
 		printf("\n");
 	}
 
-	printf("Surface under cursor has id %f\n", a[idx]);
-	printf("Cursor x y idx: %f %f %zu\n", server->cursor->x, server->cursor->y, idx);
+	float pixel = a[((size_t) server->cursor->y) * width + ((size_t) server->cursor->x)];
+	printf("Pixel under cursor: %f\n", pixel);
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->depth_dst_mem);
 
-	if (!view) {
-		/* If there's no view under the	cursor,	set the	cursor image to	a
-		 * default. This is what makes the cursor image	appear when you	move it
-		 * around the screen, not over any views. */
+	if (1) {
+		// If there's no view under the	cursor,	set the	cursor image to	a
+		// default. This is what makes the cursor image	appear when you	move it
+		// around the screen, not over any views.
 		wlr_xcursor_manager_set_cursor_image(
 				server->cursor_mgr, "left_ptr",	server->cursor);
 	}
-	if (wlr_surface) {
-		/*
-		 * Send	pointer	enter and motion events.
-		 *
-		 * The enter event gives the surface "pointer focus", which is distinct
-		 * from	keyboard focus.	You get	pointer	focus by moving	the pointer over
-		 * a window.
-		 *
-		 * Note	that wlroots will avoid	sending	duplicate enter/motion events if
-		 * the surface has already has pointer focus or	if the client is already
-		 * aware of the	coordinates passed.
-		 */
+	/*
+	} else {
+		//
+		// Send	pointer	enter and motion events.
+		//
+		// The enter event gives the surface "pointer focus", which is distinct
+		// from	keyboard focus.	You get	pointer	focus by moving	the pointer over
+		// a window.
+		//
+		// Note	that wlroots will avoid	sending	duplicate enter/motion events if
+		// the surface has already has pointer focus or	if the client is already
+		// aware of the	coordinates passed.
+		//
 		// Transform cursor position to -1..1, invert matrix, multiply by width and height
+
 		struct wlr_output *cur_output = ((struct Output *) server->outputs.next)->wlr_output;
 		assert(cur_output != NULL);
 
 		float cursor_x_norm = server->cursor->x * 2.0 / cur_output->width - 1.0;
 		float cursor_y_norm = server->cursor->y * 2.0 / cur_output->height - 1.0;
 
-		struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+		struct Surface *surface;
+		wl_list_for_each(surface, &server->surfaces, link) {
+			if (surface->id == pixel) {
+				break;
+			}
+		}
+		if (surface->id != pixel) {
+			fprintf(stderr, "%f causing problems\n", pixel);
+			exit(1);
+		}
+
+		//struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
 		mat4 inverted;
 		glm_mat4_inv(surface->matrix, inverted);
 		vec4 pos;
@@ -694,11 +704,12 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 		wlr_seat_pointer_notify_enter(seat, wlr_surface, surface_x, surface_y);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
-	} else {
-		/* Clear pointer focus so future button	events and such	are not	sent to
-		 * the last client to have the cursor over it. */
-		wlr_seat_pointer_clear_focus(seat);
-	}
+	} //else {
+		// Clear pointer focus so future button	events and such	are not	sent to
+		// the last client to have the cursor over it.
+		//wlr_seat_pointer_clear_focus(seat);
+	//}
+	*/
 }
 
 static void handle_cursor_motion_relative(struct wl_listener *listener,	void *data) {
