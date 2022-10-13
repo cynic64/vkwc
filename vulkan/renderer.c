@@ -39,6 +39,7 @@ static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
 static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
 static const size_t start_descriptor_pool_size = 256u;
 static bool default_debug = true;
+static const VkFormat DEPTH_FORMAT = VK_FORMAT_D32_SFLOAT;
 
 static const struct wlr_renderer_impl renderer_impl;
 
@@ -390,6 +391,10 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyImageView(dev, buffer->image_view, NULL);
 	vkDestroyImage(dev, buffer->image, NULL);
 
+	vkDestroyImage(dev, buffer->depth_image, NULL);
+	vkDestroyImageView(dev, buffer->depth_view, NULL);
+	vkFreeMemory(dev, buffer->depth_mem, NULL);
+
 	for (size_t i = 0u; i < buffer->mem_count; ++i) {
 		vkFreeMemory(dev, buffer->memories[i], NULL);
 	}
@@ -418,6 +423,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		struct wlr_vk_renderer *renderer, struct wlr_buffer *wlr_buffer) {
 	VkResult res;
 
+	// Create render buffer
 	struct wlr_vk_render_buffer *buffer = calloc(1, sizeof(*buffer));
 	if (buffer == NULL) {
 		wlr_log_errno(WLR_ERROR, "Allocation failed");
@@ -474,10 +480,91 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		goto error_view;
 	}
 
+	// Create depth buffer
+	// Make sure D32_SFLOAT is supported
+	VkFormatProperties format_props;
+	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, DEPTH_FORMAT, &format_props);
+	VkFormatFeatureFlagBits needed_features = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+		| VK_FORMAT_FEATURE_BLIT_SRC_BIT;
+	if ((format_props.optimalTilingFeatures & needed_features) != needed_features) {
+		wlr_log(WLR_ERROR, "D32_SFLOAT doesn't support required features");
+		goto error_view;
+	}
+
+	struct VkImageCreateInfo depth_image_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = DEPTH_FORMAT,
+		.extent.width = dmabuf.width,
+		.extent.height = dmabuf.height,
+		.extent.depth = 1,
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+	res = vkCreateImage(renderer->dev->dev, &depth_image_info, NULL, &buffer->depth_image);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkCreateImage failed", res);
+		goto error_view;
+	}
+	
+	// Allocate memory
+	VkMemoryRequirements depth_mem_reqs;
+	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth_image, &depth_mem_reqs);
+	int depth_mem_type = vulkan_find_mem_type(renderer->dev, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		depth_mem_reqs.memoryTypeBits);
+	if (depth_mem_type < 0) {
+		wlr_log(WLR_ERROR, "Couldn't find memory type suitable for depth buffer");
+		goto error_depth_image;
+	}
+
+	VkMemoryAllocateInfo depth_alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = depth_mem_reqs.size,
+		.memoryTypeIndex = depth_mem_type
+	};
+
+	res = vkAllocateMemory(renderer->dev->dev, &depth_alloc_info, NULL, &buffer->depth_mem);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkAllocateMemory failed", res);
+		goto error_depth_image;
+	}
+
+	res = vkBindImageMemory(renderer->dev->dev, buffer->depth_image, buffer->depth_mem, 0);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkBindImageMemory failed", res);
+		goto error_depth_mem;
+	}
+
+	// Create image view
+	VkImageViewCreateInfo depth_view_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = buffer->depth_image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = DEPTH_FORMAT,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		}
+	};
+	res = vkCreateImageView(renderer->dev->dev, &depth_view_info, NULL, &buffer->depth_view);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkCreateImageView failed", res);
+		goto error_depth_mem;
+	}
+
+	// Create framebuffer
+	VkImageView attachments[] = {buffer->image_view, buffer->depth_view};
 	VkFramebufferCreateInfo fb_info = {0};
 	fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	fb_info.attachmentCount = 1u;
-	fb_info.pAttachments = &buffer->image_view;
+	fb_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
+	fb_info.pAttachments = attachments;
 	fb_info.flags = 0u;
 	fb_info.width = dmabuf.width;
 	fb_info.height = dmabuf.height;
@@ -487,7 +574,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffer);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkCreateFramebuffer", res);
-		goto error_view;
+		goto error_depth_view;
 	}
 
 	buffer->buffer_destroy.notify = handle_render_buffer_destroy;
@@ -496,6 +583,12 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	return buffer;
 
+error_depth_view:
+	vkDestroyImageView(renderer->dev->dev, buffer->depth_view, NULL);
+error_depth_mem:
+	vkFreeMemory(renderer->dev->dev, buffer->depth_mem, NULL);
+error_depth_image:
+	vkDestroyImage(renderer->dev->dev, buffer->depth_image, NULL);
 error_view:
 	vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
 	vkDestroyImageView(dev, buffer->image_view, NULL);
@@ -552,12 +645,17 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	VkRect2D rect = {{0, 0}, {width, height}};
 	renderer->scissor = rect;
 
+	VkClearValue clear_values[2];
+	clear_values[1].depthStencil.depth = 1;
+	clear_values[1].depthStencil.stencil = 0;
+
 	VkRenderPassBeginInfo rp_info = {0};
 	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	rp_info.renderArea = rect;
 	rp_info.renderPass = renderer->current_render_buffer->render_setup->render_pass;
 	rp_info.framebuffer = fb;
-	rp_info.clearValueCount = 0;
+	rp_info.clearValueCount = sizeof(clear_values) / sizeof(clear_values[0]);
+	rp_info.pClearValues = clear_values;
 	vkCmdBeginRenderPass(cb, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
 
 	VkViewport vp = {0.f, 0.f, (float) width, (float) height, 0.f, 1.f};
@@ -1119,6 +1217,15 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	VkPipelineVertexInputStateCreateInfo vertex = {0};
 	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
+	VkPipelineDepthStencilStateCreateInfo depth_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthBoundsTestEnable = VK_FALSE,
+		.stencilTestEnable = VK_FALSE,
+	};
+
 	VkGraphicsPipelineCreateInfo pinfo = {0};
 	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pinfo.layout = pipe_layout;
@@ -1134,6 +1241,8 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	pinfo.pViewportState = &viewport;
 	pinfo.pDynamicState = &dynamic;
 	pinfo.pVertexInputState = &vertex;
+
+	pinfo.pDepthStencilState = &depth_info;
 
 	// NOTE: use could use a cache here for faster loading
 	// store it somewhere like $XDG_CACHE_HOME/wlroots/vk_pipe_cache
@@ -1243,14 +1352,31 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	attachment.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	attachment.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+	VkAttachmentDescription depth_attach = {
+		.format = DEPTH_FORMAT,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	};
+
 	VkAttachmentReference color_ref = {0};
 	color_ref.attachment = 0u;
 	color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depth_ref = {
+		.attachment = 1,
+		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+	};
 
 	VkSubpassDescription subpass = {0};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &color_ref;
+	subpass.pDepthStencilAttachment = &depth_ref;
 
 	VkSubpassDependency deps[2] = {0};
 	deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -1277,10 +1403,12 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	deps[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT |
 		VK_ACCESS_MEMORY_READ_BIT;
 
+	VkAttachmentDescription attachments[] = {attachment, depth_attach};
+
 	VkRenderPassCreateInfo rp_info = {0};
 	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	rp_info.attachmentCount = 1;
-	rp_info.pAttachments = &attachment;
+	rp_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
+	rp_info.pAttachments = attachments;
 	rp_info.subpassCount = 1;
 	rp_info.pSubpasses = &subpass;
 	rp_info.dependencyCount = 2u;
@@ -1362,6 +1490,15 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	VkPipelineVertexInputStateCreateInfo vertex = {0};
 	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
+	VkPipelineDepthStencilStateCreateInfo depth_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthBoundsTestEnable = VK_FALSE,
+		.stencilTestEnable = VK_FALSE,
+	};
+
 	VkGraphicsPipelineCreateInfo pinfo = {0};
 	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pinfo.layout = renderer->pipe_layout;
@@ -1377,6 +1514,8 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	pinfo.pViewportState = &viewport;
 	pinfo.pDynamicState = &dynamic;
 	pinfo.pVertexInputState = &vertex;
+
+	pinfo.pDepthStencilState = &depth_info;
 
 	// NOTE: use could use a cache here for faster loading
 	// store it somewhere like $XDG_CACHE_HOME/wlroots/vk_pipe_cache.bin

@@ -149,6 +149,10 @@ struct wlr_vk_render_buffer {
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
 	bool transitioned;
 
+	VkImage depth_image;
+	VkImageView depth_view;
+	VkDeviceMemory depth_mem;
+
 	struct wl_listener buffer_destroy;
 };
 
