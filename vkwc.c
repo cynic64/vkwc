@@ -772,7 +772,7 @@ static void handle_cursor_button(struct	wl_listener *listener, void *data) {
 				wlr_surface = xwayland_surface;
 				break;
 			}
-		} if (view->xdg_surface->surface == surface->toplevel->wlr_surface) {
+		} else if (view->xdg_surface->surface == surface->toplevel->wlr_surface) {
 			wlr_surface = view->xdg_surface->surface;
 			break;
 		}
