@@ -174,8 +174,7 @@ static void surface_handle_new(struct wl_listener *listener,
 
 	wl_list_insert(server->surfaces.prev, &surface->link);
 
-	printf("Surface created! There are now %d\n", wl_list_length(&server->surfaces));
-	fflush(stdout);
+	printf("Surface created\n");
 }
 
 void relink_nodes(struct wl_list *surfaces, struct wlr_scene_node *node) {
@@ -247,13 +246,17 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			glm_rotate_z(surface->matrix, 0.5, surface->matrix);
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
+
+			glm_translate_z(surface->matrix, surface->id);
 		} else {
 			// First we translate ourselves relative to toplevel, then apply toplevel transform
 			// This allows for child transforms to be relative to parent transform
 			struct Surface *toplevel = surface->toplevel;
 			assert(toplevel != NULL);
 
-			glm_translate_make(surface->matrix, (vec3) {
+			glm_mat4_identity(surface->matrix);
+
+			glm_translate(surface->matrix, (vec3) {
 				((float) surface->x - toplevel->x) / toplevel->width,
 				((float) surface->y - toplevel->y) / toplevel->height,
 				0
@@ -261,9 +264,11 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
 				(float) surface->height / toplevel->height, 0});
 
+
 			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
+
+			surface->matrix[3][2] = surface->id;
 		}
-		glm_translate_z(surface->matrix, surface->id);
 	}
 
 	struct wlr_scene_node *cur;
@@ -602,6 +607,20 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 	}
 
 	float *a = depth_buf_mem;
+
+	// Print it out
+	char chars[] = "!@#$%^&*()_+1234567890-=[],./<>?;':";
+	for (size_t y = 0; y < height; y += 16) {
+		for (size_t x = 0; x < width; x += 16) {
+			float pixel = a[y * width + x];
+			if (pixel == 0) {
+				printf(". ");
+			} else {
+				printf("%c ", chars[(int) (pixel * sizeof(chars))]);
+			}
+		}
+		printf("\n");
+	}
 
 	float pixel = a[((size_t) server->cursor->y) * width + ((size_t) server->cursor->x)];
 	printf("Pixel under cursor: %f\n", pixel);
