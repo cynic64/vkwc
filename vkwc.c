@@ -575,12 +575,14 @@ static void process_cursor_resize(struct Server	*server, uint32_t time)	{
 
 struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 	// x and y are the absolute position of the cursor
+	
+	// There are multiple render buffers, so we have to find the right one. I do this just by checking whether
+	// the render buffer's dimensions match those of the first output, which isn't a great way but works for now.
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
 	struct wlr_vk_render_buffer *render_buffer = NULL;
 	struct Output *output = (struct Output *) server->outputs.next;
 	assert(output != NULL);
 
-	// Find the screen render buffer
 	struct wlr_vk_render_buffer *cur;
 	wl_list_for_each(cur, &renderer->render_buffers, link) {
 		if (cur->wlr_buffer->width == output->wlr_output->width
@@ -591,9 +593,9 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 			}
 		}
 	};
-
 	assert(render_buffer != NULL);
 
+	// Map the depth buffer
 	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
 	VkDeviceSize depth_buf_byte_count = width * height * 4;
 	void *depth_buf_mem;
@@ -605,13 +607,13 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 		exit(1);
 	}
 
-	float *a = depth_buf_mem;
+	float *pixels = depth_buf_mem;
 
 	// Print it out
 	char chars[] = "!@#$%^&*()_+1234567890-=[],./<>?;':";
 	for (size_t y = 0; y < height; y += 16) {
 		for (size_t x = 0; x < width; x += 16) {
-			float pixel = a[y * width + x];
+			float pixel = pixels[y * width + x];
 			if (pixel == 0) {
 				printf(". ");
 			} else {
@@ -621,23 +623,26 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 		printf("\n");
 	}
 
-	float pixel = a[((size_t) server->cursor->y) * width + ((size_t) server->cursor->x)];
+	float pixel = pixels[((size_t) server->cursor->y) * width + ((size_t) server->cursor->x)];
 	printf("Pixel under cursor: %f\n", pixel);
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_depth_mem);
 
+	// 0 means the cursor is above the background, so no surface
 	if (pixel == 0) {
 		return NULL;
 	}
 
+	// Otherwise, go through all surfaces until we find the one with a matching id
 	struct Surface *surface = NULL;
 	wl_list_for_each(surface, &server->surfaces, link) {
 		if (surface->id == pixel) {
 			break;
 		}
 	}
-	assert(surface != NULL);
+
 	if (surface->id != pixel) {
+		// Something went wrong
 		fprintf(stderr, "Troublesome pixel: %f\n", pixel);
 		exit(1);
 	}
@@ -692,9 +697,6 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		glm_mat4_inv(surface->matrix, inverted);
 		vec4 pos;
 		glm_mat4_mulv(inverted, (vec4) {cursor_x_norm, cursor_y_norm, 0.0, 1.0}, pos);
-		printf("Inverse matrix:\n");
-		glm_mat4_print(inverted, stdout);
-		printf("Determinant: %f\n", glm_mat4_det(surface->matrix));
 
 		float surface_x = pos[0] * wlr_surface->current.width;
 		float surface_y = pos[1] * wlr_surface->current.height;
@@ -742,6 +744,7 @@ static void handle_cursor_button(struct	wl_listener *listener, void *data) {
 	struct Server *server =
 		wl_container_of(listener, server, cursor_button);
 	struct wlr_event_pointer_button	*event = data;
+
 	/* Notify the client with pointer focus	that a button press has	occurred */
 	wlr_seat_pointer_notify_button(server->seat,
 			event->time_msec, event->button, event->state);
@@ -760,15 +763,23 @@ static void handle_cursor_button(struct	wl_listener *listener, void *data) {
 
 	// Focus view
 	struct View *view;
+	struct wlr_surface *wlr_surface;
 	wl_list_for_each(view, &server->views, link) {
-		if (view->xdg_surface->surface == surface->wlr_surface) {
+		if (view->type == XWAYLAND_VIEW) {
+			struct wlr_surface *xwayland_surface =
+				((struct XWaylandView *) view)->xwayland_surface->surface;
+			if (xwayland_surface == surface->toplevel->wlr_surface) {
+				wlr_surface = xwayland_surface;
+				break;
+			}
+		} if (view->xdg_surface->surface == surface->toplevel->wlr_surface) {
+			wlr_surface = view->xdg_surface->surface;
 			break;
 		}
 	}
-	assert(view->xdg_surface->surface == surface->wlr_surface);
 
 	/* Focus that client if	the button was _pressed_ */
-	focus_view(view, view->xdg_surface->surface);
+	focus_view(view, wlr_surface);
 }
 
 static void handle_cursor_axis(struct wl_listener *listener, void *data) {
