@@ -256,16 +256,15 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 
 			glm_mat4_identity(surface->matrix);
 
+			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
+
 			glm_translate(surface->matrix, (vec3) {
 				((float) surface->x - toplevel->x) / toplevel->width,
 				((float) surface->y - toplevel->y) / toplevel->height,
-				0
+				0,
 			});
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
-				(float) surface->height / toplevel->height, 0});
-
-
-			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
+				(float) surface->height / toplevel->height, 1});
 
 			surface->matrix[3][2] = surface->id;
 		}
@@ -689,14 +688,17 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 
 		struct wlr_surface *wlr_surface = surface->wlr_surface;
 
-		//struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
 		mat4 inverted;
 		glm_mat4_inv(surface->matrix, inverted);
 		vec4 pos;
 		glm_mat4_mulv(inverted, (vec4) {cursor_x_norm, cursor_y_norm, 0.0, 1.0}, pos);
+		printf("Inverse matrix:\n");
+		glm_mat4_print(inverted, stdout);
+		printf("Determinant: %f\n", glm_mat4_det(surface->matrix));
 
 		float surface_x = pos[0] * wlr_surface->current.width;
 		float surface_y = pos[1] * wlr_surface->current.height;
+		printf("Cursor relative to surface: %f %f\n", surface_x, surface_y);
 
 		wlr_seat_pointer_notify_enter(seat, wlr_surface, surface_x, surface_y);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
