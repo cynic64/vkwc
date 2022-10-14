@@ -391,12 +391,12 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyImageView(dev, buffer->image_view, NULL);
 	vkDestroyImage(dev, buffer->image, NULL);
 
-	vkDestroyImage(dev, buffer->depth_image, NULL);
+	vkDestroyImage(dev, buffer->depth, NULL);
 	vkDestroyImageView(dev, buffer->depth_view, NULL);
 	vkFreeMemory(dev, buffer->depth_mem, NULL);
 
-	vkDestroyBuffer(dev, buffer->depth_dst_buf, NULL);
-	vkFreeMemory(dev, buffer->depth_dst_mem, NULL);
+	vkDestroyBuffer(dev, buffer->host_depth, NULL);
+	vkFreeMemory(dev, buffer->host_depth_mem, NULL);
 
 	for (size_t i = 0u; i < buffer->mem_count; ++i) {
 		vkFreeMemory(dev, buffer->memories[i], NULL);
@@ -510,7 +510,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
-	res = vkCreateImage(renderer->dev->dev, &depth_image_info, NULL, &buffer->depth_image);
+	res = vkCreateImage(renderer->dev->dev, &depth_image_info, NULL, &buffer->depth);
 	if (res != VK_SUCCESS) {
 		fprintf(stderr, "Couldn't create depth buffer image\n");
 		exit(1);
@@ -518,7 +518,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	
 	// Allocate memory
 	VkMemoryRequirements depth_mem_reqs;
-	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth_image, &depth_mem_reqs);
+	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth, &depth_mem_reqs);
 	int depth_mem_type = vulkan_find_mem_type(renderer->dev, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		depth_mem_reqs.memoryTypeBits);
 	if (depth_mem_type < 0) {
@@ -538,7 +538,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		exit(1);
 	}
 
-	res = vkBindImageMemory(renderer->dev->dev, buffer->depth_image, buffer->depth_mem, 0);
+	res = vkBindImageMemory(renderer->dev->dev, buffer->depth, buffer->depth_mem, 0);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkBindImageMemory failed", res);
 		exit(1);
@@ -547,7 +547,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	// Create image view
 	VkImageViewCreateInfo depth_view_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = buffer->depth_image,
+		.image = buffer->depth,
 		.viewType = VK_IMAGE_VIEW_TYPE_2D,
 		.format = DEPTH_FORMAT,
 		.subresourceRange = {
@@ -573,38 +573,38 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 	};
 
-	res = vkCreateBuffer(renderer->dev->dev, &depth_dst_info, NULL, &buffer->depth_dst_buf);
+	res = vkCreateBuffer(renderer->dev->dev, &depth_dst_info, NULL, &buffer->host_depth);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("Couldn't create buffer to copy depth buffer into", res);
 		exit(1);
 	}
 
 	// Allocate memory
-	VkMemoryRequirements depth_dst_mem_reqs;
-	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->depth_dst_buf, &depth_dst_mem_reqs);
-	int depth_dst_mem_type = vulkan_find_mem_type(renderer->dev,
+	VkMemoryRequirements host_depth_mem_reqs;
+	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->host_depth, &host_depth_mem_reqs);
+	int host_depth_mem_type = vulkan_find_mem_type(renderer->dev,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
 	        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	        | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-		depth_dst_mem_reqs.memoryTypeBits);
-	if (depth_dst_mem_type < 0) {
+		host_depth_mem_reqs.memoryTypeBits);
+	if (host_depth_mem_type < 0) {
 		wlr_log(WLR_ERROR, "Couldn't find memory type suitable for depth buffer destination");
 		exit(1);
 	}
 
 	VkMemoryAllocateInfo depth_dst_alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = depth_dst_mem_reqs.size,
-		.memoryTypeIndex = depth_dst_mem_type
+		.allocationSize = host_depth_mem_reqs.size,
+		.memoryTypeIndex = host_depth_mem_type
 	};
 
-	res = vkAllocateMemory(renderer->dev->dev, &depth_dst_alloc_info, NULL, &buffer->depth_dst_mem);
+	res = vkAllocateMemory(renderer->dev->dev, &depth_dst_alloc_info, NULL, &buffer->host_depth_mem);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("Couldn't allocate memory for depth buffer destination", res);
 		exit(1);
 	}
 
-	res = vkBindBufferMemory(renderer->dev->dev, buffer->depth_dst_buf, buffer->depth_dst_mem, 0);
+	res = vkBindBufferMemory(renderer->dev->dev, buffer->host_depth, buffer->host_depth_mem, 0);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("Couldn't bind buffer memory for depth buffer destination", res);
 		exit(1);
@@ -637,7 +637,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 error_depth_view:
 	vkDestroyImageView(renderer->dev->dev, buffer->depth_view, NULL);
 	vkFreeMemory(renderer->dev->dev, buffer->depth_mem, NULL);
-	vkDestroyImage(renderer->dev->dev, buffer->depth_image, NULL);
+	vkDestroyImage(renderer->dev->dev, buffer->depth, NULL);
 error_view:
 	vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
 	vkDestroyImageView(dev, buffer->image_view, NULL);
@@ -833,7 +833,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
 		.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 		.newLayout= VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		.image = renderer->current_render_buffer->depth_image,
+		.image = renderer->current_render_buffer->depth,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.layerCount = 1,
@@ -865,8 +865,8 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	};
 
 	vkCmdCopyImageToBuffer(renderer->cb,
-		renderer->current_render_buffer->depth_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-	        renderer->current_render_buffer->depth_dst_buf,
+		renderer->current_render_buffer->depth, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	        renderer->current_render_buffer->host_depth,
 	        1, &depth_copy_region);
 	// I think we don't have to transition back to VK_IMAGE_LAYOUT_UNDEFINED because the render pass takes care
 	// of that

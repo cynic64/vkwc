@@ -595,7 +595,7 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 	void *depth_buf_mem;
 
 	VkResult res = vkMapMemory(renderer->dev->dev,
-		render_buffer->depth_dst_mem, 0, depth_buf_byte_count, 0, &depth_buf_mem);
+		render_buffer->host_depth_mem, 0, depth_buf_byte_count, 0, &depth_buf_mem);
 	if (res != VK_SUCCESS) {
 		fprintf(stderr, "Couldn't map depth buffer memory for reading\n");
 		exit(1);
@@ -603,17 +603,10 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 
 	float *a = depth_buf_mem;
 
-	for (size_t y = 0; y < height; y += 16) {
-		for (size_t x = 0; x < width; x += 16) {
-			printf("%c ", a[y * width + x] == 0 ? '.' : '#');
-		}
-		printf("\n");
-	}
-
 	float pixel = a[((size_t) server->cursor->y) * width + ((size_t) server->cursor->x)];
 	printf("Pixel under cursor: %f\n", pixel);
 
-	vkUnmapMemory(renderer->dev->dev, render_buffer->depth_dst_mem);
+	vkUnmapMemory(renderer->dev->dev, render_buffer->host_depth_mem);
 
 	if (pixel == 0) {
 		return NULL;

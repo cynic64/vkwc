@@ -149,13 +149,13 @@ struct wlr_vk_render_buffer {
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
 	bool transitioned;
 
-	VkImage depth_image;
+	VkImage depth;
 	VkImageView depth_view;
 	VkDeviceMemory depth_mem;
 
 	// These are host-visible and can be mapped
-	VkBuffer depth_dst_buf;
-	VkDeviceMemory depth_dst_mem;
+	VkBuffer host_depth;
+	VkDeviceMemory host_depth_mem;
 
 	// Lets us know which render buffer was in use last (corresponds to frame in wlr_vk_renderer)
 	uint32_t frame;
