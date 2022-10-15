@@ -14,6 +14,14 @@ COMMAND="$WAYLAND_SCANNER private-code \
 echo "XDG shell protocol .c command: $COMMAND"
 $COMMAND
 
+for shader in vulkan/shaders/*
+do
+	vn=$(basename $shader | sed 's/\./_/g')"_data"
+	COMMAND="glslangValidator -V $shader -o render/$shader.h --vn $vn"
+	echo $COMMAND
+	$COMMAND
+done
+
 LIBS="\
         -lm -g
         $(pkg-config --cflags --libs wlroots) \
@@ -24,5 +32,5 @@ LIBS="\
 
 COMMAND="gcc -Wall -pedantic -ggdb -o vkwc vkwc.c render.c util.c surface.c vulkan/*.c misc/pixel_format.c $LIBS -DWLR_USE_UNSTABLE -I."
 echo "Command: $COMMAND"
-
 $COMMAND
+
