@@ -6,6 +6,7 @@ layout(push_constant, row_major) uniform UBO {
 	mat4 proj;
 	vec2 uv_offset;
 	vec2 uv_size;
+	float surface_id;
 } data;
 
 layout(location = 0) out vec2 uv;
@@ -15,4 +16,5 @@ void main() {
 		float(gl_VertexIndex & 2) * 0.5f);
 	uv = data.uv_offset + pos * data.uv_size;
 	gl_Position = data.proj * vec4(pos, 0.0, 1.0);
+	gl_Position.z = data.surface_id;
 }

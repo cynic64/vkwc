@@ -246,8 +246,6 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			glm_rotate_z(surface->matrix, 0.5, surface->matrix);
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
-
-			glm_translate_z(surface->matrix, surface->id);
 		} else {
 			// First we translate ourselves relative to toplevel, then apply toplevel transform
 			// This allows for child transforms to be relative to parent transform
@@ -265,8 +263,6 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			});
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
 				(float) surface->height / toplevel->height, 1});
-
-			surface->matrix[3][2] = surface->id;
 		}
 	}
 

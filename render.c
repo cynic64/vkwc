@@ -50,6 +50,8 @@ struct VertPcrData {
 	float mat4[4][4];
 	float uv_off[2];
 	float uv_size[2];
+	float surface_id;
+	float _filler[3];
 };
 
 struct RenderData {
@@ -101,16 +103,7 @@ static struct wlr_texture *scene_buffer_get_texture(
 }
 
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, struct wlr_texture	*wlr_texture,
-		mat4 matrix, float alpha) {
-	/*
-	 * Box only has	the width and height (in pixel coordinates).
-	 * box->x and box->y are always	0.
-	 * 
-	 * The matrix we get converts 0..1 to the pixel	coordinates of the windw.
-	 * It looks like [width	0 x    0 height	y    0 0 1]
-	 * 
-	 * We require <node> to	figure what coordinates	to rotate around.
-	 */
+		mat4 matrix, float surface_id) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
 	VkCommandBuffer	cb = renderer->cb;
 
@@ -153,6 +146,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 	VertPcrData.uv_off[1] =	0;
 	VertPcrData.uv_size[0] = 1;
 	VertPcrData.uv_size[1] = 1;
+	VertPcrData.surface_id = surface_id;
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
@@ -162,19 +156,12 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 }
 
 static void render_texture(struct wlr_output *output, pixman_region32_t *output_damage,
-		struct wlr_texture *texture, mat4 matrix) {
-	/* src_box: pixel coordinates, but only	width and height. Also floating	point.
-	 * dst_box: pixel coordinates of where to render to
-	 * matrix: matrix to transform 0..1 coords to where to render to
-	 * 
-	 * The original	tinywl only redraws damaged regions (for efficiency, I think).
-	 * But screw that.
-	 */
+		struct wlr_texture *texture, mat4 matrix, float surface_id) {
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
 	wlr_renderer_scissor(renderer, NULL);
-	render_subtexture_with_matrix(renderer, texture, matrix, 1.0);
+	render_subtexture_with_matrix(renderer, texture, matrix, surface_id);
 }
 
 static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, void *_data) {
@@ -199,7 +186,7 @@ static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, vo
 			return;
 		}
 
-		render_texture(output, output_damage, texture, surface->matrix);
+		render_texture(output, output_damage, texture, surface->matrix, surface->id);
 
 		if (data->presentation != NULL && scene_surface->primary_output	== output) {
 			wlr_presentation_surface_sampled_on_output(data->presentation, wlr_surface, output);

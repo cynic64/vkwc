@@ -56,6 +56,8 @@ struct vert_pcr_data {
 	float mat4[4][4];
 	float uv_off[2];
 	float uv_size[2];
+	float surface_id;
+	float _filler[3];
 };
 
 // https://www.w3.org/Graphics/Color/srgb
@@ -971,12 +973,10 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 	vert_pcr_data.uv_off[1] = box->y / wlr_texture->height;
 	vert_pcr_data.uv_size[0] = box->width / wlr_texture->width;
 	vert_pcr_data.uv_size[1] = box->height / wlr_texture->height;
+	vert_pcr_data.surface_id = 0;
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vert_pcr_data), &vert_pcr_data);
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(vert_pcr_data), sizeof(float),
-		&alpha);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 	texture->last_used = renderer->frame;
 
