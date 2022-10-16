@@ -424,6 +424,62 @@ static void handle_render_buffer_destroy(struct wl_listener *listener, void *dat
 	destroy_render_buffer(buffer);
 }
 
+static void create_image(struct wlr_vk_renderer *renderer,
+		VkFormat format, VkFormatFeatureFlagBits features,
+                int width, int height,
+                VkImageUsageFlagBits usage,
+                VkImage *image) {
+	VkFormatProperties format_props;
+	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, format, &format_props);
+	if ((format_props.optimalTilingFeatures & features) != features) {
+		fprintf(stderr, "Format %d doesn't support necessary features %d", format, features);
+		exit(1);
+	}
+
+	struct VkImageCreateInfo info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = format,
+		.extent.width = width,
+		.extent.height = height,
+		.extent.depth = 1,
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = usage,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+
+	VkResult res = vkCreateImage(renderer->dev->dev, &info, NULL, image);
+	if (res != VK_SUCCESS) {
+		fprintf(stderr, "Couldn't create depth buffer image\n");
+		exit(1);
+	}
+}
+
+static void alloc_memory(struct wlr_vk_renderer *renderer,
+		VkMemoryRequirements requirements, VkMemoryPropertyFlagBits properties,
+                VkDeviceMemory *memory) {
+	int type = vulkan_find_mem_type(renderer->dev, properties, requirements.memoryTypeBits);
+	if (type < 0) {
+		wlr_log(WLR_ERROR, "Couldn't find suitable memory type");
+		exit(1);
+	}
+
+	VkMemoryAllocateInfo alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = requirements.size,
+		.memoryTypeIndex = type,
+	};
+
+	VkResult res = vkAllocateMemory(renderer->dev->dev, &alloc_info, NULL, memory);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkAllocateMemory failed", res);
+		exit(1);
+	}
+}
+
 static struct wlr_vk_render_buffer *create_render_buffer(
 		struct wlr_vk_renderer *renderer, struct wlr_buffer *wlr_buffer) {
 	VkResult res;
@@ -487,64 +543,19 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	}
 
 	// Create depth buffer
-	// Make sure D32_SFLOAT is supported
-	VkFormatProperties depth_format_props;
-	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, DEPTH_FORMAT, &depth_format_props);
-	VkFormatFeatureFlagBits needed_features = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-		| VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
-	if ((depth_format_props.optimalTilingFeatures & needed_features) != needed_features) {
-		fprintf(stderr, "VK_FORMAT_D32_SFLOAT doesn't float necessary features as rendering"
-			"destination\n");
-		exit(1);
-	}
+	create_image(renderer, DEPTH_FORMAT,
+		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT,
+	        dmabuf.width, dmabuf.height,
+	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	        &buffer->depth);
 
-	struct VkImageCreateInfo depth_image_info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = DEPTH_FORMAT,
-		.extent.width = dmabuf.width,
-		.extent.height = dmabuf.height,
-		.extent.depth = 1,
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
-	res = vkCreateImage(renderer->dev->dev, &depth_image_info, NULL, &buffer->depth);
-	if (res != VK_SUCCESS) {
-		fprintf(stderr, "Couldn't create depth buffer image\n");
-		exit(1);
-	}
-	
 	// Allocate memory
 	VkMemoryRequirements depth_mem_reqs;
 	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth, &depth_mem_reqs);
-	int depth_mem_type = vulkan_find_mem_type(renderer->dev, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		depth_mem_reqs.memoryTypeBits);
-	if (depth_mem_type < 0) {
-		wlr_log(WLR_ERROR, "Couldn't find memory type suitable for depth buffer");
-		exit(1);
-	}
-
-	VkMemoryAllocateInfo depth_alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = depth_mem_reqs.size,
-		.memoryTypeIndex = depth_mem_type
-	};
-
-	res = vkAllocateMemory(renderer->dev->dev, &depth_alloc_info, NULL, &buffer->depth_mem);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkAllocateMemory failed", res);
-		exit(1);
-	}
+	alloc_memory(renderer, depth_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->depth_mem);
 
 	res = vkBindImageMemory(renderer->dev->dev, buffer->depth, buffer->depth_mem, 0);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkBindImageMemory failed", res);
-		exit(1);
-	}
+	assert(res == VK_SUCCESS);
 
 	// Create image view
 	VkImageViewCreateInfo depth_view_info = {
@@ -561,10 +572,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		}
 	};
 	res = vkCreateImageView(renderer->dev->dev, &depth_view_info, NULL, &buffer->depth_view);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreateImageView failed", res);
-		exit(1);
-	}
+	assert(res == VK_SUCCESS);
 
 	// Create host-visible buffer that depth buffer will be copied into upon completion
 	// D32_SFLOAT doesn't support TRANSFER_DST on my machine, so we use whatever 32-bit format
@@ -584,33 +592,14 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	// Allocate memory
 	VkMemoryRequirements host_depth_mem_reqs;
 	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->host_depth, &host_depth_mem_reqs);
-	int host_depth_mem_type = vulkan_find_mem_type(renderer->dev,
+	alloc_memory(renderer, host_depth_mem_reqs,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-	        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-	        | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-		host_depth_mem_reqs.memoryTypeBits);
-	if (host_depth_mem_type < 0) {
-		wlr_log(WLR_ERROR, "Couldn't find memory type suitable for depth buffer destination");
-		exit(1);
-	}
-
-	VkMemoryAllocateInfo depth_dst_alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = host_depth_mem_reqs.size,
-		.memoryTypeIndex = host_depth_mem_type
-	};
-
-	res = vkAllocateMemory(renderer->dev->dev, &depth_dst_alloc_info, NULL, &buffer->host_depth_mem);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Couldn't allocate memory for depth buffer destination", res);
-		exit(1);
-	}
+		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+		| VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+	        &buffer->host_depth_mem);
 
 	res = vkBindBufferMemory(renderer->dev->dev, buffer->host_depth, buffer->host_depth_mem, 0);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Couldn't bind buffer memory for depth buffer destination", res);
-		exit(1);
-	}
+	assert(res == VK_SUCCESS);
 
 	// Create framebuffer
 	VkImageView attachments[] = {buffer->image_view, buffer->depth_view};
