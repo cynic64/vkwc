@@ -156,9 +156,6 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float),
-		&alpha);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 
 	return true;
@@ -172,9 +169,6 @@ static void render_texture(struct wlr_output *output, pixman_region32_t *output_
 	 * 
 	 * The original	tinywl only redraws damaged regions (for efficiency, I think).
 	 * But screw that.
-	 * 
-	 * <node> is passed so render_subtexture_with_matrix knows what	to rotate around (we figure out
-	 * the center of rotation by going up and down the scene graph starting	with the node we're drawing).
 	 */
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
