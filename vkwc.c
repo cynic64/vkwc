@@ -593,19 +593,20 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 
 	// Map the depth buffer
 	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
-	VkDeviceSize depth_buf_byte_count = width * height * 4;
-	void *depth_buf_mem;
+	VkDeviceSize depth_byte_count = width * height * 4;
+	void *depth_mem;
 
 	VkResult res = vkMapMemory(renderer->dev->dev,
-		render_buffer->host_depth_mem, 0, depth_buf_byte_count, 0, &depth_buf_mem);
+		render_buffer->host_depth_mem, 0, depth_byte_count, 0, &depth_mem);
 	if (res != VK_SUCCESS) {
 		fprintf(stderr, "Couldn't map depth buffer memory for reading\n");
 		exit(1);
 	}
 
-	float *pixels = depth_buf_mem;
+	float *pixels = depth_mem;
 
 	// Print it out
+	/*
 	char chars[] = "!@#$%^&*()_+1234567890-=[],./<>?;':";
 	for (size_t y = 0; y < height; y += 16) {
 		for (size_t x = 0; x < width; x += 16) {
@@ -618,11 +619,35 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 		}
 		printf("\n");
 	}
+	*/
 
 	float pixel = pixels[((size_t) server->cursor->y) * width + ((size_t) server->cursor->x)];
 	printf("Pixel under cursor: %f\n", pixel);
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_depth_mem);
+
+	VkDeviceSize uv_byte_count = width * height * 6;
+	void *uv_mem;
+	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
+	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *uv_pixels = uv_mem;
+
+	char chars[] = "1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./!@#$%^&*()_QWERTYUIOP{}SDFGHJKL:ZXCVBNM<>?";
+	for (size_t y = 0; y < height; y += 16) {
+		for (size_t x = 0; x < width; x += 16) {
+			uint16_t pixel = uv_pixels[y * width + x].r;
+			if (pixel == 0) {
+				printf(". ");
+			} else {
+				printf("%c ", chars[(int) (((double) pixel) / UINT16_MAX * sizeof(chars))]);
+			}
+		}
+		printf("\n");
+	}
+
+	size_t idx = ((size_t) server->cursor->y) * width + ((size_t) server->cursor->x);
+	printf("UV under cursor: %d %d %d\n", uv_pixels[idx].r, uv_pixels[idx].g, uv_pixels[idx].b);
+
+	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
 
 	// 0 means the cursor is above the background, so no surface
 	if (pixel == 0) {

@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <xf86drm.h>
+#include <stdio.h>
 #include <vulkan/vulkan.h>
 #include <wlr/util/log.h>
 #include <wlr/version.h>
@@ -476,6 +477,14 @@ struct wlr_vk_device *vulkan_device_create(struct wlr_vk_instance *ini,
 	qinfo.queueCount = 1;
 	qinfo.pQueuePriorities = &prio;
 
+	// enable independentBlend
+	VkPhysicalDeviceFeatures phys_dev_features;
+	vkGetPhysicalDeviceFeatures(phdev, &phys_dev_features);
+	assert(phys_dev_features.independentBlend == VK_TRUE);
+
+	VkPhysicalDeviceFeatures enabled_features = {0};
+	enabled_features.independentBlend = VK_TRUE;
+
 	VkDeviceCreateInfo dev_info = {0};
 	dev_info.pNext = NULL;
 	dev_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -483,6 +492,7 @@ struct wlr_vk_device *vulkan_device_create(struct wlr_vk_instance *ini,
 	dev_info.pQueueCreateInfos = &qinfo;
 	dev_info.enabledExtensionCount = dev->extension_count;
 	dev_info.ppEnabledExtensionNames = dev->extensions;
+	dev_info.pEnabledFeatures = &enabled_features;
 
 	res = vkCreateDevice(phdev, &dev_info, NULL, &dev->dev);
 	if (res != VK_SUCCESS) {

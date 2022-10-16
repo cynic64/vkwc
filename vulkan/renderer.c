@@ -40,6 +40,7 @@ static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
 static const size_t start_descriptor_pool_size = 256u;
 static bool default_debug = true;
 static const VkFormat DEPTH_FORMAT = VK_FORMAT_D32_SFLOAT;
+static const VkFormat UV_FORMAT = VK_FORMAT_R16G16B16A16_UNORM;
 
 static const struct wlr_renderer_impl renderer_impl;
 
@@ -400,6 +401,13 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyBuffer(dev, buffer->host_depth, NULL);
 	vkFreeMemory(dev, buffer->host_depth_mem, NULL);
 
+	vkDestroyImage(dev, buffer->uv, NULL);
+	vkDestroyImageView(dev, buffer->uv_view, NULL);
+	vkFreeMemory(dev, buffer->uv_mem, NULL);
+
+	vkDestroyBuffer(dev, buffer->host_uv, NULL);
+	vkFreeMemory(dev, buffer->host_uv_mem, NULL);
+
 	for (size_t i = 0u; i < buffer->mem_count; ++i) {
 		vkFreeMemory(dev, buffer->memories[i], NULL);
 	}
@@ -576,20 +584,16 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	// Create host-visible buffer that depth buffer will be copied into upon completion
 	// D32_SFLOAT doesn't support TRANSFER_DST on my machine, so we use whatever 32-bit format
-	VkBufferCreateInfo depth_dst_info = {
+	VkBufferCreateInfo host_depth_info = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = dmabuf.width * dmabuf.height * 4,
 		.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 	};
 
-	res = vkCreateBuffer(renderer->dev->dev, &depth_dst_info, NULL, &buffer->host_depth);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Couldn't create buffer to copy depth buffer into", res);
-		exit(1);
-	}
+	res = vkCreateBuffer(renderer->dev->dev, &host_depth_info, NULL, &buffer->host_depth);
+	assert(res == VK_SUCCESS);
 
-	// Allocate memory
 	VkMemoryRequirements host_depth_mem_reqs;
 	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->host_depth, &host_depth_mem_reqs);
 	alloc_memory(renderer, host_depth_mem_reqs,
@@ -601,8 +605,58 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkBindBufferMemory(renderer->dev->dev, buffer->host_depth, buffer->host_depth_mem, 0);
 	assert(res == VK_SUCCESS);
 
+	// Create attachment to write UV coordinates into
+	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
+		dmabuf.width, dmabuf.height, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	        &buffer->uv);
+
+	VkMemoryRequirements uv_mem_reqs;
+	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->uv, &uv_mem_reqs);
+	alloc_memory(renderer, uv_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->uv_mem);
+
+	res = vkBindImageMemory(renderer->dev->dev, buffer->uv, buffer->uv_mem, 0);
+	assert(res == VK_SUCCESS);
+
+	VkImageViewCreateInfo uv_view_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = buffer->uv,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = UV_FORMAT,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		}
+	};
+	res = vkCreateImageView(renderer->dev->dev, &uv_view_info, NULL, &buffer->uv_view);
+	assert(res == VK_SUCCESS);
+
+	// Create host-visible UV buffer
+	VkBufferCreateInfo host_uv_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = dmabuf.width * dmabuf.height * 12,
+		.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+	};
+
+	res = vkCreateBuffer(renderer->dev->dev, &host_uv_info, NULL, &buffer->host_uv);
+	assert(res == VK_SUCCESS);
+
+	VkMemoryRequirements host_uv_mem_reqs;
+	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->host_uv, &host_uv_mem_reqs);
+	alloc_memory(renderer, host_uv_mem_reqs,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+		| VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+	        &buffer->host_uv_mem);
+
+	res = vkBindBufferMemory(renderer->dev->dev, buffer->host_uv, buffer->host_uv_mem, 0);
+	assert(res == VK_SUCCESS);
+
 	// Create framebuffer
-	VkImageView attachments[] = {buffer->image_view, buffer->depth_view};
+	VkImageView attachments[] = {buffer->image_view, buffer->depth_view, buffer->uv_view};
 	VkFramebufferCreateInfo fb_info = {0};
 	fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	fb_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
@@ -685,9 +739,12 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	VkRect2D rect = {{0, 0}, {width, height}};
 	renderer->scissor = rect;
 
-	VkClearValue clear_values[2];
+	VkClearValue clear_values[3];
 	clear_values[1].depthStencil.depth = 0;
 	clear_values[1].depthStencil.stencil = 0;
+	clear_values[2].color.float32[0] = 0.0;
+	clear_values[2].color.float32[1] = 0.0;
+	clear_values[2].color.float32[2] = 0.0;
 
 	VkRenderPassBeginInfo rp_info = {0};
 	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -703,7 +760,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	vkCmdSetScissor(cb, 0, 1, &rect);
 
 	// Refresh projection matrix.
-	// wlr_matrix_projection assumes a GL corrdinate system so we need
+	// wlr_matrix_projection assumes a GL coordinate system so we need
 	// to pass WL_OUTPUT_TRANSFORM_FLIPPED_180 to adjust it for vulkan.
 	wlr_matrix_projection(renderer->projection, width, height,
 		WL_OUTPUT_TRANSFORM_FLIPPED_180);
@@ -861,6 +918,47 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	        1, &depth_copy_region);
 	// I think we don't have to transition back to VK_IMAGE_LAYOUT_UNDEFINED because the render pass takes care
 	// of that
+
+	// Transition UV to TRANSFER_SRC_OPTIMAL
+	VkImageMemoryBarrier uv_barrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.newLayout= VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		.image = renderer->current_render_buffer->uv,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.layerCount = 1,
+			.levelCount = 1
+		},
+		.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT
+	};
+	vkCmdPipelineBarrier(renderer->cb, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &uv_barrier);
+
+	// Copy UV to host-visible memory
+	VkBufferImageCopy uv_copy_region = {
+		.bufferOffset = 0,
+		.bufferRowLength = renderer->current_render_buffer->wlr_buffer->width,
+		.bufferImageHeight = renderer->current_render_buffer->wlr_buffer->height,
+		.imageSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		},
+		.imageOffset = { .x = 0, .y = 0, .z = 0 },
+		.imageExtent = {
+			.width = renderer->current_render_buffer->wlr_buffer->width,
+			.height = renderer->current_render_buffer->wlr_buffer->height,
+			.depth = 1,
+		},
+	};
+
+	vkCmdCopyImageToBuffer(renderer->cb,
+		renderer->current_render_buffer->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	        renderer->current_render_buffer->host_uv,
+	        1, &uv_copy_region);
 
 	vkEndCommandBuffer(renderer->cb);
 
@@ -1259,7 +1357,7 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	rasterization.lineWidth = 1.f;
 
 	VkPipelineColorBlendAttachmentState blend_attachment = {0};
-	blend_attachment.blendEnable = true;
+	blend_attachment.blendEnable = VK_TRUE;
 	// we generally work with pre-multiplied alpha
 	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -1273,10 +1371,15 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 
+	VkPipelineColorBlendAttachmentState uv_blend_attachment = {0};
+	uv_blend_attachment.blendEnable = VK_TRUE;
+
+	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
+
 	VkPipelineColorBlendStateCreateInfo blend = {0};
 	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	blend.attachmentCount = 1;
-	blend.pAttachments = &blend_attachment;
+	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
+	blend.pAttachments = blend_attachments;
 
 	VkPipelineMultisampleStateCreateInfo multisample = {0};
 	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -1424,6 +1527,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	VkDevice dev = renderer->dev->dev;
 	VkResult res;
 
+	// Desktop out
 	VkAttachmentDescription attachment = {0};
 	attachment.format = format;
 	attachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1434,6 +1538,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	attachment.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
 	attachment.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+	// Depth
 	VkAttachmentDescription depth_attach = {
 		.format = DEPTH_FORMAT,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
@@ -1445,6 +1550,16 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	};
 
+	// UV
+	VkAttachmentDescription uv_attach = {
+		.format = UV_FORMAT,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	};
+
 	VkAttachmentReference color_ref = {0};
 	color_ref.attachment = 0u;
 	color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -1454,10 +1569,17 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 	};
 
+	VkAttachmentReference uv_attach_ref = {
+		.attachment = 2,
+		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	};
+
+	VkAttachmentReference color_attachments[] = {color_ref, uv_attach_ref};
+
 	VkSubpassDescription subpass = {0};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &color_ref;
+	subpass.colorAttachmentCount = sizeof(color_attachments) / sizeof(color_attachments[0]);
+	subpass.pColorAttachments = color_attachments;
 	subpass.pDepthStencilAttachment = &depth_ref;
 
 	VkSubpassDependency deps[2] = {0};
@@ -1485,7 +1607,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	deps[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT |
 		VK_ACCESS_MEMORY_READ_BIT;
 
-	VkAttachmentDescription attachments[] = {attachment, depth_attach};
+	VkAttachmentDescription attachments[] = {attachment, depth_attach, uv_attach};
 
 	VkRenderPassCreateInfo rp_info = {0};
 	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1533,7 +1655,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	rasterization.lineWidth = 1.f;
 
 	VkPipelineColorBlendAttachmentState blend_attachment = {0};
-	blend_attachment.blendEnable = true;
+	blend_attachment.blendEnable = VK_TRUE;
 	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
@@ -1546,10 +1668,15 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 
+	VkPipelineColorBlendAttachmentState uv_blend_attachment = {0};
+	uv_blend_attachment.blendEnable = VK_TRUE;
+
+	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
+
 	VkPipelineColorBlendStateCreateInfo blend = {0};
 	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	blend.attachmentCount = 1;
-	blend.pAttachments = &blend_attachment;
+	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
+	blend.pAttachments = blend_attachments;
 
 	VkPipelineMultisampleStateCreateInfo multisample = {0};
 	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
