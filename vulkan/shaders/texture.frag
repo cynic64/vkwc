@@ -3,7 +3,7 @@
 layout(set = 0, binding = 0) uniform sampler2D tex;
 
 layout(push_constant) uniform UBO {
-	layout(offset = 96) float surface_id;
+	layout(offset = 80) float surface_id;
 } data;
 
 layout(location = 0) in vec2 uv;

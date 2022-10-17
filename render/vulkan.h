@@ -156,10 +156,6 @@ struct wlr_vk_render_buffer {
 	VkImageView depth_view;
 	VkDeviceMemory depth_mem;
 
-	// Depth buffer on host
-	VkBuffer host_depth;
-	VkDeviceMemory host_depth_mem;
-
 	// UV buffer
 	VkImage uv;
 	VkImageView uv_view;

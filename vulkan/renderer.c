@@ -57,8 +57,6 @@ struct vert_pcr_data {
 	float mat4[4][4];
 	float uv_off[2];
 	float uv_size[2];
-	float surface_id;
-	float _filler[3];
 };
 
 // https://www.w3.org/Graphics/Color/srgb
@@ -398,9 +396,6 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyImageView(dev, buffer->depth_view, NULL);
 	vkFreeMemory(dev, buffer->depth_mem, NULL);
 
-	vkDestroyBuffer(dev, buffer->host_depth, NULL);
-	vkFreeMemory(dev, buffer->host_depth_mem, NULL);
-
 	vkDestroyImage(dev, buffer->uv, NULL);
 	vkDestroyImageView(dev, buffer->uv_view, NULL);
 	vkFreeMemory(dev, buffer->uv_mem, NULL);
@@ -580,29 +575,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		}
 	};
 	res = vkCreateImageView(renderer->dev->dev, &depth_view_info, NULL, &buffer->depth_view);
-	assert(res == VK_SUCCESS);
-
-	// Create host-visible buffer that depth buffer will be copied into upon completion
-	// D32_SFLOAT doesn't support TRANSFER_DST on my machine, so we use whatever 32-bit format
-	VkBufferCreateInfo host_depth_info = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = dmabuf.width * dmabuf.height * 4,
-		.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-	};
-
-	res = vkCreateBuffer(renderer->dev->dev, &host_depth_info, NULL, &buffer->host_depth);
-	assert(res == VK_SUCCESS);
-
-	VkMemoryRequirements host_depth_mem_reqs;
-	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->host_depth, &host_depth_mem_reqs);
-	alloc_memory(renderer, host_depth_mem_reqs,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-		| VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-	        &buffer->host_depth_mem);
-
-	res = vkBindBufferMemory(renderer->dev->dev, buffer->host_depth, buffer->host_depth_mem, 0);
 	assert(res == VK_SUCCESS);
 
 	// Create attachment to write UV coordinates into
@@ -876,49 +848,6 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	free(acquire_barriers);
 	free(release_barriers);
 
-	// Transition depth buffer to TRANSFER_SRC_OPTIMAL
-	VkImageMemoryBarrier depth_barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-		.newLayout= VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		.image = renderer->current_render_buffer->depth,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-			.layerCount = 1,
-			.levelCount = 1
-		},
-		.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT
-	};
-	vkCmdPipelineBarrier(renderer->cb, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &depth_barrier);
-
-	// Copy depth buffer to host-visible memory
-	VkBufferImageCopy depth_copy_region = {
-		.bufferOffset = 0,
-		.bufferRowLength = renderer->current_render_buffer->wlr_buffer->width,
-		.bufferImageHeight = renderer->current_render_buffer->wlr_buffer->height,
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		},
-		.imageOffset = { .x = 0, .y = 0, .z = 0 },
-		.imageExtent = {
-			.width = renderer->current_render_buffer->wlr_buffer->width,
-			.height = renderer->current_render_buffer->wlr_buffer->height,
-			.depth = 1,
-		},
-	};
-
-	vkCmdCopyImageToBuffer(renderer->cb,
-		renderer->current_render_buffer->depth, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-	        renderer->current_render_buffer->host_depth,
-	        1, &depth_copy_region);
-	// I think we don't have to transition back to VK_IMAGE_LAYOUT_UNDEFINED because the render pass takes care
-	// of that
-
 	// Transition UV to TRANSFER_SRC_OPTIMAL
 	VkImageMemoryBarrier uv_barrier = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -1066,7 +995,6 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 	vert_pcr_data.uv_off[1] = box->y / wlr_texture->height;
 	vert_pcr_data.uv_size[0] = box->width / wlr_texture->width;
 	vert_pcr_data.uv_size[1] = box->height / wlr_texture->height;
-	vert_pcr_data.surface_id = 0;
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vert_pcr_data), &vert_pcr_data);

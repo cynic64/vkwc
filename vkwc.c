@@ -628,7 +628,8 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	if (!(cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id)) {
 		// Something went wrong
 		fprintf(stderr, "Troublesome pixel: %f\n", pixel_surface_id);
-		exit(1);
+		*surface = NULL;
+		return;
 	}
 
 	*surface = cur_s;

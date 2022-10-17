@@ -50,8 +50,6 @@ struct VertPcrData {
 	float mat4[4][4];
 	float uv_off[2];
 	float uv_size[2];
-	float surface_id;
-	float _filler[3];
 };
 
 struct RenderData {
@@ -146,12 +144,11 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 	VertPcrData.uv_off[1] =	0;
 	VertPcrData.uv_size[0] = 1;
 	VertPcrData.uv_size[1] = 1;
-	VertPcrData.surface_id = surface_id;
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
 	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float), &VertPcrData.surface_id);
+		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float), &surface_id);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 
 	return true;
