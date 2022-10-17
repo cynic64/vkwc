@@ -238,7 +238,6 @@ void calc_placements(struct wl_list *surfaces, struct wlr_scene_node *node, int 
 // This will recalculate the matrices of the specified node and all children
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
 void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int output_width, int output_height) {
-	printf("I think output dims are %d %d\n", output_width, output_height);
 	if (node->type == WLR_SCENE_NODE_SURFACE) {
 		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
 		struct wlr_surface *wlr_surface = scene_surface->surface;
@@ -249,7 +248,7 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 
 			mat4 view;
 			mat4 projection;
-			glm_perspective(1.0, (float) output_width / output_height, 0, 10, projection);
+			glm_perspective(1, 1, 0, 10, projection);
 
 			vec3 eye = {0, 0, 2};
 			vec3 center = {0, 0, 0};
@@ -267,7 +266,6 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			// Move it
 			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, 0});
 			// Undo previous translation
-			/*
 			glm_translate(surface->matrix, (vec3) {0.5 * surface->width, 0.5 * surface->height, 0.0});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
@@ -275,7 +273,6 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			glm_rotate_z(surface->matrix, surface->z_rot, surface->matrix);
 			// Move it so its 0, 0 is at the center
 			glm_translate(surface->matrix, (vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
-			*/
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
 		} else {
