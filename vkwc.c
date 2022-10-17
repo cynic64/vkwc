@@ -235,15 +235,37 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 		struct Surface *surface = find_surface(wlr_surface, surfaces);
 
 		if (surface->is_toplevel) {
+			glm_mat4_identity(surface->matrix);
+
+			mat4 view;
+			mat4 projection;
+			glm_perspective(1.0, (float) output_width / output_height, 0, 10, projection);
+
+			vec3 eye = {0, 0, 2.5};
+			vec3 center = {0, 0, 0};
+			vec3 up = {0, 1, 0};
+			glm_lookat(eye, center, up, view);
+			glm_mat4_mul(view, surface->matrix, surface->matrix);
+			glm_mat4_mul(projection, surface->matrix, surface->matrix);
+
 			// These are in backwards order
 			// Turn 0..2 into -1..1
-			glm_translate_make(surface->matrix, (vec3) {-1, -1, 0});
+			glm_translate(surface->matrix, (vec3) {-1, -1, 0});
 			// Turn 0..1920, 0..1080 into 0..2, 0..2
-			glm_scale(surface->matrix, (vec3) {2.0/output_width, 2.0/output_height, 1.0});
+			// Not quite sure what to do with the Z component here
+			glm_scale(surface->matrix, (vec3) {2.0/output_width, 2.0/output_height, 1.0/output_width});
 			// Move it
 			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, 0});
+			// Undo previous translation
+			glm_translate(surface->matrix, (vec3) {0.5 * surface->width, 0.5 * surface->height, 0.0});
 			// Rotate it
-			glm_rotate_z(surface->matrix, 0.5, surface->matrix);
+			struct timespec ts;
+			clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+			double time = ts.tv_sec % 1000 + (double) ts.tv_nsec / 1000000000;
+			float theta = time / 10 * 2 * 3.14159265 + surface->id;
+			glm_rotate_y(surface->matrix, theta, surface->matrix);
+			// Move it so it's 0, 0 is at the center
+			glm_translate(surface->matrix, (vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
 		} else {
@@ -372,6 +394,11 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			perror(" failed");
 			exit(EXIT_SUCCESS);
 		}
+		break;
+	}
+	case XKB_KEY_R:
+	{
+		server->cursor_mode = VKWC_CURSOR_MOVE;
 		break;
 	}
 	default:
@@ -602,8 +629,6 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
 	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *pixel = uv_mem;
 
-	printf("UV under cursor: %d %d %d\n", pixel[0].r, pixel[0].g, pixel[0].b);
-
 	float pixel_surface_id = (double) pixel[0].b / UINT16_MAX;
 	double pixel_x_norm = (double) pixel[0].r / UINT16_MAX;
 	double pixel_y_norm = (double) pixel[0].g / UINT16_MAX;
@@ -673,11 +698,6 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		// Note	that wlroots will avoid	sending	duplicate enter/motion events if
 		// the surface has already has pointer focus or	if the client is already
 		// aware of the	coordinates passed.
-		//
-		// Transform cursor position to -1..1, invert matrix, multiply by width and height
-
-		printf("Cursor relative to surface: %d %d\n", surface_x, surface_y);
-
 		wlr_seat_pointer_notify_enter(seat, surface->wlr_surface, surface_x, surface_y);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
 	}

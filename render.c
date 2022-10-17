@@ -57,6 +57,8 @@ struct RenderData {
 	pixman_region32_t *damage;
 	struct wlr_presentation	*presentation; // May be NULL
 	struct wl_list *surfaces;
+	mat4 view;
+	mat4 projection;
 };
 
 void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int x, int	y, int width, int height) {
