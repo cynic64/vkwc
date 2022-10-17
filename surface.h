@@ -18,8 +18,9 @@ struct Surface {
 	mat4 matrix;
 	int x, y, width, height;
 
-	// Set these and calc_matrices will do the rest. All are in radians.
+	// Set these and calc_matrices will do the rest. Rotations in radians, speeds in radians per frame.
 	double x_rot, y_rot, z_rot;
+	double x_rot_speed, y_rot_speed, z_rot_speed;
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);

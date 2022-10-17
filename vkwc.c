@@ -50,7 +50,11 @@ enum CursorMode	{
 	VKWC_CURSOR_PASSTHROUGH,
 	VKWC_CURSOR_MOVE,
 	VKWC_CURSOR_RESIZE,
-	VKWC_CURSOR_X_ROTATE,
+	VKWC_CURSOR_XY_ROTATE,
+	VKWC_CURSOR_Z_ROTATE,
+	VKWC_CURSOR_X_ROTATE_SPEED,
+	VKWC_CURSOR_Y_ROTATE_SPEED,
+	VKWC_CURSOR_Z_ROTATE_SPEED,
 };
 
 enum ViewType {
@@ -242,6 +246,9 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
 		struct wlr_surface *wlr_surface = scene_surface->surface;
 		struct Surface *surface = find_surface(wlr_surface, surfaces);
+		surface->x_rot += surface->x_rot_speed;
+		surface->y_rot += surface->y_rot_speed;
+		surface->z_rot += surface->z_rot_speed;
 
 		if (surface->is_toplevel) {
 			glm_mat4_identity(surface->matrix);
@@ -472,19 +479,62 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 		break;
 	}
 	case XKB_KEY_F3:
-		if (server->cursor_mode == VKWC_CURSOR_X_ROTATE) {
-			printf("Exit X_ROTATE\n");
+		if (server->cursor_mode == VKWC_CURSOR_XY_ROTATE) {
 			server->grabbed_surface = NULL;
 			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
 		} else {
 			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
 			if (server->grabbed_surface != NULL) {
 				server->grabbed_surface = server->grabbed_surface->toplevel;
-				printf("Found surface dims %d %d, enter X_ROTATE\n",
-					server->grabbed_surface->width, server->grabbed_surface->height);
-				server->cursor_mode = VKWC_CURSOR_X_ROTATE;
-			} else {
-				printf("No surface under cursor\n");
+				server->cursor_mode = VKWC_CURSOR_XY_ROTATE;
+			}
+		}
+		break;
+	case XKB_KEY_F5:
+		if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE) {
+			server->grabbed_surface = NULL;
+			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+		} else {
+			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
+			if (server->grabbed_surface != NULL) {
+				server->grabbed_surface = server->grabbed_surface->toplevel;
+				server->cursor_mode = VKWC_CURSOR_Z_ROTATE;
+			}
+		}
+		break;
+	case XKB_KEY_F6:
+		if (server->cursor_mode == VKWC_CURSOR_X_ROTATE_SPEED) {
+			server->grabbed_surface = NULL;
+			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+		} else {
+			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
+			if (server->grabbed_surface != NULL) {
+				server->grabbed_surface = server->grabbed_surface->toplevel;
+				server->cursor_mode = VKWC_CURSOR_X_ROTATE_SPEED;
+			}
+		}
+		break;
+	case XKB_KEY_F7:
+		if (server->cursor_mode == VKWC_CURSOR_Y_ROTATE_SPEED) {
+			server->grabbed_surface = NULL;
+			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+		} else {
+			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
+			if (server->grabbed_surface != NULL) {
+				server->grabbed_surface = server->grabbed_surface->toplevel;
+				server->cursor_mode = VKWC_CURSOR_Y_ROTATE_SPEED;
+			}
+		}
+		break;
+	case XKB_KEY_F8:
+		if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED) {
+			server->grabbed_surface = NULL;
+			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+		} else {
+			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
+			if (server->grabbed_surface != NULL) {
+				server->grabbed_surface = server->grabbed_surface->toplevel;
+				server->cursor_mode = VKWC_CURSOR_Z_ROTATE_SPEED;
 			}
 		}
 		break;
@@ -696,11 +746,21 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 	} else if (server->cursor_mode == VKWC_CURSOR_RESIZE) {
 		process_cursor_resize(server, time);
 		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE && server->grabbed_surface != NULL) {
-		printf("Wheee, delta %f %f now %f %f\n", delta_x, delta_y,
-			server->grabbed_surface->x_rot, server->grabbed_surface->x_rot );
+	} else if (server->cursor_mode == VKWC_CURSOR_XY_ROTATE && server->grabbed_surface != NULL) {
 		server->grabbed_surface->x_rot += delta_y * -0.02;
 		server->grabbed_surface->y_rot += delta_x * 0.02;
+		return;
+	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE && server->grabbed_surface != NULL) {
+		server->grabbed_surface->z_rot += delta_x * 0.02;
+		return;
+	} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE_SPEED && server->grabbed_surface != NULL) {
+		server->grabbed_surface->x_rot_speed += delta_x * 0.02 * 0.05;
+		return;
+	} else if (server->cursor_mode == VKWC_CURSOR_Y_ROTATE_SPEED && server->grabbed_surface != NULL) {
+		server->grabbed_surface->y_rot_speed += delta_x * 0.02 * 0.05;
+		return;
+	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED && server->grabbed_surface != NULL) {
+		server->grabbed_surface->z_rot_speed += delta_x * 0.02 * 0.05;
 		return;
 	}
 
@@ -730,6 +790,7 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		// aware of the	coordinates passed.
 		wlr_seat_pointer_notify_enter(seat, surface->wlr_surface, surface_x, surface_y);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
+		wlr_seat_pointer_notify_frame(server->seat);
 	}
 }
 
@@ -747,6 +808,7 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 	wlr_cursor_move(server->cursor,	event->device,
 			event->delta_x,	event->delta_y);
 	process_cursor_motion(server, event->time_msec);
+	printf("%u\n", event->time_msec);
 }
 
 static void handle_cursor_motion_absolute(
@@ -837,10 +899,11 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	 * generally at	the output's refresh rate (e.g.	60Hz). */
 	struct Output *output =	wl_container_of(listener, output, frame);
 	struct wlr_scene *scene	= output->server->scene;
+	struct Server *server = output->server;
 
 	// Pre-frame processing
-	struct wlr_scene_node *root_node = &output->server->scene->node;
-	struct wl_list *surfaces = &output->server->surfaces;
+	struct wlr_scene_node *root_node = &server->scene->node;
+	struct wl_list *surfaces = &server->surfaces;
 	relink_nodes(surfaces, root_node);
 	calc_placements(surfaces, root_node, 0, 0);
 	calc_matrices(surfaces, root_node, output->wlr_output->width, output->wlr_output->height);
@@ -850,11 +913,16 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(scene, output->wlr_output);
 
 	/* Render the scene if needed and commit the output */
-	draw_frame(scene_output, &output->server->surfaces, output->server->cursor->x, output->server->cursor->y);
+	draw_frame(scene_output, &server->surfaces, server->cursor->x, server->cursor->y);
 
 	struct timespec	now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
+
 	wlr_scene_output_send_frame_done(scene_output, &now);
+
+	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
+	uint32_t time = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+	process_cursor_motion(server, time);
 }
 
 static void handle_new_output(struct wl_listener *listener, void *data)	{
