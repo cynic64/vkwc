@@ -936,29 +936,35 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	vkCmdPipelineBarrier(renderer->cb, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &uv_barrier);
 
-	// Copy UV to host-visible memory
-	VkBufferImageCopy uv_copy_region = {
-		.bufferOffset = 0,
-		.bufferRowLength = renderer->current_render_buffer->wlr_buffer->width,
-		.bufferImageHeight = renderer->current_render_buffer->wlr_buffer->height,
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		},
-		.imageOffset = { .x = 0, .y = 0, .z = 0 },
-		.imageExtent = {
-			.width = renderer->current_render_buffer->wlr_buffer->width,
-			.height = renderer->current_render_buffer->wlr_buffer->height,
-			.depth = 1,
-		},
-	};
+	// Copy UV to host-visible memory, but only the pixel under the cursor
+	if (renderer->should_copy_uv) {
+		// vulkan_end also gets used to draw the cursor and such, in which case it doesn't make sense
+		// to copy the UV texture. So only copy if explicitly told so.
+		assert(renderer->cursor_x < renderer->current_render_buffer->wlr_buffer->width);
+		assert(renderer->cursor_y < renderer->current_render_buffer->wlr_buffer->height);
+		VkBufferImageCopy uv_copy_region = {
+			.bufferOffset = 0,
+			.bufferRowLength = renderer->current_render_buffer->wlr_buffer->width,
+			.bufferImageHeight = renderer->current_render_buffer->wlr_buffer->height,
+			.imageSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+			.imageOffset = { .x = renderer->cursor_x, .y = renderer->cursor_y, .z = 0 },
+			.imageExtent = {
+				.width = 1,
+				.height = 1,
+				.depth = 1,
+			},
+		};
 
-	vkCmdCopyImageToBuffer(renderer->cb,
-		renderer->current_render_buffer->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-	        renderer->current_render_buffer->host_uv,
-	        1, &uv_copy_region);
+		vkCmdCopyImageToBuffer(renderer->cb,
+			renderer->current_render_buffer->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		        renderer->current_render_buffer->host_uv,
+		        1, &uv_copy_region);
+	}
 
 	vkEndCommandBuffer(renderer->cb);
 

@@ -150,6 +150,8 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
+	vkCmdPushConstants(cb, renderer->pipe_layout,
+		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float), &VertPcrData.surface_id);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 
 	return true;
@@ -202,7 +204,7 @@ static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, vo
 }
 
 // surfaces should be a list of struct Surface, defined in vkwc.c
-bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces) {
+bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
 	// If I	don't do this, windows aren't re-drawn when the	cursor moves.
 	// So just damage everything instead. It's inefficient, but I don't care for now.
 	wlr_output_damage_add_whole(scene_output->damage);
@@ -249,7 +251,7 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces)
 	wlr_renderer_begin(renderer, output->width, output->height);
 
 	wlr_renderer_scissor(renderer, NULL);
-	wlr_renderer_clear(renderer, (float[4]){ 0.3, 0.0, 0.1,	1.0 });
+	wlr_renderer_clear(renderer, (float[4]){ 0.1, 0.0, 0.2,	1.0 });
 
 	// Actually draw stuff
 	pixman_region32_t full_region;
@@ -283,7 +285,12 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces)
 	render_rect_simple(renderer, color, 10,	10, 10,	10);
 
 	// Finish
+	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
+	vk_renderer->cursor_x = cursor_x;
+	vk_renderer->cursor_y = cursor_y;
+	vk_renderer->should_copy_uv = true;
 	wlr_renderer_end(renderer);
+	vk_renderer->should_copy_uv = false;
 	pixman_region32_fini(&damage);
 
 	int tr_width, tr_height;

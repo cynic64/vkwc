@@ -569,8 +569,11 @@ static void process_cursor_resize(struct Server	*server, uint32_t time)	{
 	wlr_xdg_toplevel_set_size(view->xdg_surface, new_width,	new_height);
 }
 
-struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
-	// x and y are the absolute position of the cursor
+void check_uv(struct Server *server, int cursor_x, int cursor_y,
+        	struct Surface **surface, int *surface_x, int *surface_y) {
+	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor and the x
+	// and y relative to this surface.
+	// Returns NULL to surface if there is no surface under the cursor.
 	
 	// There are multiple render buffers, so we have to find the right one. I do this just by checking whether
 	// the render buffer's dimensions match those of the first output, which isn't a great way but works for now.
@@ -593,82 +596,46 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 
 	// Map the depth buffer
 	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
-	VkDeviceSize depth_byte_count = width * height * 4;
-	void *depth_mem;
-
-	VkResult res = vkMapMemory(renderer->dev->dev,
-		render_buffer->host_depth_mem, 0, depth_byte_count, 0, &depth_mem);
-	if (res != VK_SUCCESS) {
-		fprintf(stderr, "Couldn't map depth buffer memory for reading\n");
-		exit(1);
-	}
-
-	float *pixels = depth_mem;
-
-	// Print it out
-	/*
-	char chars[] = "!@#$%^&*()_+1234567890-=[],./<>?;':";
-	for (size_t y = 0; y < height; y += 16) {
-		for (size_t x = 0; x < width; x += 16) {
-			float pixel = pixels[y * width + x];
-			if (pixel == 0) {
-				printf(". ");
-			} else {
-				printf("%c ", chars[(int) (pixel * sizeof(chars))]);
-			}
-		}
-		printf("\n");
-	}
-	*/
-
-	float pixel = pixels[((size_t) server->cursor->y) * width + ((size_t) server->cursor->x)];
-	printf("Pixel under cursor: %f\n", pixel);
-
-	vkUnmapMemory(renderer->dev->dev, render_buffer->host_depth_mem);
 
 	VkDeviceSize uv_byte_count = width * height * 8;
 	void *uv_mem;
 	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
-	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *uv_pixels = uv_mem;
+	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *pixel = uv_mem;
 
-	char chars[] = "1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./!@#$%^&*()_QWERTYUIOP{}SDFGHJKL:ZXCVBNM<>?";
-	for (size_t y = 0; y < height; y += 16) {
-		for (size_t x = 0; x < width; x += 16) {
-			uint16_t pixel = uv_pixels[y * width + x].r;
-			if (pixel == 0) {
-				printf(". ");
-			} else {
-				printf("%c ", chars[(int) (((double) pixel) / UINT16_MAX * sizeof(chars))]);
-			}
-		}
-		printf("\n");
-	}
+	printf("UV under cursor: %d %d %d\n", pixel[0].r, pixel[0].g, pixel[0].b);
 
-	size_t idx = ((size_t) server->cursor->y) * width + ((size_t) server->cursor->x);
-	printf("UV under cursor: %d %d %d\n", uv_pixels[idx].r, uv_pixels[idx].g, uv_pixels[idx].b);
+	float pixel_surface_id = (double) pixel[0].b / UINT16_MAX;
+	double pixel_x_norm = (double) pixel[0].r / UINT16_MAX;
+	double pixel_y_norm = (double) pixel[0].g / UINT16_MAX;
+	double error_margin = 1.0 / 65536;
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
 
-	// 0 means the cursor is above the background, so no surface
-	if (pixel == 0) {
-		return NULL;
+	// Close to 0 means the cursor is above the background, so no surface
+	if (pixel_surface_id < error_margin) {
+		*surface = NULL;
+		return;
 	}
 
 	// Otherwise, go through all surfaces until we find the one with a matching id
-	struct Surface *surface = NULL;
-	wl_list_for_each(surface, &server->surfaces, link) {
-		if (surface->id == pixel) {
+	struct Surface *cur_s = NULL;
+	wl_list_for_each(cur_s, &server->surfaces, link) {
+		if (cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id) {
 			break;
 		}
 	}
 
-	if (surface->id != pixel) {
+	if (!(cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id)) {
 		// Something went wrong
-		fprintf(stderr, "Troublesome pixel: %f\n", pixel);
+		fprintf(stderr, "Troublesome pixel: %f\n", pixel_surface_id);
 		exit(1);
 	}
 
-	return surface;
+	*surface = cur_s;
+	if (surface_x != NULL && surface_y != NULL) {
+		*surface_x = pixel_x_norm * (*surface)->width;
+		*surface_y = pixel_y_norm * (*surface)->height;
+	}
 }
 
 static void process_cursor_motion(struct Server	*server, uint32_t time)	{
@@ -684,7 +651,9 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 	/* Otherwise, find the Surface under the pointer and send the event along.	*/
 	struct wlr_seat	*seat =	server->seat;
 
-	struct Surface *surface = get_surface_at_pos(server, server->cursor->x, server->cursor->y);
+	struct Surface *surface;
+	int surface_x, surface_y;	// Cursor position relative to surface
+	check_uv(server, server->cursor->x, server->cursor->y, &surface, &surface_x, &surface_y);
 
 	if (surface == NULL) {
 		// If there's no view under the	cursor,	set the	cursor image to	a
@@ -706,24 +675,9 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		//
 		// Transform cursor position to -1..1, invert matrix, multiply by width and height
 
-		struct wlr_output *cur_output = ((struct Output *) server->outputs.next)->wlr_output;
-		assert(cur_output != NULL);
+		printf("Cursor relative to surface: %d %d\n", surface_x, surface_y);
 
-		float cursor_x_norm = server->cursor->x * 2.0 / cur_output->width - 1.0;
-		float cursor_y_norm = server->cursor->y * 2.0 / cur_output->height - 1.0;
-
-		struct wlr_surface *wlr_surface = surface->wlr_surface;
-
-		mat4 inverted;
-		glm_mat4_inv(surface->matrix, inverted);
-		vec4 pos;
-		glm_mat4_mulv(inverted, (vec4) {cursor_x_norm, cursor_y_norm, 0.0, 1.0}, pos);
-
-		float surface_x = pos[0] * wlr_surface->current.width;
-		float surface_y = pos[1] * wlr_surface->current.height;
-		printf("Cursor relative to surface: %f %f\n", surface_x, surface_y);
-
-		wlr_seat_pointer_notify_enter(seat, wlr_surface, surface_x, surface_y);
+		wlr_seat_pointer_notify_enter(seat, surface->wlr_surface, surface_x, surface_y);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
 	}
 }
@@ -776,7 +730,8 @@ static void handle_cursor_button(struct	wl_listener *listener, void *data) {
 		return;
 	}
 
-	struct Surface *surface = get_surface_at_pos(server, server->cursor->x, server->cursor->y);
+	struct Surface *surface;
+	check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
 	if (surface == NULL) {
 		// Nothing under cursor
 		return;
@@ -844,7 +799,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(scene, output->wlr_output);
 
 	/* Render the scene if needed and commit the output */
-	draw_frame(scene_output, &output->server->surfaces);
+	draw_frame(scene_output, &output->server->surfaces, output->server->cursor->x, output->server->cursor->y);
 
 	struct timespec	now;
 	clock_gettime(CLOCK_MONOTONIC, &now);

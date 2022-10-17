@@ -217,6 +217,12 @@ struct wlr_vk_renderer {
 
 	struct wl_list render_buffers; // wlr_vk_render_buffer
 
+	// Instead of copying the entire UV texture each frame, we only copy the pixel under the cursor.
+	// For that, however, we need to know where the cursor actually is.
+	int cursor_x;
+	int cursor_y;
+	bool should_copy_uv;
+
 	struct {
 		VkCommandBuffer cb;
 		bool recording;

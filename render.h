@@ -6,7 +6,7 @@
 #include "surface.h"
 
 // surfaces has type struct Surface from surface.h
-bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces);
+bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces, int cursor_x, int cursor_y);
 
 void print_scene_graph(struct wlr_scene_node *node, int	level);
 
