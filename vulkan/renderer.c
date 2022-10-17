@@ -712,7 +712,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	renderer->scissor = rect;
 
 	VkClearValue clear_values[3];
-	clear_values[1].depthStencil.depth = 0;
+	clear_values[1].depthStencil.depth = 1;
 	clear_values[1].depthStencil.stencil = 0;
 	clear_values[2].color.float32[0] = 0.0;
 	clear_values[2].color.float32[1] = 0.0;
@@ -1337,7 +1337,7 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_ALWAYS,
+		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
 		.depthBoundsTestEnable = VK_FALSE,
 		.stencilTestEnable = VK_FALSE,
 	};
@@ -1631,7 +1631,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_ALWAYS,
+		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
 		.depthBoundsTestEnable = VK_FALSE,
 		.stencilTestEnable = VK_FALSE,
 	};

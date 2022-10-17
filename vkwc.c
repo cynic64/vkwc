@@ -149,8 +149,11 @@ struct Keyboard	{
 static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	struct Surface *surface = wl_container_of(listener, surface, destroy);
 
-	if (surface->server->grabbed_surface == surface) {
-		surface->server->grabbed_surface = NULL;
+	if (surface->server->grabbed_surface != NULL) {
+		// Maybe the grabbed surface or its parent got deleted
+		if (surface->server->grabbed_surface == surface || surface->server->grabbed_surface->toplevel == surface) {
+			surface->server->grabbed_surface = NULL;
+		};
 	};
 
 	wl_list_remove(&surface->link);
@@ -170,9 +173,6 @@ static void surface_handle_new(struct wl_listener *listener,
 	surface->wlr_surface = wlr_surface;
 	surface->toplevel = NULL;
 	surface->id = (double) rand() / RAND_MAX;
-	surface->x_rot = 0;
-	surface->y_rot = 0;
-	surface->z_rot = 0;
 
 	struct Server *server;
 	server = wl_container_of(listener, server, new_surface);
@@ -473,12 +473,18 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 	}
 	case XKB_KEY_F3:
 		if (server->cursor_mode == VKWC_CURSOR_X_ROTATE) {
+			printf("Exit X_ROTATE\n");
 			server->grabbed_surface = NULL;
 			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
 		} else {
 			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
 			if (server->grabbed_surface != NULL) {
+				server->grabbed_surface = server->grabbed_surface->toplevel;
+				printf("Found surface dims %d %d, enter X_ROTATE\n",
+					server->grabbed_surface->width, server->grabbed_surface->height);
 				server->cursor_mode = VKWC_CURSOR_X_ROTATE;
+			} else {
+				printf("No surface under cursor\n");
 			}
 		}
 		break;
@@ -691,6 +697,8 @@ static void process_cursor_motion(struct Server	*server, uint32_t time)	{
 		process_cursor_resize(server, time);
 		return;
 	} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE && server->grabbed_surface != NULL) {
+		printf("Wheee, delta %f %f now %f %f\n", delta_x, delta_y,
+			server->grabbed_surface->x_rot, server->grabbed_surface->x_rot );
 		server->grabbed_surface->x_rot += delta_y * -0.02;
 		server->grabbed_surface->y_rot += delta_x * 0.02;
 		return;
