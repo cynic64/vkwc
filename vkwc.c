@@ -50,6 +50,7 @@ enum CursorMode	{
 	VKWC_CURSOR_PASSTHROUGH,
 	VKWC_CURSOR_MOVE,
 	VKWC_CURSOR_RESIZE,
+	VKWC_CURSOR_X_ROTATE,
 };
 
 enum ViewType {
@@ -79,6 +80,7 @@ struct Server {
 	struct wl_listener cursor_button;
 	struct wl_listener cursor_axis;
 	struct wl_listener cursor_frame;
+	double last_cursor_x, last_cursor_y;
 
 	struct wlr_seat	*seat;
 	struct wl_listener new_input;
@@ -90,6 +92,7 @@ struct Server {
 	double grab_x, grab_y;
 	struct wlr_box grab_geobox;
 	uint32_t resize_edges;
+	struct Surface *grabbed_surface;
 
 	struct wlr_output_layout *output_layout;
 	struct wl_list outputs;
@@ -146,11 +149,14 @@ struct Keyboard	{
 static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	struct Surface *surface = wl_container_of(listener, surface, destroy);
 
+	if (surface->server->grabbed_surface == surface) {
+		surface->server->grabbed_surface = NULL;
+	};
+
 	wl_list_remove(&surface->link);
 	wl_list_remove(&surface->destroy.link);
 
 	printf("Surface destroyed! There are now %d\n", wl_list_length(&surface->server->surfaces));
-	fflush(stdout);
 
 	free(surface);
 }
@@ -164,6 +170,9 @@ static void surface_handle_new(struct wl_listener *listener,
 	surface->wlr_surface = wlr_surface;
 	surface->toplevel = NULL;
 	surface->id = (double) rand() / RAND_MAX;
+	surface->x_rot = 0;
+	surface->y_rot = 0;
+	surface->z_rot = 0;
 
 	struct Server *server;
 	server = wl_container_of(listener, server, new_surface);
@@ -229,6 +238,7 @@ void calc_placements(struct wl_list *surfaces, struct wlr_scene_node *node, int 
 // This will recalculate the matrices of the specified node and all children
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
 void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int output_width, int output_height) {
+	printf("I think output dims are %d %d\n", output_width, output_height);
 	if (node->type == WLR_SCENE_NODE_SURFACE) {
 		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
 		struct wlr_surface *wlr_surface = scene_surface->surface;
@@ -241,7 +251,7 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			mat4 projection;
 			glm_perspective(1.0, (float) output_width / output_height, 0, 10, projection);
 
-			vec3 eye = {0, 0, 2.5};
+			vec3 eye = {0, 0, 2};
 			vec3 center = {0, 0, 0};
 			vec3 up = {0, 1, 0};
 			glm_lookat(eye, center, up, view);
@@ -257,15 +267,15 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			// Move it
 			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, 0});
 			// Undo previous translation
+			/*
 			glm_translate(surface->matrix, (vec3) {0.5 * surface->width, 0.5 * surface->height, 0.0});
 			// Rotate it
-			struct timespec ts;
-			clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-			double time = ts.tv_sec % 1000 + (double) ts.tv_nsec / 1000000000;
-			float theta = time / 10 * 2 * 3.14159265 + surface->id;
-			glm_rotate_y(surface->matrix, theta, surface->matrix);
-			// Move it so it's 0, 0 is at the center
+			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
+			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
+			glm_rotate_z(surface->matrix, surface->z_rot, surface->matrix);
+			// Move it so its 0, 0 is at the center
 			glm_translate(surface->matrix, (vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
+			*/
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
 		} else {
@@ -292,6 +302,74 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 	wl_list_for_each(cur, &node->state.children, state.link) {
 		calc_matrices(surfaces, cur, output_width, output_height);
 	};
+}
+
+void check_uv(struct Server *server, int cursor_x, int cursor_y,
+        	struct Surface **surface, int *surface_x, int *surface_y) {
+	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor and the x
+	// and y relative to this surface.
+	// Returns NULL to surface if there is no surface under the cursor.
+	
+	// There are multiple render buffers, so we have to find the right one. I do this just by checking whether
+	// the render buffer's dimensions match those of the first output, which isn't a great way but works for now.
+	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
+	struct wlr_vk_render_buffer *render_buffer = NULL;
+	struct Output *output = (struct Output *) server->outputs.next;
+	assert(output != NULL);
+
+	struct wlr_vk_render_buffer *cur;
+	wl_list_for_each(cur, &renderer->render_buffers, link) {
+		if (cur->wlr_buffer->width == output->wlr_output->width
+				&& cur->wlr_buffer->height == output->wlr_output->height) {
+			if (render_buffer == NULL || render_buffer->frame < cur->frame) {
+				// Always choose the most recent one
+				render_buffer = cur;
+			}
+		}
+	};
+	assert(render_buffer != NULL);
+
+	// Map the depth buffer
+	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
+
+	VkDeviceSize uv_byte_count = width * height * 8;
+	void *uv_mem;
+	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
+	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *pixel = uv_mem;
+
+	float pixel_surface_id = (double) pixel[0].b / UINT16_MAX;
+	double pixel_x_norm = (double) pixel[0].r / UINT16_MAX;
+	double pixel_y_norm = (double) pixel[0].g / UINT16_MAX;
+	double error_margin = 1.0 / 65536;
+
+	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
+
+	// Close to 0 means the cursor is above the background, so no surface
+	if (pixel_surface_id < error_margin) {
+		*surface = NULL;
+		return;
+	}
+
+	// Otherwise, go through all surfaces until we find the one with a matching id
+	struct Surface *cur_s = NULL;
+	wl_list_for_each(cur_s, &server->surfaces, link) {
+		if (cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id) {
+			break;
+		}
+	}
+
+	if (!(cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id)) {
+		// Something went wrong
+		fprintf(stderr, "Troublesome pixel: %f\n", pixel_surface_id);
+		*surface = NULL;
+		return;
+	}
+
+	*surface = cur_s;
+	if (surface_x != NULL && surface_y != NULL) {
+		*surface_x = pixel_x_norm * (*surface)->width;
+		*surface_y = pixel_y_norm * (*surface)->height;
+	}
 }
 
 static void focus_view(struct View *view, struct wlr_surface *surface) {
@@ -396,11 +474,17 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 		}
 		break;
 	}
-	case XKB_KEY_R:
-	{
-		server->cursor_mode = VKWC_CURSOR_MOVE;
+	case XKB_KEY_F3:
+		if (server->cursor_mode == VKWC_CURSOR_X_ROTATE) {
+			server->grabbed_surface = NULL;
+			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+		} else {
+			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
+			if (server->grabbed_surface != NULL) {
+				server->cursor_mode = VKWC_CURSOR_X_ROTATE;
+			}
+		}
 		break;
-	}
 	default:
 		return false;
 	}
@@ -596,81 +680,22 @@ static void process_cursor_resize(struct Server	*server, uint32_t time)	{
 	wlr_xdg_toplevel_set_size(view->xdg_surface, new_width,	new_height);
 }
 
-void check_uv(struct Server *server, int cursor_x, int cursor_y,
-        	struct Surface **surface, int *surface_x, int *surface_y) {
-	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor and the x
-	// and y relative to this surface.
-	// Returns NULL to surface if there is no surface under the cursor.
-	
-	// There are multiple render buffers, so we have to find the right one. I do this just by checking whether
-	// the render buffer's dimensions match those of the first output, which isn't a great way but works for now.
-	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
-	struct wlr_vk_render_buffer *render_buffer = NULL;
-	struct Output *output = (struct Output *) server->outputs.next;
-	assert(output != NULL);
-
-	struct wlr_vk_render_buffer *cur;
-	wl_list_for_each(cur, &renderer->render_buffers, link) {
-		if (cur->wlr_buffer->width == output->wlr_output->width
-				&& cur->wlr_buffer->height == output->wlr_output->height) {
-			if (render_buffer == NULL || render_buffer->frame < cur->frame) {
-				// Always choose the most recent one
-				render_buffer = cur;
-			}
-		}
-	};
-	assert(render_buffer != NULL);
-
-	// Map the depth buffer
-	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
-
-	VkDeviceSize uv_byte_count = width * height * 8;
-	void *uv_mem;
-	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
-	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *pixel = uv_mem;
-
-	float pixel_surface_id = (double) pixel[0].b / UINT16_MAX;
-	double pixel_x_norm = (double) pixel[0].r / UINT16_MAX;
-	double pixel_y_norm = (double) pixel[0].g / UINT16_MAX;
-	double error_margin = 1.0 / 65536;
-
-	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
-
-	// Close to 0 means the cursor is above the background, so no surface
-	if (pixel_surface_id < error_margin) {
-		*surface = NULL;
-		return;
-	}
-
-	// Otherwise, go through all surfaces until we find the one with a matching id
-	struct Surface *cur_s = NULL;
-	wl_list_for_each(cur_s, &server->surfaces, link) {
-		if (cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id) {
-			break;
-		}
-	}
-
-	if (!(cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id)) {
-		// Something went wrong
-		fprintf(stderr, "Troublesome pixel: %f\n", pixel_surface_id);
-		*surface = NULL;
-		return;
-	}
-
-	*surface = cur_s;
-	if (surface_x != NULL && surface_y != NULL) {
-		*surface_x = pixel_x_norm * (*surface)->width;
-		*surface_y = pixel_y_norm * (*surface)->height;
-	}
-}
-
 static void process_cursor_motion(struct Server	*server, uint32_t time)	{
+	double delta_x = server->cursor->x - server->last_cursor_x;
+	double delta_y = server->cursor->y - server->last_cursor_y;
+	server->last_cursor_x = server->cursor->x;
+	server->last_cursor_y = server->cursor->y;
+
 	/* If the mode is non-passthrough, delegate to those functions.	*/
 	if (server->cursor_mode	== VKWC_CURSOR_MOVE) {
 		process_cursor_move(server, time);
 		return;
 	} else if (server->cursor_mode == VKWC_CURSOR_RESIZE) {
 		process_cursor_resize(server, time);
+		return;
+	} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE && server->grabbed_surface != NULL) {
+		server->grabbed_surface->x_rot += delta_y * -0.02;
+		server->grabbed_surface->y_rot += delta_x * 0.02;
 		return;
 	}
 
@@ -1065,7 +1090,7 @@ int main(int argc, char	*argv[]) {
 		return 0;
 	}
 
-	struct Server server;
+	struct Server server = {0};
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from	the Unix socket, manging Wayland globals, and so on. */
 	server.wl_display = wl_display_create();

@@ -17,6 +17,9 @@ struct Surface {
 
 	mat4 matrix;
 	int x, y, width, height;
+
+	// Set these and calc_matrices will do the rest. All are in radians.
+	double x_rot, y_rot, z_rot;
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);
