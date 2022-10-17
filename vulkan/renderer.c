@@ -1371,9 +1371,6 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 
-	VkPipelineColorBlendAttachmentState uv_blend_attachment = {0};
-	uv_blend_attachment.blendEnable = VK_TRUE;
-
 	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
 
 	VkPipelineColorBlendStateCreateInfo blend = {0};
@@ -1667,9 +1664,6 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		VK_COLOR_COMPONENT_G_BIT |
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
-
-	VkPipelineColorBlendAttachmentState uv_blend_attachment = {0};
-	uv_blend_attachment.blendEnable = VK_TRUE;
 
 	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
 

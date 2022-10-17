@@ -626,7 +626,7 @@ struct Surface *get_surface_at_pos(struct Server *server, int x, int y) {
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_depth_mem);
 
-	VkDeviceSize uv_byte_count = width * height * 6;
+	VkDeviceSize uv_byte_count = width * height * 8;
 	void *uv_mem;
 	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
 	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *uv_pixels = uv_mem;
