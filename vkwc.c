@@ -100,7 +100,6 @@ struct Server {
 	struct wl_listener cursor_button;
 	struct wl_listener cursor_axis;
 	struct wl_listener cursor_frame;
-	double last_cursor_x, last_cursor_y;
 
 	struct wlr_seat	*seat;
 	struct wl_listener new_input;
@@ -726,12 +725,8 @@ static void process_cursor_resize(struct Server	*server, uint32_t time)	{
 	wlr_xdg_toplevel_set_size(view->xdg_surface, new_width,	new_height);
 }
 
-static void process_cursor_motion(struct Server	*server, uint32_t time)	{
-	double delta_x = server->cursor->x - server->last_cursor_x;
-	double delta_y = server->cursor->y - server->last_cursor_y;
-	server->last_cursor_x = server->cursor->x;
-	server->last_cursor_y = server->cursor->y;
-
+static void process_cursor_motion(struct Server *server, uint32_t time, double delta_x, double delta_y) {
+	// Deltas are only used when in a transform mode. Just pass 0 if there is an absolute cursor motion.
 	/* If the mode is non-passthrough, delegate to those functions.	*/
 	if (server->cursor_mode	== VKWC_CURSOR_MOVE) {
 		process_cursor_move(server, time);
@@ -800,7 +795,7 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 	 * the cursor around without any input.	*/
 	wlr_cursor_move(server->cursor,	event->device,
 			event->delta_x,	event->delta_y);
-	process_cursor_motion(server, event->time_msec);
+	process_cursor_motion(server, event->time_msec, event->delta_x, event->delta_y);
 }
 
 static void handle_cursor_motion_absolute(
@@ -815,10 +810,10 @@ static void handle_cursor_motion_absolute(
 		wl_container_of(listener, server, cursor_motion_absolute);
 	struct wlr_event_pointer_motion_absolute *event	= data;
 	wlr_cursor_warp_absolute(server->cursor, event->device,	event->x, event->y);
-	process_cursor_motion(server, event->time_msec);
+	process_cursor_motion(server, event->time_msec, 0, 0);
 }
 
-static void handle_cursor_button(struct	wl_listener *listener, void *data) {
+static void handle_cursor_button(struct wl_listener *listener, void *data) {
 	/* This	event is forwarded by the cursor when a	pointer	emits a	button
 	 * event. */
 	struct Server *server =
@@ -914,7 +909,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 
 	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
 	uint32_t time = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
-	process_cursor_motion(server, time);
+	process_cursor_motion(server, time, 0, 0);
 }
 
 static void handle_new_output(struct wl_listener *listener, void *data)	{
