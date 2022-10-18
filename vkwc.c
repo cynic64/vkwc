@@ -278,9 +278,9 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 
 			mat4 view;
 			mat4 projection;
-			glm_perspective(1, 1, 0, 10, projection);
+			glm_perspective(1, (float) output_width / (float) output_height, 0, 10, projection);
 
-			vec3 eye = {0, 0, 2};
+			vec3 eye = {0, 0, 1000};
 			vec3 center = {0, 0, 0};
 			vec3 up = {0, 1, 0};
 			glm_lookat(eye, center, up, view);
@@ -288,15 +288,8 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			glm_mat4_mul(projection, surface->matrix, surface->matrix);
 
 			// These are in backwards order
-			// Turn 0..2 into -1..1
-			glm_translate(surface->matrix, (vec3) {-1, -1, 0});
-			// Turn 0..1920, 0..1080 into 0..2, 0..2
-			// Not quite sure what to do with the Z component here
-			glm_scale(surface->matrix, (vec3) {2.0/output_width, 2.0/output_height, 1.0/output_width});
 			// Move it
 			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, 0});
-			// Undo previous translation
-			glm_translate(surface->matrix, (vec3) {0.5 * surface->width, 0.5 * surface->height, 0.0});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
