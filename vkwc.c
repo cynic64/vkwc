@@ -55,6 +55,9 @@ enum CursorMode	{
 	VKWC_CURSOR_X_ROTATE_SPEED,
 	VKWC_CURSOR_Y_ROTATE_SPEED,
 	VKWC_CURSOR_Z_ROTATE_SPEED,
+	VKWC_CURSOR_X_MOVE,
+	VKWC_CURSOR_Y_MOVE,
+	VKWC_CURSOR_Z_MOVE,
 };
 
 enum CursorMode TRANSFORM_MODES[] = {
@@ -66,11 +69,11 @@ enum CursorMode TRANSFORM_MODES[] = {
 };
 
 xkb_keysym_t TRANSFORM_KEYS[] = {
-	XKB_KEY_F3,
-	XKB_KEY_F5,
-	XKB_KEY_F6,
-	XKB_KEY_F7,
-	XKB_KEY_F8,
+	XKB_KEY_x,
+	XKB_KEY_z,
+	XKB_KEY_X,
+	XKB_KEY_Y,
+	XKB_KEY_Z,
 };
 
 enum ViewType {
