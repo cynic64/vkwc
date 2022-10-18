@@ -183,8 +183,7 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	free(surface);
 }
 
-static void surface_handle_new(struct wl_listener *listener,
-		void *data) {
+static void surface_handle_new(struct wl_listener *listener, void *data) {
 	struct wlr_surface *wlr_surface = data;
 
 	struct Surface *surface = calloc(1, sizeof(struct Surface));
@@ -432,8 +431,7 @@ static void focus_view(struct View *view, struct wlr_surface *surface) {
 	}
 }
 
-static void handle_keyboard_modifiers(
-		struct wl_listener *listener, void *data) {
+static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
 	/* This	event is raised	when a modifier	key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
 	struct Keyboard	*keyboard =
@@ -798,8 +796,7 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 	process_cursor_motion(server, event->time_msec, event->delta_x, event->delta_y);
 }
 
-static void handle_cursor_motion_absolute(
-		struct wl_listener *listener, void *data) {
+static void handle_cursor_motion_absolute(struct wl_listener *listener, void *data) {
 	/* This	event is forwarded by the cursor when a	pointer	emits an _absolute_
 	 * motion event, from 0..1 on each axis. This happens, for example, when
 	 * wlroots is running under a Wayland window rather than KMS+DRM, and you
@@ -969,7 +966,6 @@ static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
 	focus_view(view, view->xdg_surface->surface);
 
 	print_scene_graph(&view->server->scene->node, 0);
-	fflush(stdout);
 }
 
 static void handle_xdg_toplevel_unmap(struct wl_listener *listener, void *data)	{
@@ -992,8 +988,7 @@ static void handle_xdg_toplevel_destroy(struct wl_listener *listener, void *data
 	free(view);
 }
 
-static void begin_interactive(struct View *view,
-		enum CursorMode	mode, uint32_t edges) {
+static void begin_interactive(struct View *view, enum CursorMode mode, uint32_t edges) {
 	/* This	function sets up an interactive	move or	resize operation, where	the
 	 * compositor stops propegating	pointer	events to clients and instead
 	 * consumes them itself, to move or resize windows. */
@@ -1030,8 +1025,7 @@ static void begin_interactive(struct View *view,
 	}
 }
 
-static void handle_xdg_toplevel_request_move(
-		struct wl_listener *listener, void *data) {
+static void handle_xdg_toplevel_request_move(struct wl_listener *listener, void *data) {
 	/* This	event is raised	when a client would like to begin an interactive
 	 * move, typically because the user clicked on their client-side
 	 * decorations.	Note that a more sophisticated compositor should check the
@@ -1041,8 +1035,7 @@ static void handle_xdg_toplevel_request_move(
 	begin_interactive(view,	VKWC_CURSOR_MOVE, 0);
 }
 
-static void handle_xdg_toplevel_request_resize(
-		struct wl_listener *listener, void *data) {
+static void handle_xdg_toplevel_request_resize(struct wl_listener *listener, void *data) {
 	/* This	event is raised	when a client would like to begin an interactive
 	 * resize, typically because the user clicked on their client-side
 	 * decorations.	Note that a more sophisticated compositor should check the
@@ -1056,8 +1049,7 @@ static void handle_xdg_toplevel_request_resize(
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	/* This	event is raised	when wlr_xdg_shell receives a new xdg surface from a
 	 * client, either a toplevel (application window) or popup. */
-	struct Server *server =
-		wl_container_of(listener, server, new_xdg_surface);
+	struct Server *server = wl_container_of(listener, server, new_xdg_surface);
 	struct wlr_xdg_surface *xdg_surface = data;
 
 	/* We must add xdg popups to the scene graph so	they get rendered. The
@@ -1076,13 +1068,11 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
 
 	/* Allocate a View for this surface */
-	struct View *view =
-		calloc(1, sizeof(struct	View));
+	struct View *view = calloc(1, sizeof(struct View));
 	view->type = XDG_SHELL_VIEW;
 	view->server = server;
 	view->xdg_surface = xdg_surface;
-	view->scene_node = wlr_scene_xdg_surface_create(
-			&view->server->scene->node, view->xdg_surface);
+	view->scene_node = wlr_scene_xdg_surface_create(&view->server->scene->node, view->xdg_surface);
 	view->scene_node->data = view;
 	xdg_surface->data = view->scene_node;
 
