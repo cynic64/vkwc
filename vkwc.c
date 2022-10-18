@@ -57,6 +57,22 @@ enum CursorMode	{
 	VKWC_CURSOR_Z_ROTATE_SPEED,
 };
 
+enum CursorMode TRANSFORM_MODES[] = {
+	VKWC_CURSOR_XY_ROTATE,
+	VKWC_CURSOR_Z_ROTATE,
+	VKWC_CURSOR_X_ROTATE_SPEED,
+	VKWC_CURSOR_Y_ROTATE_SPEED,
+	VKWC_CURSOR_Z_ROTATE_SPEED,
+};
+
+xkb_keysym_t TRANSFORM_KEYS[] = {
+	XKB_KEY_F3,
+	XKB_KEY_F5,
+	XKB_KEY_F6,
+	XKB_KEY_F7,
+	XKB_KEY_F8,
+};
+
 enum ViewType {
 	XDG_SHELL_VIEW,
 	XWAYLAND_VIEW,
@@ -443,20 +459,18 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 	 *
 	 * This	function assumes Alt is	held down.
 	 */
-	switch (sym) {
-	case XKB_KEY_Escape:
+	if (sym == XKB_KEY_Escape) {
 		wl_display_terminate(server->wl_display);
-		break;
-	case XKB_KEY_F1:
+	} else if (sym == XKB_KEY_F1) {
 		/* Cycle to the	next view */
 		if (wl_list_length(&server->views) < 2)	{
-			break;
+			return false;
 		}
 		struct View *next_view = wl_container_of(
 			server->views.prev, next_view, link);
 		focus_view(next_view, next_view->xdg_surface->surface);
-		break;
-	case XKB_KEY_F2:
+		return true;
+	} else if (sym == XKB_KEY_F2) {
 		if (fork() == 0) {
 			const char *arg[] = {"foot", NULL };
 			setsid();
@@ -465,9 +479,8 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			perror(" failed");
 			exit(EXIT_SUCCESS);
 		}
-		break;
-	case XKB_KEY_F4:
-	{
+		return true;
+	} else if (sym == XKB_KEY_F4) {
 		if (fork() == 0) {
 			const char *arg[] = {"my-chvt", "1", NULL };
 			setsid();
@@ -476,70 +489,8 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			perror(" failed");
 			exit(EXIT_SUCCESS);
 		}
-		break;
-	}
-	case XKB_KEY_F3:
-		if (server->cursor_mode == VKWC_CURSOR_XY_ROTATE) {
-			server->grabbed_surface = NULL;
-			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
-		} else {
-			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
-			if (server->grabbed_surface != NULL) {
-				server->grabbed_surface = server->grabbed_surface->toplevel;
-				server->cursor_mode = VKWC_CURSOR_XY_ROTATE;
-			}
-		}
-		break;
-	case XKB_KEY_F5:
-		if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE) {
-			server->grabbed_surface = NULL;
-			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
-		} else {
-			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
-			if (server->grabbed_surface != NULL) {
-				server->grabbed_surface = server->grabbed_surface->toplevel;
-				server->cursor_mode = VKWC_CURSOR_Z_ROTATE;
-			}
-		}
-		break;
-	case XKB_KEY_F6:
-		if (server->cursor_mode == VKWC_CURSOR_X_ROTATE_SPEED) {
-			server->grabbed_surface = NULL;
-			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
-		} else {
-			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
-			if (server->grabbed_surface != NULL) {
-				server->grabbed_surface = server->grabbed_surface->toplevel;
-				server->cursor_mode = VKWC_CURSOR_X_ROTATE_SPEED;
-			}
-		}
-		break;
-	case XKB_KEY_F7:
-		if (server->cursor_mode == VKWC_CURSOR_Y_ROTATE_SPEED) {
-			server->grabbed_surface = NULL;
-			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
-		} else {
-			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
-			if (server->grabbed_surface != NULL) {
-				server->grabbed_surface = server->grabbed_surface->toplevel;
-				server->cursor_mode = VKWC_CURSOR_Y_ROTATE_SPEED;
-			}
-		}
-		break;
-	case XKB_KEY_F8:
-		if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED) {
-			server->grabbed_surface = NULL;
-			server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
-		} else {
-			check_uv(server, server->cursor->x, server->cursor->y, &server->grabbed_surface, NULL, NULL);
-			if (server->grabbed_surface != NULL) {
-				server->grabbed_surface = server->grabbed_surface->toplevel;
-				server->cursor_mode = VKWC_CURSOR_Z_ROTATE_SPEED;
-			}
-		}
-		break;
-	case XKB_KEY_F9:
-	{
+		return true;
+	} else if (sym == XKB_KEY_F9) {
 		struct Surface *surface;
 		check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
 		if (surface != NULL) {
@@ -547,10 +498,8 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			surface->y_rot_speed = 0;
 			surface->z_rot_speed = 0;
 		}
-		break;
-	}
-	case XKB_KEY_F10:
-	{
+		return true;
+	} else if (sym == XKB_KEY_F10) {
 		struct Surface *surface;
 		check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
 		if (surface != NULL) {
@@ -558,12 +507,34 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			surface->y_rot = 0;
 			surface->z_rot = 0;
 		}
-		break;
+		return true;
 	}
-	default:
-		return false;
+
+	assert(sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0]) == sizeof(TRANSFORM_KEYS) / sizeof(TRANSFORM_KEYS[0]));
+	for (int i = 0; i < sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0]); i++) {
+		enum CursorMode mode = TRANSFORM_MODES[i];
+		xkb_keysym_t key = TRANSFORM_KEYS[i];
+
+		if (sym == key) {
+			if (server->cursor_mode == mode) {
+				server->grabbed_surface = NULL;
+				server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+			} else {
+				check_uv(server, server->cursor->x, server->cursor->y,
+					&server->grabbed_surface, NULL, NULL);
+				if (server->grabbed_surface != NULL) {
+					server->grabbed_surface = server->grabbed_surface->toplevel;
+					server->cursor_mode = mode;
+				} else {
+					printf("No surface under cursor\n");
+					return false;
+				}
+			}
+			return true;
+		}
 	}
-	return true;
+
+	return false;
 }
 
 static void handle_keyboard_key(struct wl_listener *listener, void *data) {
@@ -830,7 +801,6 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 	wlr_cursor_move(server->cursor,	event->device,
 			event->delta_x,	event->delta_y);
 	process_cursor_motion(server, event->time_msec);
-	printf("%u\n", event->time_msec);
 }
 
 static void handle_cursor_motion_absolute(
