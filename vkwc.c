@@ -66,14 +66,20 @@ enum CursorMode TRANSFORM_MODES[] = {
 	VKWC_CURSOR_X_ROTATE_SPEED,
 	VKWC_CURSOR_Y_ROTATE_SPEED,
 	VKWC_CURSOR_Z_ROTATE_SPEED,
+	VKWC_CURSOR_X_MOVE,
+	VKWC_CURSOR_Y_MOVE,
+	VKWC_CURSOR_Z_MOVE,
 };
 
 xkb_keysym_t TRANSFORM_KEYS[] = {
-	XKB_KEY_x,
+	XKB_KEY_q,
+	XKB_KEY_e,
+	XKB_KEY_a,
+	XKB_KEY_s,
+	XKB_KEY_d,
 	XKB_KEY_z,
-	XKB_KEY_X,
-	XKB_KEY_Y,
-	XKB_KEY_Z,
+	XKB_KEY_x,
+	XKB_KEY_c,
 };
 
 enum ViewType {
@@ -726,30 +732,13 @@ static void process_cursor_resize(struct Server	*server, uint32_t time)	{
 	wlr_xdg_toplevel_set_size(view->xdg_surface, new_width,	new_height);
 }
 
-static void process_cursor_motion(struct Server *server, uint32_t time, double delta_x, double delta_y) {
-	// Deltas are only used when in a transform mode. Just pass 0 if there is an absolute cursor motion.
+static void process_cursor_motion(struct Server *server, uint32_t time) {
 	/* If the mode is non-passthrough, delegate to those functions.	*/
 	if (server->cursor_mode	== VKWC_CURSOR_MOVE) {
 		process_cursor_move(server, time);
 		return;
 	} else if (server->cursor_mode == VKWC_CURSOR_RESIZE) {
 		process_cursor_resize(server, time);
-		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_XY_ROTATE && server->grabbed_surface != NULL) {
-		server->grabbed_surface->x_rot += delta_y * -0.02;
-		server->grabbed_surface->y_rot += delta_x * 0.02;
-		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE && server->grabbed_surface != NULL) {
-		server->grabbed_surface->z_rot += delta_x * 0.02;
-		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE_SPEED && server->grabbed_surface != NULL) {
-		server->grabbed_surface->x_rot_speed += delta_x * 0.02 * 0.05;
-		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_Y_ROTATE_SPEED && server->grabbed_surface != NULL) {
-		server->grabbed_surface->y_rot_speed += delta_x * 0.02 * 0.05;
-		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED && server->grabbed_surface != NULL) {
-		server->grabbed_surface->z_rot_speed += delta_x * 0.02 * 0.05;
 		return;
 	}
 
@@ -794,9 +783,23 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 	 * special configuration applied for the specific input	device which
 	 * generated the event.	You can	pass NULL for the device if you	want to	move
 	 * the cursor around without any input.	*/
-	wlr_cursor_move(server->cursor,	event->device,
-			event->delta_x,	event->delta_y);
-	process_cursor_motion(server, event->time_msec, event->delta_x, event->delta_y);
+	wlr_cursor_move(server->cursor,	event->device, event->delta_x, event->delta_y);
+
+	// If we're in a transform mode, don't bother processing the motion
+	if (server->cursor_mode == VKWC_CURSOR_XY_ROTATE && server->grabbed_surface != NULL) {
+		server->grabbed_surface->x_rot += event->delta_y * -0.02;
+		server->grabbed_surface->y_rot += event->delta_x * 0.02;
+	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE && server->grabbed_surface != NULL) {
+		server->grabbed_surface->z_rot += event->delta_x * 0.02;
+	} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE_SPEED && server->grabbed_surface != NULL) {
+		server->grabbed_surface->x_rot_speed += event->delta_x * 0.02 * 0.05;
+	} else if (server->cursor_mode == VKWC_CURSOR_Y_ROTATE_SPEED && server->grabbed_surface != NULL) {
+		server->grabbed_surface->y_rot_speed += event->delta_x * 0.02 * 0.05;
+	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED && server->grabbed_surface != NULL) {
+		server->grabbed_surface->z_rot_speed += event->delta_x * 0.02 * 0.05;
+	} else {
+		process_cursor_motion(server, event->time_msec);
+	}
 }
 
 static void handle_cursor_motion_absolute(struct wl_listener *listener, void *data) {
@@ -810,7 +813,7 @@ static void handle_cursor_motion_absolute(struct wl_listener *listener, void *da
 		wl_container_of(listener, server, cursor_motion_absolute);
 	struct wlr_event_pointer_motion_absolute *event	= data;
 	wlr_cursor_warp_absolute(server->cursor, event->device,	event->x, event->y);
-	process_cursor_motion(server, event->time_msec, 0, 0);
+	process_cursor_motion(server, event->time_msec);
 }
 
 static void handle_cursor_button(struct wl_listener *listener, void *data) {
@@ -909,7 +912,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 
 	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
 	uint32_t time = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
-	process_cursor_motion(server, time, 0, 0);
+	process_cursor_motion(server, time);
 }
 
 static void handle_new_output(struct wl_listener *listener, void *data)	{
