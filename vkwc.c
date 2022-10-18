@@ -538,6 +538,28 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			}
 		}
 		break;
+	case XKB_KEY_F9:
+	{
+		struct Surface *surface;
+		check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
+		if (surface != NULL) {
+			surface->x_rot_speed = 0;
+			surface->y_rot_speed = 0;
+			surface->z_rot_speed = 0;
+		}
+		break;
+	}
+	case XKB_KEY_F10:
+	{
+		struct Surface *surface;
+		check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
+		if (surface != NULL) {
+			surface->x_rot = 0;
+			surface->y_rot = 0;
+			surface->z_rot = 0;
+		}
+		break;
+	}
 	default:
 		return false;
 	}

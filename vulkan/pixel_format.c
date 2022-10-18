@@ -39,7 +39,7 @@ const struct wlr_vk_format *vulkan_get_format_from_drm(uint32_t drm_format) {
 }
 
 static const VkImageUsageFlags render_usage =
-	VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 static const VkImageUsageFlags tex_usage =
 	VK_IMAGE_USAGE_SAMPLED_BIT |
 	VK_IMAGE_USAGE_TRANSFER_DST_BIT;
