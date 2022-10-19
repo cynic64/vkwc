@@ -210,7 +210,8 @@ static void surface_handle_new(struct wl_listener *listener, void *data) {
 
 	wl_list_insert(server->surfaces.prev, &surface->link);
 
-	printf("Surface created\n");
+	printf("Surface created, xywh: %d %d %d %d\n", wlr_surface->sx, wlr_surface->sy,
+		wlr_surface->current.width, wlr_surface->current.height);
 }
 
 void relink_nodes(struct wl_list *surfaces, struct wlr_scene_node *node) {
@@ -289,7 +290,11 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 
 			// These are in backwards order
 			// Move it
-			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, 0});
+			glm_translate(surface->matrix, (vec3) {
+				surface->x + surface->x_offset,
+				surface->y + surface->y_offset,
+				surface->z_offset
+			});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
@@ -325,7 +330,7 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 }
 
 void check_uv(struct Server *server, int cursor_x, int cursor_y,
-        	struct Surface **surface, int *surface_x, int *surface_y) {
+        	struct Surface **surface_out, int *surface_x, int *surface_y) {
 	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor and the x
 	// and y relative to this surface.
 	// Returns NULL to surface if there is no surface under the cursor.
@@ -364,31 +369,44 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
 
+	//printf("id, x, y: %f %f %f\n", pixel_surface_id, pixel_x_norm, pixel_y_norm);
+
 	// Close to 0 means the cursor is above the background, so no surface
 	if (pixel_surface_id < error_margin) {
-		*surface = NULL;
+		//printf("ID is close to zero. Exit.\n");
+		*surface_out = NULL;
 		return;
 	}
 
 	// Otherwise, go through all surfaces until we find the one with a matching id
-	struct Surface *cur_s = NULL;
-	wl_list_for_each(cur_s, &server->surfaces, link) {
-		if (cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id) {
+	struct Surface *surface = NULL;
+	wl_list_for_each(surface, &server->surfaces, link) {
+		/*
+		printf("Found surface with xywh %d %d %d %d, id %f\n",
+			(int) surface->x, (int) surface->y, (int) surface->width, (int) surface->height,
+			surface->id);
+		*/
+	}
+
+	bool found_surface = false;
+	wl_list_for_each(surface, &server->surfaces, link) {
+		if (surface->id - error_margin < pixel_surface_id && surface->id + error_margin > pixel_surface_id) {
+			//printf("Surface with id %f matches\n", surface->id);
+			found_surface = true;
 			break;
 		}
 	}
 
-	if (!(cur_s->id - error_margin < pixel_surface_id && cur_s->id + error_margin > pixel_surface_id)) {
-		// Something went wrong
-		fprintf(stderr, "Troublesome pixel: %f\n", pixel_surface_id);
-		*surface = NULL;
-		return;
+	if (!found_surface) {
+		fprintf(stderr, "Could not find surface with id matching: %f\n", pixel_surface_id);
+		exit(1);
 	}
 
-	*surface = cur_s;
+	// Set return values
+	*surface_out = surface;
 	if (surface_x != NULL && surface_y != NULL) {
-		*surface_x = pixel_x_norm * (*surface)->width;
-		*surface_y = pixel_y_norm * (*surface)->height;
+		*surface_x = pixel_x_norm * surface->width;
+		*surface_y = pixel_y_norm * surface->height;
 	}
 }
 
@@ -779,17 +797,27 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 	wlr_cursor_move(server->cursor,	event->device, event->delta_x, event->delta_y);
 
 	// If we're in a transform mode, don't bother processing the motion
-	if (server->cursor_mode == VKWC_CURSOR_XY_ROTATE && server->grabbed_surface != NULL) {
-		server->grabbed_surface->x_rot += event->delta_y * -0.02;
-		server->grabbed_surface->y_rot += event->delta_x * 0.02;
-	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE && server->grabbed_surface != NULL) {
-		server->grabbed_surface->z_rot += event->delta_x * 0.02;
-	} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE_SPEED && server->grabbed_surface != NULL) {
-		server->grabbed_surface->x_rot_speed += event->delta_x * 0.02 * 0.05;
-	} else if (server->cursor_mode == VKWC_CURSOR_Y_ROTATE_SPEED && server->grabbed_surface != NULL) {
-		server->grabbed_surface->y_rot_speed += event->delta_x * 0.02 * 0.05;
-	} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED && server->grabbed_surface != NULL) {
-		server->grabbed_surface->z_rot_speed += event->delta_x * 0.02 * 0.05;
+	if (server->grabbed_surface != NULL) {
+		if (server->cursor_mode == VKWC_CURSOR_XY_ROTATE) {			// Rotation
+			server->grabbed_surface->x_rot += event->delta_y * -0.02;
+			server->grabbed_surface->y_rot += event->delta_x * 0.02;
+		} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE) {
+			server->grabbed_surface->z_rot += event->delta_x * 0.02;
+		} else if (server->cursor_mode == VKWC_CURSOR_X_ROTATE_SPEED) {		// Rotation speed
+			server->grabbed_surface->x_rot_speed += event->delta_x * 0.02 * 0.05;
+		} else if (server->cursor_mode == VKWC_CURSOR_Y_ROTATE_SPEED) {
+			server->grabbed_surface->y_rot_speed += event->delta_x * 0.02 * 0.05;
+		} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED) {
+			server->grabbed_surface->z_rot_speed += event->delta_x * 0.02 * 0.05;
+		} else if (server->cursor_mode == VKWC_CURSOR_X_MOVE) {			// Translation
+			server->grabbed_surface->x_offset += event->delta_x;
+		} else if (server->cursor_mode == VKWC_CURSOR_Y_MOVE) {			// Translation
+			server->grabbed_surface->y_offset += event->delta_y;
+		} else if (server->cursor_mode == VKWC_CURSOR_Z_MOVE) {			// Translation
+			server->grabbed_surface->z_offset += event->delta_y;
+		} else {
+			process_cursor_motion(server, event->time_msec);
+		}
 	} else {
 		process_cursor_motion(server, event->time_msec);
 	}

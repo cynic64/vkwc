@@ -16,11 +16,13 @@ struct Surface {
 	bool is_toplevel;
 
 	mat4 matrix;
-	double x, y, width, height;
+	int x, y, width, height;
 
 	// Set these and calc_matrices will do the rest. Rotations in radians, speeds in radians per frame.
 	double x_rot, y_rot, z_rot;
 	double x_rot_speed, y_rot_speed, z_rot_speed;
+	// These get added to the scene node position
+	double x_offset, y_offset, z_offset;
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);
