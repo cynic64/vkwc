@@ -615,8 +615,9 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	// Create attachment to write UV coordinates into
 	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
-		dmabuf.width, dmabuf.height, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-	        &buffer->uv);
+		dmabuf.width, dmabuf.height,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT 
+ 		| VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &buffer->uv);
 
 	VkMemoryRequirements uv_mem_reqs;
 	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->uv, &uv_mem_reqs);
@@ -1863,13 +1864,10 @@ static void init_postprocess_pipeline(struct wlr_vk_renderer *renderer,
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 
-	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
-
 	VkPipelineColorBlendStateCreateInfo blend = {0};
 	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
-	blend.pAttachments = blend_attachments;
-
+	blend.attachmentCount = 1;
+	blend.pAttachments = &blend_attachment;
 
 	VkPipelineMultisampleStateCreateInfo multisample = {0};
 	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -2075,7 +2073,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
 	// Then it is used as an input, so we have to change the layout
 	VkAttachmentReference intermediate_in_ref = {
-		.attachment = 0,
+		.attachment = 2,
 		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
