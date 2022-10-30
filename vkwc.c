@@ -12,6 +12,8 @@
 #include <pixman-1/pixman.h>
 #include <vulkan/vulkan.h>
 #include <drm_fourcc.h>
+
+#define CGLM_CLIPSPACE_INCLUDE_ALL
 #include <cglm/cglm.h>
 
 #include <wlr/backend.h>
@@ -279,14 +281,15 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 
 			mat4 view;
 			mat4 projection;
-			glm_perspective(1, (float) output_width / (float) output_height, 0, 1, projection);
+			glm_perspective_rh_zo(1, (float) output_width / (float) output_height, 1, 10000, projection);
 
 			vec3 eye = {0, 0, 1000};
 			vec3 center = {0, 0, 0};
 			vec3 up = {0, 1, 0};
-			glm_lookat(eye, center, up, view);
-			glm_mat4_mul(view, surface->matrix, surface->matrix);
-			glm_mat4_mul(projection, surface->matrix, surface->matrix);
+			glm_lookat_rh_zo(eye, center, up, view);
+
+			glm_mat4_mul(surface->matrix, projection, surface->matrix);
+			glm_mat4_mul(surface->matrix, view, surface->matrix);
 
 			// These are in backwards order
 			// Move it
@@ -307,7 +310,6 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			vec4 top_left = {-1, 1, 0, 1};
 			vec4 dst;
 			glm_mat4_mulv(surface->matrix, top_left, dst);
-			printf("top left goes to %f %f %f %f\n", dst[0], dst[1], dst[2], dst[3]);
 		} else {
 			// First we translate ourselves relative to toplevel, then apply toplevel transform
 			// This allows for child transforms to be relative to parent transform

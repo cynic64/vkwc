@@ -861,8 +861,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	// Refresh projection matrix.
 	// wlr_matrix_projection assumes a GL coordinate system so we need
 	// to pass WL_OUTPUT_TRANSFORM_FLIPPED_180 to adjust it for vulkan.
-	wlr_matrix_projection(renderer->projection, width, height,
-		WL_OUTPUT_TRANSFORM_FLIPPED_180);
+	wlr_matrix_projection(renderer->projection, width, height, WL_OUTPUT_TRANSFORM_FLIPPED_180);
 
 	renderer->render_width = width;
 	renderer->render_height = height;
@@ -1733,7 +1732,7 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 
 	VkPipelineDepthStencilStateCreateInfo depth_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_FALSE,
+		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
 		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.depthBoundsTestEnable = VK_FALSE,
@@ -1845,7 +1844,7 @@ static void init_quad_pipeline(struct wlr_vk_renderer *renderer,
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.depthBoundsTestEnable = VK_FALSE,
 		.stencilTestEnable = VK_FALSE,
 	};

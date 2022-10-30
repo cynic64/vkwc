@@ -250,7 +250,10 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces,
 	wlr_renderer_begin(renderer, output->width, output->height);
 
 	wlr_renderer_scissor(renderer, NULL);
-	//wlr_renderer_clear(renderer, (float[4]){ 0.1, 0.0, 0.2, 1.0 });
+
+	// Draw frame counter
+	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
+	render_rect_simple(renderer, color, 10,	10, 10, 10);
 
 	// Actually draw stuff
 	pixman_region32_t full_region;
@@ -268,8 +271,6 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces,
 		// scene_output->[xy] determines offset, useful for multiple outputs
 		scene_node_for_each_node(&scene->node, -scene_output->x, -scene_output->y,
 			render_node_iterator, &data);
-
-		wlr_renderer_scissor(renderer, NULL);
 	} else {
 		fprintf(stderr, "Output is disabled, dunno what to do\n");
 		exit(1);
@@ -278,10 +279,6 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces,
 	pixman_region32_fini(&full_region);
 
 	wlr_output_render_software_cursors(output, &damage);
-
-	// Draw frame counter
-	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	render_rect_simple(renderer, color, 10,	10, 10,	10);
 
 	// Finish
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
