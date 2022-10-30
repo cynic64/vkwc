@@ -133,6 +133,7 @@ struct wlr_vk_render_format_setup {
 
 	VkPipeline tex_pipe;
 	VkPipeline quad_pipe;
+	VkPipeline postprocess_pipe;
 };
 
 // Renderer-internal represenation of an wlr_buffer imported for rendering.
@@ -170,6 +171,13 @@ struct wlr_vk_render_buffer {
 	VkImage image;
 	VkImageView image_view;
 
+	// Descriptor pool from which the input attachment descriptor for the postprocess subpass will be allocated.
+	// We have to allocate descriptors per render buffer because the attachment is different for each render
+	// buffer, which is why this is here.
+	// Having one pool per render buffer also avoids having to worry about what to set descriptorCount to.
+	VkDescriptorPool input_attach_dpool;
+	VkDescriptorSet postprocess_set;
+
 	// Lets us know which render buffer was in use last (corresponds to frame in wlr_vk_renderer)
 	uint32_t frame;
 
@@ -187,10 +195,15 @@ struct wlr_vk_renderer {
 	VkShaderModule vert_module;
 	VkShaderModule tex_frag_module;
 	VkShaderModule quad_frag_module;
+	VkShaderModule postprocess_vert_module;
+	VkShaderModule postprocess_frag_module;
 
 	VkDescriptorSetLayout ds_layout;
 	VkPipelineLayout pipe_layout;
 	VkSampler sampler;
+
+	VkDescriptorSetLayout postprocess_ds_layout;
+	VkPipelineLayout postprocess_pipe_layout;
 
 	VkFence fence;
 
@@ -251,8 +264,7 @@ struct wlr_vk_buffer_span vulkan_get_stage_span(
 
 // Tries to allocate a texture descriptor set. Will additionally
 // return the pool it was allocated from when successful (for freeing it later).
-struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(
-	struct wlr_vk_renderer *renderer, VkDescriptorSet *ds);
+struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *renderer, VkDescriptorSet *ds);
 
 // Frees the given descriptor set from the pool its pool.
 void vulkan_free_ds(struct wlr_vk_renderer *renderer,

@@ -23,6 +23,8 @@
 #include "render/vulkan/shaders/common.vert.h"
 #include "render/vulkan/shaders/texture.frag.h"
 #include "render/vulkan/shaders/quad.frag.h"
+#include "render/vulkan/shaders/postprocess.vert.h"
+#include "render/vulkan/shaders/postprocess.frag.h"
 #include <wlr/types/wlr_buffer.h>
 
 // TODO:
@@ -82,8 +84,7 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
 	mat4[3][3] = 1.f;
 }
 
-struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(
-		struct wlr_vk_renderer *renderer, VkDescriptorSet *ds) {
+struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *renderer, VkDescriptorSet *ds) {
 	VkResult res;
 	VkDescriptorSetAllocateInfo ds_info = {0};
 	ds_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -407,6 +408,8 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyBuffer(dev, buffer->host_uv, NULL);
 	vkFreeMemory(dev, buffer->host_uv_mem, NULL);
 
+	vkDestroyDescriptorPool(dev, buffer->input_attach_dpool, NULL);
+
 	for (size_t i = 0u; i < buffer->mem_count; ++i) {
 		vkFreeMemory(dev, buffer->memories[i], NULL);
 	}
@@ -687,6 +690,50 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	wl_signal_add(&wlr_buffer->events.destroy, &buffer->buffer_destroy);
 	wl_list_insert(&renderer->render_buffers, &buffer->link);
 
+	// Descriptor pool for passing intermediate image as input attachment to second subpass
+	VkDescriptorPoolSize dpool_size = {
+		.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.descriptorCount = 1,
+	};
+
+	VkDescriptorPoolCreateInfo dpool_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.poolSizeCount = 1,
+		.pPoolSizes = &dpool_size,
+		.maxSets = 1,
+	};
+
+	res = vkCreateDescriptorPool(dev, &dpool_info, NULL, &buffer->input_attach_dpool);
+	assert(res == VK_SUCCESS);
+
+	// Create descriptors for input attachment
+	VkDescriptorSetAllocateInfo descriptor_alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = buffer->input_attach_dpool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &renderer->postprocess_ds_layout,
+	};
+	res = vkAllocateDescriptorSets(dev, &descriptor_alloc_info, &buffer->postprocess_set);
+	assert(res == VK_SUCCESS);
+
+	// Write image views to subpass descriptors
+	VkDescriptorImageInfo descriptor_image_info = {
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.imageView = buffer->intermediate_view,
+		.sampler = VK_NULL_HANDLE,
+	};
+
+	VkWriteDescriptorSet write_descriptor_set = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = buffer->postprocess_set,
+		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.descriptorCount = 1,
+		.dstBinding = 0,
+		.pImageInfo = &descriptor_image_info,
+	};
+
+	vkUpdateDescriptorSets(dev, 1, &write_descriptor_set, 0, NULL);
+
 	return buffer;
 
 error_depth_view:
@@ -783,6 +830,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
+	struct wlr_vk_render_format_setup *setup = renderer->current_render_buffer->render_setup;
 
 	VkCommandBuffer render_cb = renderer->cb;
 	VkCommandBuffer pre_cb = vulkan_record_stage_cb(renderer);
@@ -793,6 +841,10 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 
 	// Move to next subpass
 	vkCmdNextSubpass(render_cb, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(render_cb, VK_PIPELINE_BIND_POINT_GRAPHICS, setup->postprocess_pipe);;
+	vkCmdBindDescriptorSets(render_cb, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->postprocess_pipe_layout,
+		0, 1, &renderer->current_render_buffer->postprocess_set, 0, NULL);
+	vkCmdDraw(render_cb, 4, 1, 0, 0);
 
 	vkCmdEndRenderPass(render_cb);
 
@@ -1207,6 +1259,7 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 	vkDestroyFence(dev->dev, renderer->fence, NULL);
 	vkDestroyPipelineLayout(dev->dev, renderer->pipe_layout, NULL);
 	vkDestroyDescriptorSetLayout(dev->dev, renderer->ds_layout, NULL);
+	vkDestroyDescriptorSetLayout(dev->dev, renderer->postprocess_ds_layout, NULL);
 	vkDestroySampler(dev->dev, renderer->sampler, NULL);
 	vkDestroyCommandPool(dev->dev, renderer->command_pool, NULL);
 
@@ -1498,6 +1551,50 @@ static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
 	return true;
 }
 
+// Creates the descriptor set layouts and pipeline layout for the postprocess subpass
+static bool init_postprocess_layout(struct wlr_vk_renderer *renderer,
+		VkDescriptorSetLayout *out_ds_layout, VkPipelineLayout *out_pipe_layout) {
+	VkResult res;
+	VkDevice dev = renderer->dev->dev;
+
+	// layouts
+	// descriptor set
+	VkDescriptorSetLayoutBinding ds_binding = {
+		.binding = 0,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	};
+
+	VkDescriptorSetLayoutCreateInfo ds_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = 1,
+		.pBindings = &ds_binding,
+	};
+
+	res = vkCreateDescriptorSetLayout(dev, &ds_info, NULL, out_ds_layout);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkCreateDescriptorSetLayout", res);
+		return false;
+	}
+
+	// pipeline layout
+	VkPipelineLayoutCreateInfo pl_info = {0};
+	pl_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pl_info.setLayoutCount = 1;
+	pl_info.pSetLayouts = out_ds_layout;
+
+	res = vkCreatePipelineLayout(dev, &pl_info, NULL, out_pipe_layout);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkCreatePipelineLayout", res);
+		return false;
+	}
+
+	// The descriptors will be created in create_render_buffer, since they are unique for each framebuffer
+
+	return true;
+}
+
 // Initializes the pipeline for rendering textures and using the given
 // VkRenderPass and VkPipelineLayout.
 static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
@@ -1717,6 +1814,103 @@ static void init_quad_pipeline(struct wlr_vk_renderer *renderer,
 	assert(res == VK_SUCCESS);
 }
 
+static void init_postprocess_pipeline(struct wlr_vk_renderer *renderer,
+		VkRenderPass render_pass, VkPipelineLayout pipe_layout, VkPipeline *pipe) {
+	VkDevice dev = renderer->dev->dev;
+
+	// shaders
+	VkPipelineShaderStageCreateInfo vert_stage = {
+		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		NULL, 0, VK_SHADER_STAGE_VERTEX_BIT, renderer->postprocess_vert_module,
+		"main", NULL
+	};
+
+	VkPipelineShaderStageCreateInfo frag_stage = {
+		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		NULL, 0, VK_SHADER_STAGE_FRAGMENT_BIT, renderer->postprocess_frag_module,
+		"main", NULL
+	};
+
+	VkPipelineShaderStageCreateInfo postprocess_stages[] = {vert_stage, frag_stage};
+
+	// info
+	VkPipelineInputAssemblyStateCreateInfo assembly = {0};
+	assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+
+	VkPipelineRasterizationStateCreateInfo rasterization = {0};
+	rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterization.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterization.cullMode = VK_CULL_MODE_NONE;
+	rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterization.lineWidth = 1.f;
+
+	VkPipelineColorBlendAttachmentState blend_attachment = {0};
+	blend_attachment.blendEnable = VK_TRUE;
+	// we generally work with pre-multiplied alpha
+	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+	blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+	blend_attachment.colorWriteMask =
+		VK_COLOR_COMPONENT_R_BIT |
+		VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT;
+
+	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
+
+	VkPipelineColorBlendStateCreateInfo blend = {0};
+	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
+	blend.pAttachments = blend_attachments;
+
+
+	VkPipelineMultisampleStateCreateInfo multisample = {0};
+	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	VkPipelineViewportStateCreateInfo viewport = {0};
+	viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewport.viewportCount = 1;
+	viewport.scissorCount = 1;
+
+	VkDynamicState dynStates[2] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo dynamic = {0};
+	dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamic.pDynamicStates = dynStates;
+	dynamic.dynamicStateCount = 2;
+
+	VkPipelineVertexInputStateCreateInfo vertex = {0};
+	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+	VkGraphicsPipelineCreateInfo pinfo = {0};
+	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pinfo.layout = pipe_layout;
+	pinfo.renderPass = render_pass;
+	pinfo.subpass = 1;
+	pinfo.stageCount = 2;
+	pinfo.pStages = postprocess_stages;
+
+	pinfo.pInputAssemblyState = &assembly;
+	pinfo.pRasterizationState = &rasterization;
+	pinfo.pColorBlendState = &blend;
+	pinfo.pMultisampleState = &multisample;
+	pinfo.pViewportState = &viewport;
+	pinfo.pDynamicState = &dynamic;
+	pinfo.pVertexInputState = &vertex;
+
+	VkPipelineCache cache = VK_NULL_HANDLE;
+	VkResult res = vkCreateGraphicsPipelines(dev, cache, 1, &pinfo, NULL, pipe);
+
+	assert(res == VK_SUCCESS);
+}
+
 // Creates static render data, such as sampler, layouts and shader modules
 // for the given rednerer.
 // Cleanup is done by destroying the renderer.
@@ -1749,6 +1943,11 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 		return false;
 	}
 
+	if (!init_postprocess_layout(renderer, &renderer->postprocess_ds_layout,
+			&renderer->postprocess_pipe_layout)) {
+		return false;
+	}
+
 	// load vert module and tex frag module since they are needed to
 	// initialize the tex pipeline
 	VkShaderModuleCreateInfo sinfo = {0};
@@ -1776,6 +1975,24 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->quad_frag_module);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("Failed to create quad fragment shader module", res);
+		return false;
+	}
+
+	// postprocess vert
+	sinfo.codeSize = sizeof(postprocess_vert_data);
+	sinfo.pCode = postprocess_vert_data;
+	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_vert_module);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("Failed to create postprocess vertex shader module", res);
+		return false;
+	}
+
+	// postprocess frag
+	sinfo.codeSize = sizeof(postprocess_frag_data);
+	sinfo.pCode = postprocess_frag_data;
+	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_frag_module);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("Failed to create postprocess fragment shader module", res);
 		return false;
 	}
 
@@ -1951,8 +2168,10 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		goto error;
 	}
 
-	// No error checking because this function just dies on error
+	// No error checking because these just die on error
 	init_quad_pipeline(renderer, setup->render_pass, renderer->pipe_layout, &setup->quad_pipe);
+	init_postprocess_pipeline(renderer, setup->render_pass, renderer->postprocess_pipe_layout,
+		&setup->postprocess_pipe);
 
 	wl_list_insert(&renderer->render_format_setups, &setup->link);
 	return setup;
