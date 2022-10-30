@@ -587,7 +587,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	create_image(renderer, DEPTH_FORMAT,
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT,
 	        dmabuf.width, dmabuf.height,
-	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+	        | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
 	        &buffer->depth);
 
 	VkMemoryRequirements depth_mem_reqs;
@@ -798,9 +799,9 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	renderer->scissor = rect;
 
 	VkClearValue clear_values[3];
-	clear_values[2].color.float32[0] = 0.0;
-	clear_values[2].color.float32[1] = 0.0;
-	clear_values[2].color.float32[2] = 0.0;
+	clear_values[0].color.float32[0] = 0.0;
+	clear_values[0].color.float32[1] = 0.0;
+	clear_values[0].color.float32[2] = 0.0;
 	clear_values[1].depthStencil.depth = 1.0;
 	clear_values[1].depthStencil.stencil = 0;
 	clear_values[2].color.float32[0] = 0.0;
@@ -1676,9 +1677,9 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 
 	VkPipelineDepthStencilStateCreateInfo depth_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
+		.depthTestEnable = VK_FALSE,
 		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.depthBoundsTestEnable = VK_FALSE,
 		.stencilTestEnable = VK_FALSE,
 	};
