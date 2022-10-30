@@ -279,7 +279,7 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 
 			mat4 view;
 			mat4 projection;
-			glm_perspective(1, (float) output_width / (float) output_height, 0, 10, projection);
+			glm_perspective(1, (float) output_width / (float) output_height, 0, 1, projection);
 
 			vec3 eye = {0, 0, 1000};
 			vec3 center = {0, 0, 0};
@@ -303,6 +303,11 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 			glm_translate(surface->matrix, (vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
+
+			vec4 top_left = {-1, 1, 0, 1};
+			vec4 dst;
+			glm_mat4_mulv(surface->matrix, top_left, dst);
+			printf("top left goes to %f %f %f %f\n", dst[0], dst[1], dst[2], dst[3]);
 		} else {
 			// First we translate ourselves relative to toplevel, then apply toplevel transform
 			// This allows for child transforms to be relative to parent transform

@@ -441,7 +441,10 @@ VkImage vulkan_import_dmabuf(struct wlr_vk_renderer *renderer,
 	img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	img_info.extent = (VkExtent3D) { attribs->width, attribs->height, 1 };
 	img_info.usage = for_render ?
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT :
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+		| VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+		| VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+		:
 		VK_IMAGE_USAGE_SAMPLED_BIT;
 	if (disjoint) {
 		img_info.flags = VK_IMAGE_CREATE_DISJOINT_BIT;

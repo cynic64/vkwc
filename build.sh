@@ -14,13 +14,13 @@ COMMAND="$WAYLAND_SCANNER private-code \
 echo "XDG shell protocol .c command: $COMMAND"
 $COMMAND
 
-for shader in vulkan/shaders/*
-do
-	vn=$(basename $shader | sed 's/\./_/g')"_data"
-	COMMAND="glslangValidator -V $shader -o render/$shader.h --vn $vn"
-	echo $COMMAND
-	$COMMAND
-done
+#for shader in vulkan/shaders/*
+#do
+#	vn=$(basename $shader | sed 's/\./_/g')"_data"
+#	COMMAND="glslangValidator -V $shader -o render/$shader.h --vn $vn"
+#	echo $COMMAND
+#	$COMMAND
+#done
 
 LIBS="\
         -lm -g

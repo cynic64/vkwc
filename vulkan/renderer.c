@@ -392,6 +392,10 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyImageView(dev, buffer->image_view, NULL);
 	vkDestroyImage(dev, buffer->image, NULL);
 
+	vkDestroyImage(dev, buffer->intermediate, NULL);
+	vkDestroyImageView(dev, buffer->intermediate_view, NULL);
+	vkFreeMemory(dev, buffer->intermediate_mem, NULL);
+
 	vkDestroyImage(dev, buffer->depth, NULL);
 	vkDestroyImageView(dev, buffer->depth_view, NULL);
 	vkFreeMemory(dev, buffer->depth_mem, NULL);
@@ -456,7 +460,7 @@ static void create_image(struct wlr_vk_renderer *renderer,
 
 	VkResult res = vkCreateImage(renderer->dev->dev, &info, NULL, image);
 	if (res != VK_SUCCESS) {
-		fprintf(stderr, "Couldn't create depth buffer image\n");
+		fprintf(stderr, "Couldn't create image\n");
 		exit(1);
 	}
 }
@@ -505,6 +509,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	wlr_log(WLR_DEBUG, "vulkan create_render_buffer: %.4s, %dx%d",
 		(const char*) &dmabuf.format, dmabuf.width, dmabuf.height);
 
+	// This is what gets presented
 	buffer->image = vulkan_import_dmabuf(renderer, &dmabuf,
 		buffer->memories, &buffer->mem_count, true);
 	if (!buffer->image) {
@@ -545,6 +550,36 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		goto error_view;
 	}
 
+	// Create intermediate image
+	create_image(renderer, fmt->format.vk_format,
+	             VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+	             dmabuf.width, dmabuf.height,
+	             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+	             &buffer->intermediate);
+
+	VkMemoryRequirements intermediate_mem_reqs;
+	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->intermediate, &intermediate_mem_reqs);
+	alloc_memory(renderer, intermediate_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->intermediate_mem);
+
+	res = vkBindImageMemory(renderer->dev->dev, buffer->intermediate, buffer->intermediate_mem, 0);
+	assert(res == VK_SUCCESS);
+
+	VkImageViewCreateInfo intermediate_view_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = buffer->intermediate,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = fmt->format.vk_format,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1,
+		}
+	};
+	res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL, &buffer->intermediate_view);
+	assert(res == VK_SUCCESS);
+
 	// Create depth buffer
 	create_image(renderer, DEPTH_FORMAT,
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT,
@@ -552,7 +587,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 	        &buffer->depth);
 
-	// Allocate memory
 	VkMemoryRequirements depth_mem_reqs;
 	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth, &depth_mem_reqs);
 	alloc_memory(renderer, depth_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->depth_mem);
@@ -560,7 +594,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkBindImageMemory(renderer->dev->dev, buffer->depth, buffer->depth_mem, 0);
 	assert(res == VK_SUCCESS);
 
-	// Create image view
 	VkImageViewCreateInfo depth_view_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = buffer->depth,
@@ -628,7 +661,12 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	assert(res == VK_SUCCESS);
 
 	// Create framebuffer
-	VkImageView attachments[] = {buffer->image_view, buffer->depth_view, buffer->uv_view};
+	VkImageView attachments[] = {
+		buffer->intermediate_view,
+		buffer->depth_view,
+		buffer->uv_view,
+		buffer->image_view,
+	};
 	VkFramebufferCreateInfo fb_info = {0};
 	fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	fb_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
@@ -712,7 +750,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	renderer->scissor = rect;
 
 	VkClearValue clear_values[3];
-	clear_values[1].depthStencil.depth = 1;
+	clear_values[1].depthStencil.depth = 1.0;
 	clear_values[1].depthStencil.stencil = 0;
 	clear_values[2].color.float32[0] = 0.0;
 	clear_values[2].color.float32[1] = 0.0;
@@ -752,6 +790,9 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	renderer->render_width = 0u;
 	renderer->render_height = 0u;
 	renderer->bound_pipe = VK_NULL_HANDLE;
+
+	// Move to next subpass
+	vkCmdNextSubpass(render_cb, VK_SUBPASS_CONTENTS_INLINE);
 
 	vkCmdEndRenderPass(render_cb);
 
@@ -1571,6 +1612,111 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	return true;
 }
 
+static void init_quad_pipeline(struct wlr_vk_renderer *renderer,
+		VkRenderPass render_pass, VkPipelineLayout pipe_layout, VkPipeline *pipe) {
+	VkDevice dev = renderer->dev->dev;
+
+	// shaders
+	VkPipelineShaderStageCreateInfo vert_stage = {
+		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		NULL, 0, VK_SHADER_STAGE_VERTEX_BIT, renderer->vert_module,
+		"main", NULL
+	};
+
+	VkPipelineShaderStageCreateInfo quad_stages[2] = {vert_stage, {
+		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		NULL, 0, VK_SHADER_STAGE_FRAGMENT_BIT,
+		renderer->quad_frag_module, "main", NULL
+	}};
+
+	// info
+	VkPipelineInputAssemblyStateCreateInfo assembly = {0};
+	assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+
+	VkPipelineRasterizationStateCreateInfo rasterization = {0};
+	rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterization.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterization.cullMode = VK_CULL_MODE_NONE;
+	rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterization.lineWidth = 1.f;
+
+	VkPipelineColorBlendAttachmentState blend_attachment = {0};
+	blend_attachment.blendEnable = VK_TRUE;
+	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+	blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+	blend_attachment.colorWriteMask =
+		VK_COLOR_COMPONENT_R_BIT |
+		VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT;
+
+	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
+
+	VkPipelineColorBlendStateCreateInfo blend = {0};
+	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
+	blend.pAttachments = blend_attachments;
+
+	VkPipelineMultisampleStateCreateInfo multisample = {0};
+	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	VkPipelineViewportStateCreateInfo viewport = {0};
+	viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewport.viewportCount = 1;
+	viewport.scissorCount = 1;
+
+	VkDynamicState dynStates[2] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo dynamic = {0};
+	dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamic.pDynamicStates = dynStates;
+	dynamic.dynamicStateCount = 2;
+
+	VkPipelineVertexInputStateCreateInfo vertex = {0};
+	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+	VkPipelineDepthStencilStateCreateInfo depth_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		.depthBoundsTestEnable = VK_FALSE,
+		.stencilTestEnable = VK_FALSE,
+	};
+
+	VkGraphicsPipelineCreateInfo pinfo = {0};
+	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pinfo.layout = pipe_layout;
+	pinfo.renderPass = render_pass;
+	pinfo.subpass = 0;
+	pinfo.stageCount = 2;
+	pinfo.pStages = quad_stages;
+
+	pinfo.pInputAssemblyState = &assembly;
+	pinfo.pRasterizationState = &rasterization;
+	pinfo.pColorBlendState = &blend;
+	pinfo.pMultisampleState = &multisample;
+	pinfo.pViewportState = &viewport;
+	pinfo.pDynamicState = &dynamic;
+	pinfo.pVertexInputState = &vertex;
+
+	pinfo.pDepthStencilState = &depth_info;
+
+	// NOTE: use could use a cache here for faster loading
+	// store it somewhere like $XDG_CACHE_HOME/wlroots/vk_pipe_cache.bin
+	VkPipelineCache cache = VK_NULL_HANDLE;
+	VkResult res = vkCreateGraphicsPipelines(dev, cache, 1, &pinfo, NULL, pipe);
+	assert(res == VK_SUCCESS);
+}
+
 // Creates static render data, such as sampler, layouts and shader modules
 // for the given rednerer.
 // Cleanup is done by destroying the renderer.
@@ -1657,23 +1803,22 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	VkDevice dev = renderer->dev->dev;
 	VkResult res;
 
-	// Desktop out
-	VkAttachmentDescription attachment = {0};
-	attachment.format = format;
-	attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-	attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachment.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-	attachment.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+	// Intermediate
+	VkAttachmentDescription intermediate_attach = {
+		.format = format,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	};
 
 	// Depth
 	VkAttachmentDescription depth_attach = {
 		.format = DEPTH_FORMAT,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1690,9 +1835,29 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
-	VkAttachmentReference color_ref = {0};
-	color_ref.attachment = 0u;
-	color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	// Desktop out
+	VkAttachmentDescription output_attach = {
+		.format = format,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_GENERAL,
+		.finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+	};
+
+	// In the first subpass, the intermediate attachment is used as an output
+	VkAttachmentReference intermediate_out_ref = {
+		.attachment = 0,
+		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	};
+
+	// Then it is used as an input, so we have to change the layout
+	VkAttachmentReference intermediate_in_ref = {
+		.attachment = 0,
+		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
 
 	VkAttachmentReference depth_ref = {
 		.attachment = 1,
@@ -1704,15 +1869,33 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
-	VkAttachmentReference color_attachments[] = {color_ref, uv_attach_ref};
+	VkAttachmentReference output_ref = {
+		.attachment = 3,
+		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	};
 
-	VkSubpassDescription subpass = {0};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = sizeof(color_attachments) / sizeof(color_attachments[0]);
-	subpass.pColorAttachments = color_attachments;
-	subpass.pDepthStencilAttachment = &depth_ref;
+	VkAttachmentReference render_attachments[] = {intermediate_out_ref, uv_attach_ref};
 
-	VkSubpassDependency deps[2] = {0};
+	VkSubpassDescription render_subpass = {
+		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+		.colorAttachmentCount = sizeof(render_attachments) / sizeof(render_attachments[0]),
+		.pColorAttachments = render_attachments,
+		.pDepthStencilAttachment = &depth_ref,
+	};
+
+	VkSubpassDescription postprocess_subpass = {
+		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+		.inputAttachmentCount = 1,
+		.pInputAttachments = &intermediate_in_ref,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &output_ref,
+	};
+
+	VkSubpassDescription subpasses[] = {render_subpass, postprocess_subpass};
+
+	VkSubpassDependency deps[3] = {0};
+	// I think there's multiple things rolled into one here. Among other things, vertex buffer reads
+	// wait on transfer writes and texture reads wait on color attachment output
 	deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	deps[0].srcStageMask = VK_PIPELINE_STAGE_HOST_BIT |
 		VK_PIPELINE_STAGE_TRANSFER_BIT |
@@ -1728,6 +1911,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
 		VK_ACCESS_SHADER_READ_BIT;
 
+	// Memory reads and writes must wait on this frame finishing rendering
 	deps[1].srcSubpass = 0;
 	deps[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -1737,15 +1921,23 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	deps[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT |
 		VK_ACCESS_MEMORY_READ_BIT;
 
-	VkAttachmentDescription attachments[] = {attachment, depth_attach, uv_attach};
+	// Color reads in the 2nd subpass must wait on color writes in the first
+	deps[2].srcSubpass = 0;
+	deps[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	deps[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	deps[2].dstSubpass = 1;
+	deps[2].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+	deps[2].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	VkAttachmentDescription attachments[] = {intermediate_attach, depth_attach, uv_attach, output_attach};
 
 	VkRenderPassCreateInfo rp_info = {0};
 	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	rp_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
 	rp_info.pAttachments = attachments;
-	rp_info.subpassCount = 1;
-	rp_info.pSubpasses = &subpass;
-	rp_info.dependencyCount = 2u;
+	rp_info.subpassCount = sizeof(subpasses) / sizeof(subpasses[0]);
+	rp_info.pSubpasses = subpasses;
+	rp_info.dependencyCount = sizeof(deps) / sizeof(deps[0]);
 	rp_info.pDependencies = deps;
 
 	res = vkCreateRenderPass(dev, &rp_info, NULL, &setup->render_pass);
@@ -1755,112 +1947,12 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		return NULL;
 	}
 
-	if (!init_tex_pipeline(renderer, setup->render_pass, renderer->pipe_layout,
-			&setup->tex_pipe)) {
+	if (!init_tex_pipeline(renderer, setup->render_pass, renderer->pipe_layout, &setup->tex_pipe)) {
 		goto error;
 	}
 
-	VkPipelineShaderStageCreateInfo vert_stage = {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_VERTEX_BIT, renderer->vert_module,
-		"main", NULL
-	};
-
-	VkPipelineShaderStageCreateInfo quad_stages[2] = {vert_stage, {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_FRAGMENT_BIT,
-		renderer->quad_frag_module, "main", NULL
-	}};
-
-	// info
-	VkPipelineInputAssemblyStateCreateInfo assembly = {0};
-	assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-
-	VkPipelineRasterizationStateCreateInfo rasterization = {0};
-	rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterization.polygonMode = VK_POLYGON_MODE_FILL;
-	rasterization.cullMode = VK_CULL_MODE_NONE;
-	rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-	rasterization.lineWidth = 1.f;
-
-	VkPipelineColorBlendAttachmentState blend_attachment = {0};
-	blend_attachment.blendEnable = VK_TRUE;
-	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-	blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
-	blend_attachment.colorWriteMask =
-		VK_COLOR_COMPONENT_R_BIT |
-		VK_COLOR_COMPONENT_G_BIT |
-		VK_COLOR_COMPONENT_B_BIT |
-		VK_COLOR_COMPONENT_A_BIT;
-
-	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
-
-	VkPipelineColorBlendStateCreateInfo blend = {0};
-	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
-	blend.pAttachments = blend_attachments;
-
-	VkPipelineMultisampleStateCreateInfo multisample = {0};
-	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-	VkPipelineViewportStateCreateInfo viewport = {0};
-	viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewport.viewportCount = 1;
-	viewport.scissorCount = 1;
-
-	VkDynamicState dynStates[2] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR,
-	};
-	VkPipelineDynamicStateCreateInfo dynamic = {0};
-	dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamic.pDynamicStates = dynStates;
-	dynamic.dynamicStateCount = 2;
-
-	VkPipelineVertexInputStateCreateInfo vertex = {0};
-	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-	VkPipelineDepthStencilStateCreateInfo depth_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		.depthBoundsTestEnable = VK_FALSE,
-		.stencilTestEnable = VK_FALSE,
-	};
-
-	VkGraphicsPipelineCreateInfo pinfo = {0};
-	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pinfo.layout = renderer->pipe_layout;
-	pinfo.renderPass = setup->render_pass;
-	pinfo.subpass = 0;
-	pinfo.stageCount = 2;
-	pinfo.pStages = quad_stages;
-
-	pinfo.pInputAssemblyState = &assembly;
-	pinfo.pRasterizationState = &rasterization;
-	pinfo.pColorBlendState = &blend;
-	pinfo.pMultisampleState = &multisample;
-	pinfo.pViewportState = &viewport;
-	pinfo.pDynamicState = &dynamic;
-	pinfo.pVertexInputState = &vertex;
-
-	pinfo.pDepthStencilState = &depth_info;
-
-	// NOTE: use could use a cache here for faster loading
-	// store it somewhere like $XDG_CACHE_HOME/wlroots/vk_pipe_cache.bin
-	VkPipelineCache cache = VK_NULL_HANDLE;
-	res = vkCreateGraphicsPipelines(dev, cache, 1, &pinfo, NULL, &setup->quad_pipe);
-	if (res != VK_SUCCESS) {
-		wlr_log(WLR_ERROR, "failed to create vulkan quad pipeline: %d", res);
-		goto error;
-	}
+	// No error checking because this function just dies on error
+	init_quad_pipeline(renderer, setup->render_pass, renderer->pipe_layout, &setup->quad_pipe);
 
 	wl_list_insert(&renderer->render_format_setups, &setup->link);
 	return setup;
