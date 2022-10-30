@@ -10,6 +10,8 @@
 #include <wlr/render/drm_format_set.h>
 #include <wlr/render/interface.h>
 
+#define WLR_VK_RENDER_MODE_COUNT 3
+
 struct wlr_vk_descriptor_pool;
 
 // Central vulkan state that should only be needed once per compositor.
@@ -204,6 +206,9 @@ struct wlr_vk_renderer {
 
 	VkDescriptorSetLayout postprocess_ds_layout;
 	VkPipelineLayout postprocess_pipe_layout;
+
+	// 0 = color, 1 = depth, 2 = uv, anything else = pink screen
+	int render_mode;
 
 	VkFence fence;
 

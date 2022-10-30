@@ -250,7 +250,7 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces,
 	wlr_renderer_begin(renderer, output->width, output->height);
 
 	wlr_renderer_scissor(renderer, NULL);
-	wlr_renderer_clear(renderer, (float[4]){ 0.1, 0.0, 0.2, 1.0 });
+	//wlr_renderer_clear(renderer, (float[4]){ 0.1, 0.0, 0.2, 1.0 });
 
 	// Actually draw stuff
 	pixman_region32_t full_region;

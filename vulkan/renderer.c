@@ -695,7 +695,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	// Descriptor pool for passing intermediate image as input attachment to second subpass
 	VkDescriptorPoolSize dpool_size = {
 		.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.descriptorCount = 1,
+		.descriptorCount = 3,
 	};
 
 	VkDescriptorPoolCreateInfo dpool_info = {
@@ -716,25 +716,55 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		.pSetLayouts = &renderer->postprocess_ds_layout,
 	};
 	res = vkAllocateDescriptorSets(dev, &descriptor_alloc_info, &buffer->postprocess_set);
-	assert(res == VK_SUCCESS);
+	if (res != VK_SUCCESS) {
+		wlr_vk_error("vkAllocateDescriptorSets", res);
+		exit(1);
+	}
 
 	// Write image views to subpass descriptors
-	VkDescriptorImageInfo descriptor_image_info = {
+	VkDescriptorImageInfo descriptor_color_info = {
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.imageView = buffer->intermediate_view,
+		.sampler = VK_NULL_HANDLE,
+	};
+	VkDescriptorImageInfo descriptor_depth_info = {
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.imageView = buffer->depth_view,
+		.sampler = VK_NULL_HANDLE,
+	};
+	VkDescriptorImageInfo descriptor_uv_info = {
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		.imageView = buffer->uv_view,
 		.sampler = VK_NULL_HANDLE,
 	};
 
-	VkWriteDescriptorSet write_descriptor_set = {
+	VkWriteDescriptorSet write_color_set = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		.dstSet = buffer->postprocess_set,
 		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
 		.descriptorCount = 1,
+		.pImageInfo = &descriptor_color_info,
 		.dstBinding = 0,
-		.pImageInfo = &descriptor_image_info,
 	};
+	VkWriteDescriptorSet write_depth_set = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = buffer->postprocess_set,
+		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.descriptorCount = 1,
+		.pImageInfo = &descriptor_depth_info,
+		.dstBinding = 1,
+	};
+	VkWriteDescriptorSet write_uv_set = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = buffer->postprocess_set,
+		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.descriptorCount = 1,
+		.pImageInfo = &descriptor_uv_info,
+		.dstBinding = 2,
+	};
+	VkWriteDescriptorSet write_sets[] = {write_color_set, write_depth_set, write_uv_set};
 
-	vkUpdateDescriptorSets(dev, 1, &write_descriptor_set, 0, NULL);
+	vkUpdateDescriptorSets(dev, sizeof(write_sets) / sizeof(write_sets[0]), write_sets, 0, NULL);
 
 	return buffer;
 
@@ -798,15 +828,22 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	VkRect2D rect = {{0, 0}, {width, height}};
 	renderer->scissor = rect;
 
-	VkClearValue clear_values[3];
+	VkClearValue clear_values[4];
+	// intermediate color
 	clear_values[0].color.float32[0] = 0.0;
 	clear_values[0].color.float32[1] = 0.0;
 	clear_values[0].color.float32[2] = 0.0;
+	// depth
 	clear_values[1].depthStencil.depth = 1.0;
 	clear_values[1].depthStencil.stencil = 0;
+	// uv
 	clear_values[2].color.float32[0] = 0.0;
 	clear_values[2].color.float32[1] = 0.0;
 	clear_values[2].color.float32[2] = 0.0;
+	// postprocess out
+	clear_values[3].color.float32[0] = 0.0;
+	clear_values[3].color.float32[1] = 0.0;
+	clear_values[3].color.float32[2] = 0.0;
 
 	VkRenderPassBeginInfo rp_info = {0};
 	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -846,9 +883,11 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 
 	// Move to next subpass
 	vkCmdNextSubpass(render_cb, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(render_cb, VK_PIPELINE_BIND_POINT_GRAPHICS, setup->postprocess_pipe);;
+	vkCmdBindPipeline(render_cb, VK_PIPELINE_BIND_POINT_GRAPHICS, setup->postprocess_pipe);
 	vkCmdBindDescriptorSets(render_cb, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->postprocess_pipe_layout,
 		0, 1, &renderer->current_render_buffer->postprocess_set, 0, NULL);
+	vkCmdPushConstants(render_cb, renderer->postprocess_pipe_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+		sizeof(renderer->render_mode), &renderer->render_mode);
 	vkCmdDraw(render_cb, 4, 1, 0, 0);
 
 	vkCmdEndRenderPass(render_cb);
@@ -1563,31 +1602,48 @@ static bool init_postprocess_layout(struct wlr_vk_renderer *renderer,
 	VkDevice dev = renderer->dev->dev;
 
 	// layouts
-	// descriptor set
-	VkDescriptorSetLayoutBinding ds_binding = {
+	VkDescriptorSetLayoutBinding color_binding = {
 		.binding = 0,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 	};
+	VkDescriptorSetLayoutBinding depth_binding = {
+		.binding = 1,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	};
+	VkDescriptorSetLayoutBinding uv_binding = {
+		.binding = 2,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	};
+	VkDescriptorSetLayoutBinding bindings[] = {color_binding, depth_binding, uv_binding};
 
 	VkDescriptorSetLayoutCreateInfo ds_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 1,
-		.pBindings = &ds_binding,
+		.bindingCount = sizeof(bindings) / sizeof(bindings[0]),
+		.pBindings = bindings,
 	};
 
 	res = vkCreateDescriptorSetLayout(dev, &ds_info, NULL, out_ds_layout);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreateDescriptorSetLayout", res);
-		return false;
-	}
+	assert(res == VK_SUCCESS);
+
+	// push constants
+	VkPushConstantRange pc_range = {
+		.size = 4,		// Single int
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	};
 
 	// pipeline layout
 	VkPipelineLayoutCreateInfo pl_info = {0};
 	pl_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pl_info.setLayoutCount = 1;
 	pl_info.pSetLayouts = out_ds_layout;
+	pl_info.pushConstantRangeCount = 1;
+	pl_info.pPushConstantRanges = &pc_range;
 
 	res = vkCreatePipelineLayout(dev, &pl_info, NULL, out_pipe_layout);
 	if (res != VK_SUCCESS) {
@@ -2026,7 +2082,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	VkAttachmentDescription intermediate_attach = {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -2058,7 +2114,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	VkAttachmentDescription output_attach = {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -2066,28 +2122,35 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.finalLayout = VK_IMAGE_LAYOUT_GENERAL,
 	};
 
-	// In the first subpass, the intermediate attachment is used as an output
+	// First subpass outputs
 	VkAttachmentReference intermediate_out_ref = {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
-
-	// Then it is used as an input, so we have to change the layout
-	VkAttachmentReference intermediate_in_ref = {
-		.attachment = 2,
-		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	};
-
 	VkAttachmentReference depth_ref = {
 		.attachment = 1,
 		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 	};
-
 	VkAttachmentReference uv_attach_ref = {
 		.attachment = 2,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
+	// Postprocess inputs - note the different layouts
+	VkAttachmentReference intermediate_in_ref = {
+		.attachment = 0,
+		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+	VkAttachmentReference depth_in_ref = {
+		.attachment = 1,
+		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+	VkAttachmentReference uv_in_ref = {
+		.attachment = 2,
+		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+
+	// Postprocess output
 	VkAttachmentReference output_ref = {
 		.attachment = 3,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -2102,10 +2165,12 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.pDepthStencilAttachment = &depth_ref,
 	};
 
+	VkAttachmentReference postprocess_inputs[] = {intermediate_in_ref, depth_in_ref, uv_in_ref};
+
 	VkSubpassDescription postprocess_subpass = {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-		.inputAttachmentCount = 1,
-		.pInputAttachments = &intermediate_in_ref,
+		.inputAttachmentCount = sizeof(postprocess_inputs) / sizeof(postprocess_inputs[0]),
+		.pInputAttachments = postprocess_inputs,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &output_ref,
 	};
@@ -2140,13 +2205,14 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	deps[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT |
 		VK_ACCESS_MEMORY_READ_BIT;
 
-	// Color reads in the 2nd subpass must wait on color writes in the first
+	// Reads in the postprocess subpass must wait on writes in the first
 	deps[2].srcSubpass = 0;
-	deps[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	deps[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	deps[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+		| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+	deps[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	deps[2].dstSubpass = 1;
 	deps[2].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-	deps[2].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	deps[2].dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 
 	VkAttachmentDescription attachments[] = {intermediate_attach, depth_attach, uv_attach, output_attach};
 
