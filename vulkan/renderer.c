@@ -719,7 +719,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	// Write image views to subpass descriptors
 	VkDescriptorImageInfo descriptor_image_info = {
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		.imageView = buffer->intermediate_view,
+		.imageView = buffer->uv_view,
 		.sampler = VK_NULL_HANDLE,
 	};
 
