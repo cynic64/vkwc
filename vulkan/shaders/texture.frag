@@ -12,7 +12,10 @@ layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec4 out_uv;
 
 void main() {
-	out_color = textureLod(tex, uv, 0);
+	vec4 tex_color = textureLod(tex, uv, 0);
+	if (tex_color.a == 0) discard;
+
+	out_color = tex_color;
 	out_uv = vec4(uv, data.surface_id, 1);
 }
 

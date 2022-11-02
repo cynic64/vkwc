@@ -919,7 +919,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 		acquire_barriers[idx].subresourceRange.layerCount = 1;
 		acquire_barriers[idx].subresourceRange.levelCount = 1;
 
-		// releaes
+		// release
 		release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
 		release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
@@ -1690,11 +1690,11 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	VkPipelineColorBlendAttachmentState blend_attachment = {0};
 	blend_attachment.blendEnable = VK_TRUE;
 	// we generally work with pre-multiplied alpha
-	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-	blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 	blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
 	blend_attachment.colorWriteMask =
 		VK_COLOR_COMPONENT_R_BIT |
