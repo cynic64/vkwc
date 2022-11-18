@@ -195,6 +195,18 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 		};
 	};
 
+	// TODO: Why does this make it crash? :((
+	/*
+	if (surface->body != NULL) {
+		DestroyPhysicsBody(surface->body);
+	}
+	*/
+	if (surface->body != NULL) {
+		surface->body->position.x = 10000;
+		surface->body->position.y = 10000;
+		surface->body->enabled = false;
+	}
+
 	wl_list_remove(&surface->link);
 	wl_list_remove(&surface->destroy.link);
 
@@ -360,7 +372,8 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 	};
 }
 
-void resize_bodies(struct wl_list *surfaces, struct wlr_scene_node *node) {
+// We require the cursor position so we can spawn them wherever the cursor is
+void create_bodies(struct wl_list *surfaces, struct wlr_scene_node *node, int cursor_x, int cursor_y) {
 	if (node->type == WLR_SCENE_NODE_SURFACE) {
 		// Find the Surface this node corresponds to
 		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
@@ -368,16 +381,18 @@ void resize_bodies(struct wl_list *surfaces, struct wlr_scene_node *node) {
 		struct Surface *surface = find_surface(wlr_surface, surfaces);
 
 		if (surface->body == NULL && surface->width >= 1 && surface->height >= 1) {
-			float x = surface->x + surface->x_offset, y = surface->y + surface->y_offset;
+			float x = cursor_x + surface->x + surface->x_offset;
+			float y = cursor_y + surface->y + surface->y_offset;
 			float width = surface->width, height = surface->height;
 			surface->body = CreatePhysicsBodyRectangle((Vector2) {x + width / 2, y + height / 2},
 				width, height, 1);
+			surface->body->restitution = 0;
 		};
 	}
 
 	struct wlr_scene_node *cur;
 	wl_list_for_each(cur, &node->state.children, state.link) {
-		resize_bodies(surfaces, cur);
+		create_bodies(surfaces, cur, cursor_x, cursor_y);
 	};
 }
 
@@ -977,7 +992,7 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	// Update position of floor
 	server->floor->position.x = output->wlr_output->width * 0.5;
 	server->floor->position.y = output->wlr_output->height;
-	resize_bodies(surfaces, root_node);
+	create_bodies(surfaces, root_node, server->cursor->x, server->cursor->y);
 
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene
