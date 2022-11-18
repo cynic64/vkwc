@@ -830,9 +830,10 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 
 	VkClearValue clear_values[4];
 	// intermediate color
-	clear_values[0].color.float32[0] = 0.0;
-	clear_values[0].color.float32[1] = 0.0;
-	clear_values[0].color.float32[2] = 0.0;
+	clear_values[0].color.float32[0] = 0.5;
+	clear_values[0].color.float32[1] = 0.5;
+	clear_values[0].color.float32[2] = 0.5;
+	clear_values[0].color.float32[3] = 1.0;
 	// depth
 	clear_values[1].depthStencil.depth = 1.0;
 	clear_values[1].depthStencil.stencil = 0;

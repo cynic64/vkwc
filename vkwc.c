@@ -42,10 +42,16 @@
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 
+#define PHYSAC_IMPLEMENTATION
+#define PHYSAC_STANDALONE
+#include "physac.h"
+
 #include "vulkan.h"
 #include "render.h"
 #include "util.h"
 #include "render/vulkan.h"
+
+#define PHYSAC_BOUNDARY_THICKNESS	10
 
 /* For brevity's sake, struct members are annotated where they are used. */
 enum CursorMode	{
@@ -134,6 +140,9 @@ struct Server {
 
 	struct wl_listener new_surface;
 	struct wl_list surfaces;
+
+	// We have to update the position of this if the screen size changes
+	PhysicsBody floor;
 };
 
 struct Output {
@@ -210,6 +219,9 @@ static void surface_handle_new(struct wl_listener *listener, void *data) {
 	surface->destroy.notify = surface_handle_destroy;
 	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
 
+	surface->body = NULL;
+	surface->apply_physics = true;
+
 	wl_list_insert(server->surfaces.prev, &surface->link);
 
 	printf("Surface created, xywh: %d %d %d %d\n", wlr_surface->sx, wlr_surface->sy,
@@ -276,7 +288,19 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 		surface->y_rot += surface->y_rot_speed;
 		surface->z_rot += surface->z_rot_speed;
 
-		if (surface->is_toplevel) {
+		if (surface->apply_physics && surface->body != NULL) {
+			surface->x_offset = 0;
+			surface->y_offset = 0;
+			surface->z_offset = 0;
+			surface->x = surface->body->position.x - output_width * 0.5;
+			surface->y = surface->body->position.y - output_height * 0.5;
+			surface->z_rot = surface->body->orient;
+			surface->x_rot = 0;
+			surface->y_rot = 0;
+		}
+
+		// If physics is applied, transforms shouldn't be relative to the toplevel
+		if (surface->is_toplevel || surface->apply_physics) {
 			glm_mat4_identity(surface->matrix);
 
 			mat4 view;
@@ -333,6 +357,27 @@ void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int ou
 	struct wlr_scene_node *cur;
 	wl_list_for_each(cur, &node->state.children, state.link) {
 		calc_matrices(surfaces, cur, output_width, output_height);
+	};
+}
+
+void resize_bodies(struct wl_list *surfaces, struct wlr_scene_node *node) {
+	if (node->type == WLR_SCENE_NODE_SURFACE) {
+		// Find the Surface this node corresponds to
+		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, surfaces);
+
+		if (surface->body == NULL && surface->width >= 1 && surface->height >= 1) {
+			float x = surface->x + surface->x_offset, y = surface->y + surface->y_offset;
+			float width = surface->width, height = surface->height;
+			surface->body = CreatePhysicsBodyRectangle((Vector2) {x + width / 2, y + height / 2},
+				width, height, 1);
+		};
+	}
+
+	struct wlr_scene_node *cur;
+	wl_list_for_each(cur, &node->state.children, state.link) {
+		resize_bodies(surfaces, cur);
 	};
 }
 
@@ -929,6 +974,11 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	calc_placements(surfaces, root_node, 0, 0);
 	calc_matrices(surfaces, root_node, output->wlr_output->width, output->wlr_output->height);
 
+	// Update position of floor
+	server->floor->position.x = output->wlr_output->width * 0.5;
+	server->floor->position.y = output->wlr_output->height;
+	resize_bodies(surfaces, root_node);
+
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene
 	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(scene, output->wlr_output);
@@ -1369,6 +1419,14 @@ int main(int argc, char	*argv[]) {
 			execl("/bin/sh", "/bin/sh", "-c", startup_cmd, (void *)NULL);
 		}
 	}
+
+	// Start the Physac physics engine
+	// Instead of trying to constantly adjust to the screen size, we'll just make it a 1000x1000 region
+	InitPhysics();
+	// Make the floor
+	server.floor = CreatePhysicsBodyRectangle((Vector2) {0, 0}, 10000, PHYSAC_BOUNDARY_THICKNESS, 10);
+	server.floor->enabled = false;
+
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting	the backend rigged up all of the necessary event
 	 * loop	configuration to listen	to libinput events, DRM	events,	generate
@@ -1378,6 +1436,7 @@ int main(int argc, char	*argv[]) {
 	wl_display_run(server.wl_display);
 
 	/* Once	wl_display_run returns,	we shut	down the server. */
+	ClosePhysics();
 	wl_display_destroy_clients(server.wl_display);
 	wl_display_destroy(server.wl_display);
 	return 0;

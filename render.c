@@ -46,6 +46,9 @@
 
 #define	M_PI 3.14159265358979323846
 
+#define PHYSAC_STANDALONE
+#include "physac.h"
+
 struct VertPcrData {
 	float mat4[4][4];
 	float uv_off[2];
@@ -203,6 +206,7 @@ static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, vo
 }
 
 // surfaces should be a list of struct Surface, defined in vkwc.c
+// physics_width and physics_height are needed to transform coordinates from the physics engine to screenspace.
 bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
 	// If I	don't do this, windows aren't re-drawn when the	cursor moves.
 	// So just damage everything instead. It's inefficient, but I don't care for now.
@@ -254,6 +258,39 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces,
 	// Draw frame counter
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
 	render_rect_simple(renderer, color, 10,	10, 10, 10);
+
+	// Draw physics bodies
+	int body_count = GetPhysicsBodiesCount();
+	for (int i = 0; i < body_count; i++) {
+		PhysicsBody body = GetPhysicsBody(i);
+
+		float color[4] = { i % 2, i % 3 == 0, i % 5 == 0, 1 };
+		if (body->shape.type == PHYSICS_POLYGON) {
+			struct PolygonData *polygon_data = &body->shape.vertexData;
+			int min_x = INT32_MAX, min_y = INT32_MAX, max_x = INT32_MIN, max_y = INT32_MIN;
+
+			for (int i = 0; i < polygon_data->vertexCount; i++) {
+				int x = polygon_data->positions[i].x, y = polygon_data->positions[i].y;
+				if (x < min_x) min_x = x;
+				if (y < min_y) min_y = y;
+				if (x > max_x) max_x = x;
+				if (y > max_y) max_y = y;
+			}
+
+			min_x += body->position.x;
+			max_x += body->position.x;
+			min_y += body->position.y;
+			max_y += body->position.y;
+
+			printf("Polygon %d xywh: %d %d %d %d\n", i, min_x, min_y, max_x - min_x, max_y - min_y);
+			if (max_x - min_x < 1 || max_y - min_y < 1) continue;
+
+			int center_x = (min_x + max_x) / 2;
+			int center_y = (min_y + max_y) / 2;
+
+			render_rect_simple(renderer, color, center_x - 5, center_y - 5, 10, 10);
+		}
+	}
 
 	// Actually draw stuff
 	pixman_region32_t full_region;

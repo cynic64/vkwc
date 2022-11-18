@@ -4,6 +4,11 @@
 #include <cglm/cglm.h>
 #include <wlr/types/wlr_surface.h>
 
+#ifndef PHYSAC_IMPLEMENTATION
+#define PHYSAC_STANDALONE
+#include "physac.h"
+#endif
+
 struct Surface {
 	struct Server *server;
 	struct wl_list link;
@@ -11,7 +16,8 @@ struct Surface {
 	struct wlr_surface *wlr_surface;
 	// Is a float since it gets written to the depth buffer
 	float id;
-	// This points to the Surface data associated with the "main window" a surface belongs to. So all the titlebars and such can easily access the surface data of the main window.
+	// This points to the Surface data associated with the "main window" a surface belongs to. So all the
+	// titlebars and such can easily access the surface data of the main window.
 	struct Surface *toplevel;
 	bool is_toplevel;
 
@@ -23,6 +29,10 @@ struct Surface {
 	double x_rot_speed, y_rot_speed, z_rot_speed;
 	// These get added to the scene node position
 	double x_offset, y_offset, z_offset;
+
+	PhysicsBody body;
+	// Physics will only be applied to the surface if this is enabled
+	bool apply_physics;
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);
