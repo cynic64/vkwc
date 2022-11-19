@@ -1435,10 +1435,9 @@ int main(int argc, char	*argv[]) {
 		}
 	}
 
-	// Start the Physac physics engine
-	// Instead of trying to constantly adjust to the screen size, we'll just make it a 1000x1000 region
+	// Start the physics engine
 	InitPhysics();
-	// Make the floor
+	// Make the floor (it's huge so we don't have to resize it later)
 	server.floor = CreatePhysicsBodyRectangle((Vector2) {0, 0}, 10000, PHYSAC_BOUNDARY_THICKNESS, 10);
 	server.floor->enabled = false;
 
