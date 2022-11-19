@@ -130,8 +130,10 @@ struct Server {
 	uint32_t resize_edges;
 	struct Surface *grabbed_surface;
 
-	struct wlr_output_layout *output_layout;
-	struct wl_list outputs;
+	struct wlr_output *output;
+	struct wlr_output_layout *output_layout;	// Even though we only support one output, the screencopy API
+							// requires this
+	struct wl_listener output_frame;
 	struct wl_listener new_output;
 
 	struct wl_listener new_xwayland_surface;
@@ -143,13 +145,6 @@ struct Server {
 
 	// We have to update the position of this if the screen size changes
 	PhysicsBody floor;
-};
-
-struct Output {
-	struct wl_list link;
-	struct Server *server;
-	struct wlr_output *wlr_output;
-	struct wl_listener frame;
 };
 
 struct View {
@@ -406,13 +401,12 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	// the render buffer's dimensions match those of the first output, which isn't a great way but works for now.
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
 	struct wlr_vk_render_buffer *render_buffer = NULL;
-	struct Output *output = (struct Output *) server->outputs.next;
-	assert(output != NULL);
+	struct wlr_output *output = server->output;
 
 	struct wlr_vk_render_buffer *cur;
 	wl_list_for_each(cur, &renderer->render_buffers, link) {
-		if (cur->wlr_buffer->width == output->wlr_output->width
-				&& cur->wlr_buffer->height == output->wlr_output->height) {
+		if (cur->wlr_buffer->width == output->width
+				&& cur->wlr_buffer->height == output->height) {
 			if (render_buffer == NULL || render_buffer->frame < cur->frame) {
 				// Always choose the most recent one
 				render_buffer = cur;
@@ -978,25 +972,25 @@ static void handle_cursor_frame(struct wl_listener *listener, void *data) {
 static void handle_output_frame(struct wl_listener *listener, void *data) {
 	/* This	function is called every time an output	is ready to display a frame,
 	 * generally at	the output's refresh rate (e.g.	60Hz). */
-	struct Output *output =	wl_container_of(listener, output, frame);
-	struct wlr_scene *scene	= output->server->scene;
-	struct Server *server = output->server;
+	struct Server *server = wl_container_of(listener, server, output_frame);
+	struct wlr_scene *scene	= server->scene;
+	struct wlr_output *output = server->output;
 
 	// Pre-frame processing
 	struct wlr_scene_node *root_node = &server->scene->node;
 	struct wl_list *surfaces = &server->surfaces;
 	relink_nodes(surfaces, root_node);
 	calc_placements(surfaces, root_node, 0, 0);
-	calc_matrices(surfaces, root_node, output->wlr_output->width, output->wlr_output->height);
+	calc_matrices(surfaces, root_node, output->width, output->height);
 
 	// Update position of floor
-	server->floor->position.x = output->wlr_output->width * 0.5;
-	server->floor->position.y = output->wlr_output->height;
+	server->floor->position.x = output->width * 0.5;
+	server->floor->position.y = output->height;
 	create_bodies(surfaces, root_node, server->cursor->x, server->cursor->y);
 
 	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
 	// It is associated with a scene
-	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(scene, output->wlr_output);
+	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(scene, output);
 
 	/* Render the scene if needed and commit the output */
 	draw_frame(scene_output, &server->surfaces, server->cursor->x, server->cursor->y);
@@ -1016,46 +1010,38 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 	 * monitor) becomes available. */
 	struct Server *server =
 		wl_container_of(listener, server, new_output);
-	struct wlr_output *wlr_output =	data;
+
+	if (server->output != NULL) {
+		fprintf(stderr, "Already have an output! Not adding new one.\n");
+		return;
+	}
+
+	printf("Adding output\n");
+
+	server->output = data;
 
 	/* Configures the output created by the	backend	to use our allocator
 	 * and our renderer. Must be done once,	before commiting the output */
-	wlr_output_init_render(wlr_output, server->allocator, server->renderer);
+	wlr_output_init_render(server->output, server->allocator, server->renderer);
 
 	/* Some	backends don't have modes. DRM+KMS does, and we	need to	set a mode
 	 * before we can use the output. The mode is a tuple of	(width,	height,
 	 * refresh rate), and each monitor supports only a specific set	of modes. We
 	 * just	pick the monitor's preferred mode, a more sophisticated	compositor
 	 * would let the user configure	it. */
-	if (!wl_list_empty(&wlr_output->modes))	{
-		struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
-		wlr_output_set_mode(wlr_output,	mode);
-		wlr_output_enable(wlr_output, true);
-		if (!wlr_output_commit(wlr_output)) {
+	if (!wl_list_empty(&server->output->modes))	{
+		struct wlr_output_mode *mode = wlr_output_preferred_mode(server->output);
+		wlr_output_set_mode(server->output,	mode);
+		wlr_output_enable(server->output, true);
+		if (!wlr_output_commit(server->output)) {
 			return;
 		}
 	}
 
-	/* Allocates and configures our	state for this output */
-	struct Output *output =
-		calloc(1, sizeof(struct	Output));
-	output->wlr_output = wlr_output;
-	output->server = server;
-	/* Sets	up a listener for the frame notify event. */
-	output->frame.notify = handle_output_frame;
-	wl_signal_add(&wlr_output->events.frame, &output->frame);
-	wl_list_insert(&server->outputs, &output->link);
+	wlr_output_layout_add_auto(server->output_layout, server->output);
 
-	/* Adds	this to	the output layout. The add_auto	function arranges outputs
-	 * from	left-to-right in the order they	appear.	A more sophisticated
-	 * compositor would let	the user configure the arrangement of outputs in the
-	 * layout.
-	 *
-	 * The output layout utility automatically adds	a wl_output global to the
-	 * display, which Wayland clients can see to find out information about	the
-	 * output (such	as DPI,	scale factor, manufacturer, etc).
-	 */
-	wlr_output_layout_add_auto(server->output_layout, wlr_output);
+	/* Sets	up a listener for the frame notify event. */
+	wl_signal_add(&server->output->events.frame, &server->output_frame);
 }
 
 static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
@@ -1285,15 +1271,14 @@ int main(int argc, char	*argv[]) {
 	server.new_surface.notify = surface_handle_new;
 	wl_signal_add(&compositor->events.new_surface, &server.new_surface);
 
-	/* Creates an output layout, which a wlroots utility for working with an
-	 * arrangement of screens in a physical	layout.	*/
+	// We only support one output, which will be whichever one is added first.
+	server.output = NULL;
 	server.output_layout = wlr_output_layout_create();
 
-	/* Configure a listener	to be notified when new	outputs	are available on the
-	 * backend. */
-	wl_list_init(&server.outputs);
 	server.new_output.notify = handle_new_output;
 	wl_signal_add(&server.backend->events.new_output, &server.new_output);
+
+	server.output_frame.notify = handle_output_frame;
 
 	/* Create a scene graph. This is a wlroots abstraction that handles all
 	 * rendering and damage	tracking. All the compositor author needs to do
