@@ -243,7 +243,6 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 		render_surface(output, surface);
 		surface_count++;
 	};
-	printf("Total surface count in render.c: %d\n", surface_count);
 
 	//wlr_output_render_software_cursors(output, &damage);
 
