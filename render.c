@@ -241,8 +241,6 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	int surface_count = 0;
 	wl_list_for_each(surface, surfaces, link) {
 		render_surface(output, surface);
-		printf("\tRendering surface at %p, dims %d %d %d %d\n", surface, surface->x, surface->y,
-			surface->width, surface->height);
 		surface_count++;
 	};
 	printf("Total surface count in render.c: %d\n", surface_count);

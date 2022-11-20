@@ -98,7 +98,9 @@ struct Server {
 
 	struct wlr_xdg_shell *xdg_shell;
 	struct wl_listener new_xdg_surface;
-	struct wl_list views;
+	struct wl_listener handle_xdg_map;
+	struct wl_listener handle_new_subsurface;
+	struct wl_listener handle_subsurface_map;
 
 	struct wlr_cursor *cursor;
 	struct wlr_xcursor_manager *cursor_mgr;
@@ -175,55 +177,6 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	free(surface);
 }
 
-static void surface_handle_new(struct wl_listener *listener, void *data) {
-	struct wlr_surface *wlr_surface = data;
-
-	struct Surface *surface = calloc(1, sizeof(struct Surface));
-	memset(surface, 0, sizeof(*surface));
-	surface->wlr_surface = wlr_surface;
-	surface->toplevel = NULL;
-	surface->id = (double) rand() / RAND_MAX;
-
-	struct Server *server;
-	server = wl_container_of(listener, server, new_surface);
-	surface->server = server;
-
-	surface->destroy.notify = surface_handle_destroy;
-	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
-
-	surface->body = NULL;
-	surface->apply_physics = true;
-
-	// When the surface is first created, its dimensions are always 0. So make sure we fill them in later.
-	surface->x = 0;
-	surface->y = 0;
-	surface->width = 0;
-	surface->height = 0;
-	surface->must_set_dims = true;
-
-	wl_list_insert(server->surfaces.prev, &surface->link);
-
-	printf("Surface created, xywh: %d %d %d %d\n", wlr_surface->sx, wlr_surface->sy,
-		wlr_surface->current.width, wlr_surface->current.height);
-}
-
-// Surface dimensions are set after they are created, so we constantly have to check to see if we finally
-// know the dimensions.
-void set_surface_dims(struct wl_list *surfaces) {
-	struct Surface *surface;
-	wl_list_for_each(surface, surfaces, link) {
-		struct wlr_surface *wlr_surface = surface->wlr_surface;
-		if (surface->must_set_dims && wlr_surface->current.width > 0 && wlr_surface->current.height > 0) {
-			surface->x = wlr_surface->sx;
-			surface->y = wlr_surface->sy;
-			surface->width = wlr_surface->current.width;
-			surface->height = wlr_surface->current.height;
-
-			surface->must_set_dims = false;
-		}
-	}
-}
-
 // When windows are resized, their projection matrices in their Surfaces must be updated.
 // This will recalculate the matrices of the specified node and all children
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
@@ -295,6 +248,7 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 				((float) surface->y - toplevel->y) / toplevel->height,
 				0,
 			});
+
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
 				(float) surface->height / toplevel->height, 1});
 		}
@@ -767,7 +721,6 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 
 	// Pre-frame processing
 	struct wl_list *surfaces = &server->surfaces;
-	set_surface_dims(surfaces);
 	calc_matrices(surfaces, output->width, output->height);
 
 	/* Render the scene if needed and commit the output */
@@ -822,14 +775,91 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 	wl_signal_add(&server->output->events.frame, &server->output_frame);
 }
 
+// Allocates a new Surface, zeroing the struct and setting server, wlr_surface, id, and destroy.
+// The user must still set the geometry, physics body, and toplevel.
+static struct Surface *create_surface(struct Server *server, struct wlr_surface *wlr_surface) {
+	struct Surface *surface = calloc(1, sizeof(struct Surface));
+	surface->wlr_surface = wlr_surface;
+	surface->toplevel = NULL;
+	surface->id = (double) rand() / RAND_MAX;
+	surface->server = server;
+
+	wl_list_insert(server->surfaces.prev, &surface->link);
+
+	return surface;
+}
+
+static void handle_xdg_map(struct wl_listener *listener, void *data) {
+	struct Server *server = wl_container_of(listener, server, handle_xdg_map);
+	struct wlr_xdg_surface *xdg_surface = data;
+	struct wlr_surface *wlr_surface = xdg_surface->surface;
+
+	struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+	surface->width = wlr_surface->current.width;
+	surface->height = wlr_surface->current.height;
+
+	printf("Surface mapped, set dims to %d %d\n", surface->width, surface->height);
+}
+
+static void handle_new_subsurface(struct wl_listener *listener, void *data) {
+	struct Server *server = wl_container_of(listener, server, handle_new_subsurface);
+	struct wlr_subsurface *subsurface = data;
+	struct wlr_surface *wlr_surface = subsurface->surface;
+
+	struct Surface *surface = create_surface(server, wlr_surface);
+	surface->x = subsurface->current.x;
+	surface->y = subsurface->current.y;
+	surface->width = wlr_surface->current.width;
+	surface->height = wlr_surface->current.height;
+
+	surface->z_offset = 10;
+
+	surface->is_toplevel = false;
+	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
+
+	surface->destroy.notify = surface_handle_destroy;
+	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
+
+	surface->body = NULL;
+	surface->apply_physics = false;
+
+	printf("Subsurface created, xywh: %d %d %d %d\n", surface->x, surface->y, surface->width, surface->height);
+
+	// Pretty sure this never gets called, but better safe than sorry
+	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
+}
+
+static void handle_subsurface_map(struct wl_listener *listener, void *data) {
+	// It seems that surfaces are always mapped by the time handle_new_subsurface gets called, so this is
+	// redundant I think.
+	fprintf(stderr, "This can't happen\n");
+	exit(1);
+}
+
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	/* This	event is raised	when wlr_xdg_shell receives a new xdg surface from a
 	 * client, either a toplevel (application window) or popup. */
 	struct Server *server = wl_container_of(listener, server, new_xdg_surface);
 	struct wlr_xdg_surface *xdg_surface = data;
-
 	struct wlr_surface *wlr_surface = xdg_surface->surface;
-	printf("New XDG surface! wlr_surface is at %p\n", wlr_surface);
+
+	printf("New XDG surface!\n");
+
+	// The width and height will be filled in by handle_xdg_map once it is known
+	struct Surface *surface = create_surface(server, wlr_surface);
+	surface->width = 0;
+	surface->height = 0;
+
+	surface->destroy.notify = surface_handle_destroy;
+	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
+
+	surface->is_toplevel = true;
+	surface->toplevel = surface;
+	surface->body = NULL;
+	surface->apply_physics = false;
+
+	wl_signal_add(&xdg_surface->events.map, &server->handle_xdg_map);
+	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
 
 	/*
 	// We must add xdg popups to the scene graph so	they get rendered. The
@@ -928,10 +958,9 @@ int main(int argc, char	*argv[]) {
 	struct wlr_compositor *compositor = wlr_compositor_create(server.wl_display, server.renderer);
 	wlr_data_device_manager_create(server.wl_display);
 
-	// Surface counting stuff
+	// I used to listen to the new surface event. Now, we instead map listeners to xdg_surface->map and
+	// xdg_surface->subsurface->map to get positioning information.
 	wl_list_init(&server.surfaces);
-	server.new_surface.notify = surface_handle_new;
-	wl_signal_add(&compositor->events.new_surface, &server.new_surface);
 
 	// We only support one output, which will be whichever one is added first.
 	server.output = NULL;
@@ -947,11 +976,15 @@ int main(int argc, char	*argv[]) {
 	 *
 	 * https://drewdevault.com/2018/07/29/Wayland-shells.html
 	 */
-	wl_list_init(&server.views);
 	server.xdg_shell = wlr_xdg_shell_create(server.wl_display);
+
 	server.new_xdg_surface.notify =	handle_new_xdg_surface;
 	wl_signal_add(&server.xdg_shell->events.new_surface,
 			&server.new_xdg_surface);
+
+	server.handle_xdg_map.notify = handle_xdg_map;
+	server.handle_new_subsurface.notify = handle_new_subsurface;
+	server.handle_subsurface_map.notify = handle_subsurface_map;
 
 	/*
 	 * Creates a cursor, which is a	wlroots	utility	for tracking the cursor

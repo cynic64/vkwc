@@ -25,7 +25,6 @@ struct Surface {
 
 	mat4 matrix;
 	int x, y, width, height;
-	bool must_set_dims;
 
 	// Set these and calc_matrices will do the rest. Rotations in radians, speeds in radians per frame.
 	double x_rot, y_rot, z_rot;
