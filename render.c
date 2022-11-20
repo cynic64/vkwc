@@ -70,41 +70,6 @@ void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int
 	wlr_render_rect(renderer, &box,	color, identity_matrix);;
 }
 
-static void scene_node_for_each_node(struct wlr_scene_node *node,
-		int lx,	int ly,	wlr_scene_node_iterator_func_t user_iterator,
-		void *user_data) {
-	if (!node->state.enabled) {
-		return;
-	}
-
-	lx += node->state.x;
-	ly += node->state.y;
-
-	user_iterator(node, lx,	ly, user_data);
-
-	struct wlr_scene_node *child;
-	wl_list_for_each(child,	&node->state.children, state.link) {
-		scene_node_for_each_node(child,	lx, ly,	user_iterator, user_data);
-	}
-}
-
-static struct wlr_texture *scene_buffer_get_texture(
-		struct wlr_scene_buffer	*scene_buffer, struct wlr_renderer *renderer) {
-	struct wlr_client_buffer *client_buffer	=
-		wlr_client_buffer_get(scene_buffer->buffer);
-	if (client_buffer != NULL) {
-		return client_buffer->texture;
-	}
-
-	if (scene_buffer->texture != NULL) {
-		return scene_buffer->texture;
-	}
-
-	scene_buffer->texture =
-		wlr_texture_from_buffer(renderer, scene_buffer->buffer);
-	return scene_buffer->texture;
-}
-
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, struct wlr_texture	*wlr_texture,
 		mat4 matrix, float surface_id) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
@@ -176,43 +141,6 @@ static void render_surface(struct wlr_output *output, struct Surface *surface) {
 	render_texture(output, NULL, texture, surface->matrix, surface->id);
 }
 
-static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, void *_data) {
-	struct RenderData *data = _data;
-	struct wlr_output *output = data->output;
-	pixman_region32_t *output_damage = data->damage;
-
-	struct wlr_texture *texture;
-	switch (node->type) {
-	case WLR_SCENE_NODE_ROOT:
-	case WLR_SCENE_NODE_TREE:
-		/* Root	or tree	node has nothing to render itself */
-		break;
-	case WLR_SCENE_NODE_SURFACE:;
-		struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
-		struct wlr_surface *wlr_surface = scene_surface->surface;
-		struct Surface *surface = find_surface(wlr_surface, data->surfaces);
-		assert(surface->toplevel != NULL);
-
-		texture	= wlr_surface_get_texture(wlr_surface);
-		if (texture == NULL) {
-			return;
-		}
-
-		render_texture(output, output_damage, texture, surface->matrix, surface->id);
-
-		if (data->presentation != NULL && scene_surface->primary_output	== output) {
-			wlr_presentation_surface_sampled_on_output(data->presentation, wlr_surface, output);
-		}
-		break;
-	case WLR_SCENE_NODE_RECT:;
-		fprintf(stderr, "Rect rendering unimplemented\n");
-		exit(1);
-	case WLR_SCENE_NODE_BUFFER:;
-		fprintf(stderr, "Buffer rendering unimplemented\n");
-		exit(1);
-	}
-}
-
 // surfaces should be a list of struct Surface, defined in vkwc.c
 // physics_width and physics_height are needed to transform coordinates from the physics engine to screenspace.
 bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
@@ -236,7 +164,6 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	render_rect_simple(renderer, color, 10,	10, 10, 10);
 
 	// Actually draw stuff
-	// TODO: draw stuff here
 	struct Surface *surface;
 	int surface_count = 0;
 	wl_list_for_each(surface, surfaces, link) {
@@ -256,9 +183,6 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 
 	int tr_width, tr_height;
 	wlr_output_transformed_resolution(output, &tr_width, &tr_height);
-
-	enum wl_output_transform transform =
-		wlr_output_transform_invert(output->transform);
 
 	return wlr_output_commit(output);
 }

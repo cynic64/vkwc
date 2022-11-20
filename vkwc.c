@@ -328,16 +328,8 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	}
 
 	// Otherwise, go through all surfaces until we find the one with a matching id
-	struct Surface *surface = NULL;
-	wl_list_for_each(surface, &server->surfaces, link) {
-		/*
-		printf("Found surface with xywh %d %d %d %d, id %f\n",
-			(int) surface->x, (int) surface->y, (int) surface->width, (int) surface->height,
-			surface->id);
-		*/
-	}
-
 	bool found_surface = false;
+	struct Surface *surface = NULL;
 	wl_list_for_each(surface, &server->surfaces, link) {
 		if (surface->id - error_margin < pixel_surface_id && surface->id + error_margin > pixel_surface_id) {
 			//printf("Surface with id %f matches\n", surface->id);
@@ -812,7 +804,7 @@ static void handle_new_subsurface(struct wl_listener *listener, void *data) {
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
 
-	surface->z_offset = 10;
+	surface->z_offset = (float) 10 / surface->width;
 
 	surface->is_toplevel = false;
 	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
