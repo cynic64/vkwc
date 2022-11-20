@@ -11,7 +11,7 @@
 #include <xkbcommon/xkbcommon.h>
 #include <pixman-1/pixman.h>
 #include <vulkan/vulkan.h>
-#include <drm_fourcc.h>
+#include <drm/drm_fourcc.h>
 
 #define CGLM_CLIPSPACE_INCLUDE_ALL
 #include <cglm/cglm.h>
@@ -330,7 +330,7 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor and the x
 	// and y relative to this surface.
 	// Returns NULL to surface if there is no surface under the cursor.
-	
+
 	// There are multiple render buffers, so we have to find the right one. I do this just by checking whether
 	// the render buffer's dimensions match those of the first output, which isn't a great way but works for now.
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;

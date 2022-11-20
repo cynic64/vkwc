@@ -1,4 +1,4 @@
-#include <drm_fourcc.h>
+#include <drm/drm_fourcc.h>
 #include "render/pixel_format.h"
 
 static const struct wlr_pixel_format_info pixel_format_info[] = {

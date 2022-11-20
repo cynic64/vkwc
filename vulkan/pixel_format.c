@@ -1,4 +1,4 @@
-#include <drm_fourcc.h>
+#include <drm/drm_fourcc.h>
 #include <stdlib.h>
 #include <vulkan/vulkan.h>
 #include <wlr/util/log.h>
@@ -322,4 +322,3 @@ struct wlr_vk_format_modifier_props *vulkan_format_props_find_modifier(
 
 	return NULL;
 }
-

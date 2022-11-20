@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <drm_fourcc.h>
+#include <drm/drm_fourcc.h>
 #include <vulkan/vulkan.h>
 #include <wlr/render/interface.h>
 #include <wlr/types/wlr_drm.h>
@@ -617,7 +617,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	// Create attachment to write UV coordinates into
 	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
 		dmabuf.width, dmabuf.height,
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT 
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
  		| VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &buffer->uv);
 
 	VkMemoryRequirements uv_mem_reqs;

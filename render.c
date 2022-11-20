@@ -10,7 +10,7 @@
 #include <pixman-1/pixman.h>
 #include <vulkan/vulkan.h>
 #include <math.h>
-#include <drm_fourcc.h>
+#include <drm/drm_fourcc.h>
 
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
@@ -267,4 +267,3 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 }
 
 // End my stuff
-
