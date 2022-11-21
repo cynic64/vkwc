@@ -723,8 +723,15 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 
 	//wlr_scene_output_send_frame_done(scene_output, &now);
 
-	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
 	uint32_t time = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+
+	// Tell all the surfaces we finished a frame
+	struct Surface *surface;
+	wl_list_for_each(surface, &server->surfaces, link) {
+		wlr_surface_send_frame_done(surface->wlr_surface, &now);
+	}
+
+	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
 	process_cursor_motion(server, time);
 }
 
@@ -852,6 +859,18 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 
 	wl_signal_add(&xdg_surface->events.map, &server->handle_xdg_map);
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
+
+	// Focus it
+	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
+	wlr_xdg_toplevel_set_activated(xdg_surface, true);
+
+	/*
+	struct wlr_seat *seat = server->seat;
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+	assert(keyboard != NULL);
+	wlr_seat_keyboard_notify_enter(seat, wlr_surface,
+		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+	*/
 
 	/*
 	// We must add xdg popups to the scene graph so	they get rendered. The
