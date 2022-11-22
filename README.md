@@ -8,7 +8,7 @@ A Vulkan-based wayland compositor with the ability to arbitrarily rotate and tra
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=1KfXl7QdMD8" target="_blank"><img src="http://img.youtube.com/vi/1KfXl7QdMD8/0.jpg" alt="Vulkan Wayland Compositor" width="800" height="600" border="10" /></a>
 
 ## Installation
-NOTE: This is highly unstable software! It's mostly a testbed for me to try neat things in Vulkan, and in now way
+NOTE: This is highly unstable software! It's mostly a testbed for me to try neat things in Vulkan, and in no way
 a useful compositor.
 
 Since people have asked, however, here are the dependencies I use to compile it on Gentoo:
