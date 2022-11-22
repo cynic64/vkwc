@@ -90,17 +90,25 @@ xkb_keysym_t TRANSFORM_KEYS[] = {
 	XKB_KEY_c,
 };
 
+enum ViewType {
+	XDG_SHELL_VIEW,
+	XWAYLAND_VIEW,
+};
+
+struct Window {
+	struct wl_list link;
+};
+
 struct Server {
 	struct wl_display *wl_display;
 	struct wlr_backend *backend;
 	struct wlr_renderer *renderer;
 	struct wlr_allocator *allocator;
+	struct wlr_scene *scene;
 
 	struct wlr_xdg_shell *xdg_shell;
 	struct wl_listener new_xdg_surface;
-	struct wl_listener handle_xdg_map;
-	struct wl_listener handle_new_subsurface;
-	struct wl_listener handle_subsurface_map;
+	struct wl_list views;
 
 	struct wlr_cursor *cursor;
 	struct wlr_xcursor_manager *cursor_mgr;
@@ -116,6 +124,7 @@ struct Server {
 	struct wl_listener request_set_selection;
 	struct wl_list keyboards;
 	enum CursorMode	cursor_mode;
+	struct View *grabbed_view;
 	double grab_x, grab_y;
 	struct wlr_box grab_geobox;
 	uint32_t resize_edges;
@@ -136,6 +145,30 @@ struct Server {
 
 	// We have to update the position of this if the screen size changes
 	PhysicsBody floor;
+};
+
+struct View {
+	struct wl_list link;
+	struct Server *server;
+	struct wlr_xdg_surface *xdg_surface;
+	struct wlr_scene_node *scene_node;
+	struct wl_listener map;
+	struct wl_listener unmap;
+	struct wl_listener destroy;
+	struct wl_listener request_move;
+	struct wl_listener request_resize;
+	int x, y;
+
+	enum ViewType type;
+};
+
+struct XWaylandView {
+	struct View view;
+	struct wlr_xwayland_surface *xwayland_surface;
+	struct wl_listener destroy;
+	struct wl_listener unmap;
+	struct wl_listener map;
+	struct wl_listener request_fullscreen;
 };
 
 struct Keyboard	{
@@ -177,12 +210,87 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	free(surface);
 }
 
+static void surface_handle_new(struct wl_listener *listener, void *data) {
+	struct wlr_surface *wlr_surface = data;
+
+	struct Surface *surface = calloc(1, sizeof(struct Surface));
+	memset(surface, 0, sizeof(*surface));
+	surface->wlr_surface = wlr_surface;
+	surface->toplevel = NULL;
+	surface->id = (double) rand() / RAND_MAX;
+
+	struct Server *server;
+	server = wl_container_of(listener, server, new_surface);
+	surface->server = server;
+
+	surface->destroy.notify = surface_handle_destroy;
+	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
+
+	surface->body = NULL;
+	surface->apply_physics = true;
+
+	wl_list_insert(server->surfaces.prev, &surface->link);
+
+	printf("Surface created, xywh: %d %d %d %d\n", wlr_surface->sx, wlr_surface->sy,
+		wlr_surface->current.width, wlr_surface->current.height);
+}
+
+void relink_nodes(struct wl_list *surfaces, struct wlr_scene_node *node) {
+	// Each Surface contains a reference to the Surface of its toplevel window. Whenever surfaces are added or
+	// removed, these links need to be rebuilt.
+	// This will rebuild all links on the specified node and its children
+	if (node->type == WLR_SCENE_NODE_SURFACE) {
+		// Find the Surface this node corresponds to
+		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, surfaces);
+
+		// Find the toplevel node and its Surface
+		struct wlr_scene_node *toplevel_node = get_toplevel_node(node);
+		struct wlr_scene_surface *toplevel_scene_surface = wlr_scene_surface_from_node(toplevel_node);
+		struct wlr_surface *toplevel_wlr_surface = toplevel_scene_surface->surface;
+		struct Surface *toplevel_surface = find_surface(toplevel_wlr_surface, surfaces);
+
+		surface->toplevel = toplevel_surface;
+		surface->is_toplevel = toplevel_surface == surface;
+	}
+
+	struct wlr_scene_node *cur;
+	wl_list_for_each(cur, &node->state.children, state.link) {
+		relink_nodes(surfaces, cur);
+	};
+}
+
+// Surfaces track their position and dimensions so these must be updated
+void calc_placements(struct wl_list *surfaces, struct wlr_scene_node *node, int x, int y) {
+	x += node->state.x;
+	y += node->state.y;
+
+	if (node->type == WLR_SCENE_NODE_SURFACE) {
+		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, surfaces);
+
+		surface->x = x;
+		surface->y = y;
+		surface->width = wlr_surface->current.width;
+		surface->height = wlr_surface->current.height;
+	}
+
+	struct wlr_scene_node *cur;
+	wl_list_for_each(cur, &node->state.children, state.link) {
+		calc_placements(surfaces, cur, x, y);
+	};
+}
+
 // When windows are resized, their projection matrices in their Surfaces must be updated.
 // This will recalculate the matrices of the specified node and all children
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
-void calc_matrices(struct wl_list *surfaces, int output_width, int output_height) {
-	struct Surface *surface;
-	wl_list_for_each(surface, surfaces, link) {
+void calc_matrices(struct wl_list *surfaces, struct wlr_scene_node *node, int output_width, int output_height) {
+	if (node->type == WLR_SCENE_NODE_SURFACE) {
+		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, surfaces);
 		surface->x_rot += surface->x_rot_speed;
 		surface->y_rot += surface->y_rot_speed;
 		surface->z_rot += surface->z_rot_speed;
@@ -248,11 +356,15 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 				((float) surface->y - toplevel->y) / toplevel->height,
 				0,
 			});
-
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
 				(float) surface->height / toplevel->height, 1});
 		}
 	}
+
+	struct wlr_scene_node *cur;
+	wl_list_for_each(cur, &node->state.children, state.link) {
+		calc_matrices(surfaces, cur, output_width, output_height);
+	};
 }
 
 // We require the cursor position so we can spawn them wherever the cursor is
@@ -328,8 +440,16 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	}
 
 	// Otherwise, go through all surfaces until we find the one with a matching id
-	bool found_surface = false;
 	struct Surface *surface = NULL;
+	wl_list_for_each(surface, &server->surfaces, link) {
+		/*
+		printf("Found surface with xywh %d %d %d %d, id %f\n",
+			(int) surface->x, (int) surface->y, (int) surface->width, (int) surface->height,
+			surface->id);
+		*/
+	}
+
+	bool found_surface = false;
 	wl_list_for_each(surface, &server->surfaces, link) {
 		if (surface->id - error_margin < pixel_surface_id && surface->id + error_margin > pixel_surface_id) {
 			//printf("Surface with id %f matches\n", surface->id);
@@ -348,6 +468,47 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	if (surface_x != NULL && surface_y != NULL) {
 		*surface_x = pixel_x_norm * surface->width;
 		*surface_y = pixel_y_norm * surface->height;
+	}
+}
+
+static void focus_view(struct View *view, struct wlr_surface *surface) {
+	/* Note: this function only deals with keyboard	focus. */
+	if (view == NULL) {
+		return;
+	}
+	struct Server *server =	view->server;
+	struct wlr_seat	*seat =	server->seat;
+	struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
+	if (prev_surface == surface) {
+		/* Don't re-focus an already focused surface. */
+		return;
+	}
+	if (prev_surface) {
+		/*
+		 * Deactivate the previously focused surface. This lets	the client know
+		 * it no longer	has focus and the client will repaint accordingly, e.g.
+		 * stop	displaying a caret.
+		 */
+		struct wlr_xdg_surface *previous = wlr_xdg_surface_from_wlr_surface(
+					seat->keyboard_state.focused_surface);
+		wlr_xdg_toplevel_set_activated(previous, false);
+	}
+	struct wlr_keyboard *keyboard =	wlr_seat_get_keyboard(seat);
+	/* Move	the view to the	front */
+	wlr_scene_node_raise_to_top(view->scene_node);
+	wl_list_remove(&view->link);
+	wl_list_insert(&server->views, &view->link);
+	/* Activate the	new surface */
+	if (view->type == XDG_SHELL_VIEW) {
+		wlr_xdg_toplevel_set_activated(view->xdg_surface, true);
+
+		/*
+		 * Tell	the seat to have the keyboard enter this surface. wlroots will keep
+		 * track of this and automatically send	key events to the appropriate
+		 * clients without additional work on your part.
+		 */
+		wlr_seat_keyboard_notify_enter(seat, view->xdg_surface->surface,
+			keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
 	}
 }
 
@@ -380,15 +541,12 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 		wl_display_terminate(server->wl_display);
 	} else if (sym == XKB_KEY_F1) {
 		/* Cycle to the	next view */
-		// TODO: fix this
-		/*
 		if (wl_list_length(&server->views) < 2)	{
 			return false;
 		}
 		struct View *next_view = wl_container_of(
 			server->views.prev, next_view, link);
 		focus_view(next_view, next_view->xdg_surface->surface);
-		*/
 		return true;
 	} else if (sym == XKB_KEY_F2) {
 		if (fork() == 0) {
@@ -588,13 +746,74 @@ static void handle_selection_request(struct wl_listener	*listener, void	*data) {
 	wlr_seat_set_selection(server->seat, event->source, event->serial);
 }
 
+static void process_cursor_move(struct Server *server, uint32_t	time) {
+	/* Move	the grabbed view to the	new position. */
+	struct View *view = server->grabbed_view;
+	view->x	= server->cursor->x - server->grab_x;
+	view->y	= server->cursor->y - server->grab_y;
+	wlr_scene_node_set_position(view->scene_node, view->x, view->y);
+}
+
+static void process_cursor_resize(struct Server	*server, uint32_t time)	{
+	/*
+	 * Resizing the	grabbed	view can be a little bit complicated, because we
+	 * could be resizing from any corner or	edge. This not only resizes the	view
+	 * on one or two axes, but can also move the view if you resize	from the top
+	 * or left edges (or top-left corner).
+	 *
+	 * Note	that I took some shortcuts here. In a more fleshed-out compositor,
+	 * you'd wait for the client to	prepare	a buffer at the	new size, then
+	 * commit any movement that was	prepared.
+	 */
+	struct View *view = server->grabbed_view;
+	double border_x	= server->cursor->x - server->grab_x;
+	double border_y	= server->cursor->y - server->grab_y;
+	int new_left = server->grab_geobox.x;
+	int new_right =	server->grab_geobox.x +	server->grab_geobox.width;
+	int new_top = server->grab_geobox.y;
+	int new_bottom = server->grab_geobox.y + server->grab_geobox.height;
+
+	if (server->resize_edges & WLR_EDGE_TOP) {
+		new_top	= border_y;
+		if (new_top >= new_bottom) {
+			new_top	= new_bottom - 1;
+		}
+	} else if (server->resize_edges	& WLR_EDGE_BOTTOM) {
+		new_bottom = border_y;
+		if (new_bottom <= new_top) {
+			new_bottom = new_top + 1;
+		}
+	}
+	if (server->resize_edges & WLR_EDGE_LEFT) {
+		new_left = border_x;
+		if (new_left >=	new_right) {
+			new_left = new_right - 1;
+		}
+	} else if (server->resize_edges	& WLR_EDGE_RIGHT) {
+		new_right = border_x;
+		if (new_right <= new_left) {
+			new_right = new_left + 1;
+		}
+	}
+
+	struct wlr_box geo_box;
+	wlr_xdg_surface_get_geometry(view->xdg_surface,	&geo_box);
+	view->x	= new_left - geo_box.x;
+	view->y	= new_top - geo_box.y;
+	wlr_scene_node_set_position(view->scene_node, view->x, view->y);
+
+	int new_width =	new_right - new_left;
+	int new_height = new_bottom - new_top;
+	wlr_xdg_toplevel_set_size(view->xdg_surface, new_width,	new_height);
+}
+
 static void process_cursor_motion(struct Server *server, uint32_t time) {
 	/* If the mode is non-passthrough, delegate to those functions.	*/
 	if (server->cursor_mode	== VKWC_CURSOR_MOVE) {
-		fprintf(stderr, "AHHHHH I don't know how to move things!!\n");
+		process_cursor_move(server, time);
 		return;
 	} else if (server->cursor_mode == VKWC_CURSOR_RESIZE) {
-		fprintf(stderr, "AHHHHH I don't know how to resize things!!\n");
+		process_cursor_resize(server, time);
 		return;
 	}
 
@@ -682,6 +901,51 @@ static void handle_cursor_motion_absolute(struct wl_listener *listener, void *da
 	process_cursor_motion(server, event->time_msec);
 }
 
+static void handle_cursor_button(struct wl_listener *listener, void *data) {
+	/* This	event is forwarded by the cursor when a	pointer	emits a	button
+	 * event. */
+	struct Server *server =
+		wl_container_of(listener, server, cursor_button);
+	struct wlr_event_pointer_button	*event = data;
+
+	/* Notify the client with pointer focus	that a button press has	occurred */
+	wlr_seat_pointer_notify_button(server->seat,
+			event->time_msec, event->button, event->state);
+
+	if (event->state == WLR_BUTTON_RELEASED) {
+		/* If you released any buttons,	we exit	interactive move/resize	mode. */
+		server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+		return;
+	}
+
+	struct Surface *surface;
+	check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
+	if (surface == NULL) {
+		// Nothing under cursor
+		return;
+	};
+
+	// Focus view
+	struct View *view;
+	struct wlr_surface *wlr_surface;
+	wl_list_for_each(view, &server->views, link) {
+		if (view->type == XWAYLAND_VIEW) {
+			struct wlr_surface *xwayland_surface =
+				((struct XWaylandView *) view)->xwayland_surface->surface;
+			if (xwayland_surface == surface->toplevel->wlr_surface) {
+				wlr_surface = xwayland_surface;
+				break;
+			}
+		} else if (view->xdg_surface->surface == surface->toplevel->wlr_surface) {
+			wlr_surface = view->xdg_surface->surface;
+			break;
+		}
+	}
+
+	/* Focus that client if	the button was _pressed_ */
+	focus_view(view, wlr_surface);
+}
+
 static void handle_cursor_axis(struct wl_listener *listener, void *data) {
 	/* This	event is forwarded by the cursor when a	pointer	emits an axis event,
 	 * for example when you	move the scroll	wheel. */
@@ -709,29 +973,35 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	/* This	function is called every time an output	is ready to display a frame,
 	 * generally at	the output's refresh rate (e.g.	60Hz). */
 	struct Server *server = wl_container_of(listener, server, output_frame);
+	struct wlr_scene *scene	= server->scene;
 	struct wlr_output *output = server->output;
 
 	// Pre-frame processing
+	struct wlr_scene_node *root_node = &server->scene->node;
 	struct wl_list *surfaces = &server->surfaces;
-	calc_matrices(surfaces, output->width, output->height);
+	relink_nodes(surfaces, root_node);
+	calc_placements(surfaces, root_node, 0, 0);
+	calc_matrices(surfaces, root_node, output->width, output->height);
+
+	// Update position of floor
+	server->floor->position.x = output->width * 0.5;
+	server->floor->position.y = output->height;
+	create_bodies(surfaces, root_node, server->cursor->x, server->cursor->y);
+
+	// wlr_scene_output: "A	viewport for an	output in the scene-graph" (include/wlr/types/wlr_scene.h)
+	// It is associated with a scene
+	struct wlr_scene_output	*scene_output =	wlr_scene_get_scene_output(scene, output);
 
 	/* Render the scene if needed and commit the output */
-	draw_frame(output, &server->surfaces, server->cursor->x, server->cursor->y);
+	draw_frame(scene_output, &server->surfaces, server->cursor->x, server->cursor->y);
 
 	struct timespec	now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 
-	//wlr_scene_output_send_frame_done(scene_output, &now);
-
-	uint32_t time = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
-
-	// Tell all the surfaces we finished a frame
-	struct Surface *surface;
-	wl_list_for_each(surface, &server->surfaces, link) {
-		wlr_surface_send_frame_done(surface->wlr_surface, &now);
-	}
+	wlr_scene_output_send_frame_done(scene_output, &now);
 
 	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
+	uint32_t time = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 	process_cursor_motion(server, time);
 }
 
@@ -774,65 +1044,94 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 	wl_signal_add(&server->output->events.frame, &server->output_frame);
 }
 
-// Allocates a new Surface, zeroing the struct and setting server, wlr_surface, id, and destroy.
-// The user must still set the geometry, physics body, and toplevel.
-static struct Surface *create_surface(struct Server *server, struct wlr_surface *wlr_surface) {
-	struct Surface *surface = calloc(1, sizeof(struct Surface));
-	surface->wlr_surface = wlr_surface;
-	surface->toplevel = NULL;
-	surface->id = (double) rand() / RAND_MAX;
-	surface->server = server;
+static void handle_xdg_toplevel_map(struct wl_listener *listener, void *data) {
+	printf("XDG toplevel map\n");
+	/* Called when the surface is mapped, or ready to display on-screen. */
+	struct View *view = wl_container_of(listener, view, map);
 
-	wl_list_insert(server->surfaces.prev, &surface->link);
+	wl_list_insert(&view->server->views, &view->link);
 
-	return surface;
+	focus_view(view, view->xdg_surface->surface);
+
+	print_scene_graph(&view->server->scene->node, 0);
 }
 
-static void handle_xdg_map(struct wl_listener *listener, void *data) {
-	struct Server *server = wl_container_of(listener, server, handle_xdg_map);
-	struct wlr_xdg_surface *xdg_surface = data;
-	struct wlr_surface *wlr_surface = xdg_surface->surface;
+static void handle_xdg_toplevel_unmap(struct wl_listener *listener, void *data)	{
+	/* Called when the surface is unmapped,	and should no longer be	shown. */
+	struct View *view = wl_container_of(listener, view, unmap);
 
-	struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
-	surface->width = wlr_surface->current.width;
-	surface->height = wlr_surface->current.height;
-
-	printf("Surface mapped, set dims to %d %d\n", surface->width, surface->height);
+	wl_list_remove(&view->link);
 }
 
-static void handle_new_subsurface(struct wl_listener *listener, void *data) {
-	struct Server *server = wl_container_of(listener, server, handle_new_subsurface);
-	struct wlr_subsurface *subsurface = data;
-	struct wlr_surface *wlr_surface = subsurface->surface;
+static void handle_xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
+	/* Called when the surface is destroyed	and should never be shown again. */
+	struct View *view = wl_container_of(listener, view, destroy);
 
-	struct Surface *surface = create_surface(server, wlr_surface);
-	surface->x = subsurface->current.x;
-	surface->y = subsurface->current.y;
-	surface->width = wlr_surface->current.width;
-	surface->height = wlr_surface->current.height;
+	wl_list_remove(&view->map.link);
+	wl_list_remove(&view->unmap.link);
+	wl_list_remove(&view->destroy.link);
+	wl_list_remove(&view->request_move.link);
+	wl_list_remove(&view->request_resize.link);
 
-	surface->z_offset = (float) 10 / surface->width;
-
-	surface->is_toplevel = false;
-	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
-
-	surface->destroy.notify = surface_handle_destroy;
-	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
-
-	surface->body = NULL;
-	surface->apply_physics = false;
-
-	printf("Subsurface created, xywh: %d %d %d %d\n", surface->x, surface->y, surface->width, surface->height);
-
-	// Pretty sure this never gets called, but better safe than sorry
-	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
+	free(view);
 }
 
-static void handle_subsurface_map(struct wl_listener *listener, void *data) {
-	// It seems that surfaces are always mapped by the time handle_new_subsurface gets called, so this is
-	// redundant I think.
-	fprintf(stderr, "This can't happen\n");
-	exit(1);
+static void begin_interactive(struct View *view, enum CursorMode mode, uint32_t edges) {
+	/* This	function sets up an interactive	move or	resize operation, where	the
+	 * compositor stops propegating	pointer	events to clients and instead
+	 * consumes them itself, to move or resize windows. */
+	struct Server *server =	view->server;
+	struct wlr_surface *focused_surface =
+		server->seat->pointer_state.focused_surface;
+	if (view->xdg_surface->surface !=
+			wlr_surface_get_root_surface(focused_surface)) {
+		/* Deny	move/resize requests from unfocused clients. */
+		return;
+	}
+	server->grabbed_view = view;
+	server->cursor_mode = mode;
+
+	if (mode == VKWC_CURSOR_MOVE) {
+		server->grab_x = server->cursor->x - view->x;
+		server->grab_y = server->cursor->y - view->y;
+	} else {
+		struct wlr_box geo_box;
+		wlr_xdg_surface_get_geometry(view->xdg_surface,	&geo_box);
+
+		double border_x	= (view->x + geo_box.x)	+
+			((edges	& WLR_EDGE_RIGHT) ? geo_box.width : 0);
+		double border_y	= (view->y + geo_box.y)	+
+			((edges	& WLR_EDGE_BOTTOM) ? geo_box.height : 0);
+		server->grab_x = server->cursor->x - border_x;
+		server->grab_y = server->cursor->y - border_y;
+
+		server->grab_geobox = geo_box;
+		server->grab_geobox.x += view->x;
+		server->grab_geobox.y += view->y;
+
+		server->resize_edges = edges;
+	}
+}
+
+static void handle_xdg_toplevel_request_move(struct wl_listener *listener, void *data) {
+	/* This	event is raised	when a client would like to begin an interactive
+	 * move, typically because the user clicked on their client-side
+	 * decorations.	Note that a more sophisticated compositor should check the
+	 * provided serial against a list of button press serials sent to this
+	 * client, to prevent the client from requesting this whenever they want. */
+	struct View *view = wl_container_of(listener, view, request_move);
+	begin_interactive(view,	VKWC_CURSOR_MOVE, 0);
+}
+
+static void handle_xdg_toplevel_request_resize(struct wl_listener *listener, void *data) {
+	/* This	event is raised	when a client would like to begin an interactive
+	 * resize, typically because the user clicked on their client-side
+	 * decorations.	Note that a more sophisticated compositor should check the
+	 * provided serial against a list of button press serials sent to this
+	 * client, to prevent the client from requesting this whenever they want. */
+	struct wlr_xdg_toplevel_resize_event *event = data;
+	struct View *view = wl_container_of(listener, view, request_resize);
+	begin_interactive(view,	VKWC_CURSOR_RESIZE, event->edges);
 }
 
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
@@ -840,44 +1139,12 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	 * client, either a toplevel (application window) or popup. */
 	struct Server *server = wl_container_of(listener, server, new_xdg_surface);
 	struct wlr_xdg_surface *xdg_surface = data;
-	struct wlr_surface *wlr_surface = xdg_surface->surface;
 
-	printf("New XDG surface!\n");
-
-	// The width and height will be filled in by handle_xdg_map once it is known
-	struct Surface *surface = create_surface(server, wlr_surface);
-	surface->width = 0;
-	surface->height = 0;
-
-	surface->destroy.notify = surface_handle_destroy;
-	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
-
-	surface->is_toplevel = true;
-	surface->toplevel = surface;
-	surface->body = NULL;
-	surface->apply_physics = false;
-
-	wl_signal_add(&xdg_surface->events.map, &server->handle_xdg_map);
-	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
-
-	// Focus it
-	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
-	wlr_xdg_toplevel_set_activated(xdg_surface, true);
-
-	/*
-	struct wlr_seat *seat = server->seat;
-	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-	assert(keyboard != NULL);
-	wlr_seat_keyboard_notify_enter(seat, wlr_surface,
-		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
-	*/
-
-	/*
-	// We must add xdg popups to the scene graph so	they get rendered. The
-	// wlroots scene graph provides	a helper for this, but to use it we must
-	// provide the proper parent scene node	of the xdg popup. To enable this,
-	// we always set the user data field of	xdg_surfaces to	the corresponding
-	// scene node.
+	/* We must add xdg popups to the scene graph so	they get rendered. The
+	 * wlroots scene graph provides	a helper for this, but to use it we must
+	 * provide the proper parent scene node	of the xdg popup. To enable this,
+	 * we always set the user data field of	xdg_surfaces to	the corresponding
+	 * scene node. */
 	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
 		struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(
 			xdg_surface->popup->parent);
@@ -888,13 +1155,16 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	}
 	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
 
-	// Allocate a View for this surface
+	/* Allocate a View for this surface */
+	struct View *view = calloc(1, sizeof(struct View));
+	view->type = XDG_SHELL_VIEW;
+	view->server = server;
 	view->xdg_surface = xdg_surface;
 	view->scene_node = wlr_scene_xdg_surface_create(&view->server->scene->node, view->xdg_surface);
 	view->scene_node->data = view;
 	xdg_surface->data = view->scene_node;
 
-	// Listen to the various events	it can emit
+	/* Listen to the various events	it can emit */
 	view->map.notify = handle_xdg_toplevel_map;
 	wl_signal_add(&xdg_surface->events.map,	&view->map);
 	view->unmap.notify = handle_xdg_toplevel_unmap;
@@ -902,13 +1172,40 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	view->destroy.notify = handle_xdg_toplevel_destroy;
 	wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
 
-	// cotd
+	/* cotd	*/
 	struct wlr_xdg_toplevel	*toplevel = xdg_surface->toplevel;
 	view->request_move.notify = handle_xdg_toplevel_request_move;
 	wl_signal_add(&toplevel->events.request_move, &view->request_move);
 	view->request_resize.notify = handle_xdg_toplevel_request_resize;
 	wl_signal_add(&toplevel->events.request_resize,	&view->request_resize);
-	*/
+}
+
+static void handle_xwayland_surface_map(struct wl_listener *listener, void *data) {
+	struct XWaylandView *xwayland_view = wl_container_of(listener, xwayland_view, map);
+	struct View *view = &xwayland_view->view;
+	struct wlr_surface *surface = xwayland_view->xwayland_surface->surface;
+
+	view->scene_node = wlr_scene_subsurface_tree_create(&view->server->scene->node,	surface);
+	assert(view->scene_node	!= NULL);	// Couldn't create scene node for XWayland window
+	view->scene_node->data = view;
+
+	wl_list_insert(&view->server->views, &view->link);
+}
+
+static void handle_xwayland_surface_new(struct wl_listener *listener, void *data) {
+	struct Server *server =	wl_container_of(listener, server, new_xwayland_surface);
+	struct wlr_xwayland_surface *xwayland_surface =	data;
+
+	struct XWaylandView *xwayland_view = calloc(1, sizeof(struct XWaylandView));
+	assert(xwayland_view);
+
+	xwayland_view->xwayland_surface	= xwayland_surface;
+
+	xwayland_view->view.server = server;
+	xwayland_view->view.type = XWAYLAND_VIEW;
+
+	xwayland_view->map.notify = handle_xwayland_surface_map;
+	wl_signal_add(&xwayland_surface->events.map, &xwayland_view->map);
 }
 
 int main(int argc, char	*argv[]) {
@@ -933,7 +1230,7 @@ int main(int argc, char	*argv[]) {
 
 	struct Server server = {0};
 	/* The Wayland display is managed by libwayland. It handles accepting
-	 * clients from	the Unix socket, mangling Wayland globals, and so on. */
+	 * clients from	the Unix socket, manging Wayland globals, and so on. */
 	server.wl_display = wl_display_create();
 	/* The backend is a wlroots feature which abstracts the	underlying input and
 	 * output hardware. The	autocreate option will choose the most suitable
@@ -969,9 +1266,10 @@ int main(int argc, char	*argv[]) {
 	struct wlr_compositor *compositor = wlr_compositor_create(server.wl_display, server.renderer);
 	wlr_data_device_manager_create(server.wl_display);
 
-	// I used to listen to the new surface event. Now, we instead map listeners to xdg_surface->map and
-	// xdg_surface->subsurface->map to get positioning information.
+	// Surface counting stuff
 	wl_list_init(&server.surfaces);
+	server.new_surface.notify = surface_handle_new;
+	wl_signal_add(&compositor->events.new_surface, &server.new_surface);
 
 	// We only support one output, which will be whichever one is added first.
 	server.output = NULL;
@@ -982,20 +1280,25 @@ int main(int argc, char	*argv[]) {
 
 	server.output_frame.notify = handle_output_frame;
 
+	/* Create a scene graph. This is a wlroots abstraction that handles all
+	 * rendering and damage	tracking. All the compositor author needs to do
+	 * is add things that should be	rendered to the	scene graph at the proper
+	 * positions and then call wlr_scene_output_commit() to	render a frame if
+	 * necessary.
+	 */
+	server.scene = wlr_scene_create();
+	wlr_scene_attach_output_layout(server.scene, server.output_layout);
+
 	/* Set up the xdg-shell. The xdg-shell is a Wayland protocol which is used
 	 * for application windows. For	more detail on shells, refer to	my article:
 	 *
 	 * https://drewdevault.com/2018/07/29/Wayland-shells.html
 	 */
+	wl_list_init(&server.views);
 	server.xdg_shell = wlr_xdg_shell_create(server.wl_display);
-
 	server.new_xdg_surface.notify =	handle_new_xdg_surface;
 	wl_signal_add(&server.xdg_shell->events.new_surface,
 			&server.new_xdg_surface);
-
-	server.handle_xdg_map.notify = handle_xdg_map;
-	server.handle_new_subsurface.notify = handle_new_subsurface;
-	server.handle_subsurface_map.notify = handle_subsurface_map;
 
 	/*
 	 * Creates a cursor, which is a	wlroots	utility	for tracking the cursor
@@ -1031,8 +1334,8 @@ int main(int argc, char	*argv[]) {
 	server.cursor_motion_absolute.notify = handle_cursor_motion_absolute;
 	wl_signal_add(&server.cursor->events.motion_absolute,
 			&server.cursor_motion_absolute);
-	//server.cursor_button.notify = handle_cursor_button; // TODO
-	//wl_signal_add(&server.cursor->events.button, &server.cursor_button);
+	server.cursor_button.notify = handle_cursor_button;
+	wl_signal_add(&server.cursor->events.button, &server.cursor_button);
 	server.cursor_axis.notify = handle_cursor_axis;
 	wl_signal_add(&server.cursor->events.axis, &server.cursor_axis);
 	server.cursor_frame.notify = handle_cursor_frame;
@@ -1064,6 +1367,9 @@ int main(int argc, char	*argv[]) {
 		fprintf(stderr,	"Cannot	create XWayland	server!\n");
 		exit(1);
 	};
+
+	server.new_xwayland_surface.notify = handle_xwayland_surface_new;
+	wl_signal_add(&xwayland->events.new_surface, &server.new_xwayland_surface);
 
 	struct wlr_xcursor_manager *xcursor_manager = wlr_xcursor_manager_create("left_ptr", 24);
 	if (!xcursor_manager) {

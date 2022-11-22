@@ -70,6 +70,41 @@ void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int
 	wlr_render_rect(renderer, &box,	color, identity_matrix);;
 }
 
+static void scene_node_for_each_node(struct wlr_scene_node *node,
+		int lx,	int ly,	wlr_scene_node_iterator_func_t user_iterator,
+		void *user_data) {
+	if (!node->state.enabled) {
+		return;
+	}
+
+	lx += node->state.x;
+	ly += node->state.y;
+
+	user_iterator(node, lx,	ly, user_data);
+
+	struct wlr_scene_node *child;
+	wl_list_for_each(child,	&node->state.children, state.link) {
+		scene_node_for_each_node(child,	lx, ly,	user_iterator, user_data);
+	}
+}
+
+static struct wlr_texture *scene_buffer_get_texture(
+		struct wlr_scene_buffer	*scene_buffer, struct wlr_renderer *renderer) {
+	struct wlr_client_buffer *client_buffer	=
+		wlr_client_buffer_get(scene_buffer->buffer);
+	if (client_buffer != NULL) {
+		return client_buffer->texture;
+	}
+
+	if (scene_buffer->texture != NULL) {
+		return scene_buffer->texture;
+	}
+
+	scene_buffer->texture =
+		wlr_texture_from_buffer(renderer, scene_buffer->buffer);
+	return scene_buffer->texture;
+}
+
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, struct wlr_texture	*wlr_texture,
 		mat4 matrix, float surface_id) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
@@ -124,7 +159,6 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 	return true;
 }
 
-// TODO: get rid of output_damage
 static void render_texture(struct wlr_output *output, pixman_region32_t *output_damage,
 		struct wlr_texture *texture, mat4 matrix, float surface_id) {
 	struct wlr_renderer *renderer =	output->renderer;
@@ -134,16 +168,53 @@ static void render_texture(struct wlr_output *output, pixman_region32_t *output_
 	render_subtexture_with_matrix(renderer, texture, matrix, surface_id);
 }
 
-static void render_surface(struct wlr_output *output, struct Surface *surface) {
-	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
-	if (texture == NULL) return;
+static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, void *_data) {
+	struct RenderData *data = _data;
+	struct wlr_output *output = data->output;
+	pixman_region32_t *output_damage = data->damage;
 
-	render_texture(output, NULL, texture, surface->matrix, surface->id);
+	struct wlr_texture *texture;
+	switch (node->type) {
+	case WLR_SCENE_NODE_ROOT:
+	case WLR_SCENE_NODE_TREE:
+		/* Root	or tree	node has nothing to render itself */
+		break;
+	case WLR_SCENE_NODE_SURFACE:;
+		struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
+		struct wlr_surface *wlr_surface = scene_surface->surface;
+		struct Surface *surface = find_surface(wlr_surface, data->surfaces);
+		assert(surface->toplevel != NULL);
+
+		texture	= wlr_surface_get_texture(wlr_surface);
+		if (texture == NULL) {
+			return;
+		}
+
+		render_texture(output, output_damage, texture, surface->matrix, surface->id);
+
+		if (data->presentation != NULL && scene_surface->primary_output	== output) {
+			wlr_presentation_surface_sampled_on_output(data->presentation, wlr_surface, output);
+		}
+		break;
+	case WLR_SCENE_NODE_RECT:;
+		fprintf(stderr, "Rect rendering unimplemented\n");
+		exit(1);
+	case WLR_SCENE_NODE_BUFFER:;
+		fprintf(stderr, "Buffer rendering unimplemented\n");
+		exit(1);
+	}
 }
 
 // surfaces should be a list of struct Surface, defined in vkwc.c
 // physics_width and physics_height are needed to transform coordinates from the physics engine to screenspace.
-bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
+bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
+	// If I	don't do this, windows aren't re-drawn when the	cursor moves.
+	// So just damage everything instead. It's inefficient, but I don't care for now.
+	wlr_output_damage_add_whole(scene_output->damage);
+
+	// Get the output, i.e.	screen
+	struct wlr_output *output = scene_output->output;
+
 	// Get the renderer, i.e. Vulkan or GLES2
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer	!= NULL);
@@ -151,8 +222,33 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	// TinyWL used to try to do direct scanout here. But I think there's no point because
 	// we want fancy effects that aren't possible with that.
 
-	int buffer_age = -1;
-	wlr_output_attach_render(output, &buffer_age);
+	bool needs_frame;
+	pixman_region32_t damage;
+	pixman_region32_init(&damage);
+	// wlr_output_damage_attach_render: "Attach the	renderer's buffer to the output"
+	// "Must call this before rendering, then `wlr_output_set_damage` then `wlr_output_commit`"
+	// "needs_frame will be set to true if a frame should be submitted"
+	if (!wlr_output_damage_attach_render(scene_output->damage,
+			&needs_frame, &damage))	{
+		pixman_region32_fini(&damage);
+		return false;
+	}
+
+	if (!needs_frame) {
+		fprintf(stderr, "wlr_output_damage_attach_render says we don't need to draw a frame. This shouldn't "
+			" happen.\n");
+		exit(1);
+	}
+
+	// Try to import new buffers as	textures
+	// As far as I can tell	this never gets	called
+	struct wlr_scene_buffer	*scene_buffer, *scene_buffer_tmp;
+	wl_list_for_each_safe(scene_buffer, scene_buffer_tmp,
+			&scene_output->scene->pending_buffers, pending_link) {
+		scene_buffer_get_texture(scene_buffer, renderer);
+		wl_list_remove(&scene_buffer->pending_link);
+		wl_list_init(&scene_buffer->pending_link);
+	}
 
 	// Begin rendering
 	wlr_renderer_begin(renderer, output->width, output->height);
@@ -163,15 +259,65 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
 	render_rect_simple(renderer, color, 10,	10, 10, 10);
 
-	// Actually draw stuff
-	struct Surface *surface;
-	int surface_count = 0;
-	wl_list_for_each(surface, surfaces, link) {
-		render_surface(output, surface);
-		surface_count++;
-	};
+	// Draw physics bodies
+	/*
+	int body_count = GetPhysicsBodiesCount();
+	for (int i = 0; i < body_count; i++) {
+		PhysicsBody body = GetPhysicsBody(i);
 
-	//wlr_output_render_software_cursors(output, &damage);
+		float color[4] = { i % 2, i % 3 == 0, i % 5 == 0, 1 };
+		if (body->shape.type == PHYSICS_POLYGON) {
+			struct PolygonData *polygon_data = &body->shape.vertexData;
+			int min_x = INT32_MAX, min_y = INT32_MAX, max_x = INT32_MIN, max_y = INT32_MIN;
+
+			for (int i = 0; i < polygon_data->vertexCount; i++) {
+				int x = polygon_data->positions[i].x, y = polygon_data->positions[i].y;
+				if (x < min_x) min_x = x;
+				if (y < min_y) min_y = y;
+				if (x > max_x) max_x = x;
+				if (y > max_y) max_y = y;
+			}
+
+			min_x += body->position.x;
+			max_x += body->position.x;
+			min_y += body->position.y;
+			max_y += body->position.y;
+
+			printf("Polygon %d xywh: %d %d %d %d\n", i, min_x, min_y, max_x - min_x, max_y - min_y);
+			if (max_x - min_x < 1 || max_y - min_y < 1) continue;
+
+			int center_x = (min_x + max_x) / 2;
+			int center_y = (min_y + max_y) / 2;
+
+			render_rect_simple(renderer, color, center_x - 5, center_y - 5, 10, 10);
+		}
+	}
+	*/
+
+	// Actually draw stuff
+	pixman_region32_t full_region;
+	pixman_region32_init_rect(&full_region,	0, 0, output->width, output->height);
+
+	struct wlr_scene *scene = scene_output->scene;
+
+	if (output->enabled && pixman_region32_not_empty(&damage)) {
+		struct RenderData data = {
+			.output	= output,
+			.damage	= &damage,
+			.presentation =	scene->presentation,
+			.surfaces = surfaces
+		};
+		// scene_output->[xy] determines offset, useful for multiple outputs
+		scene_node_for_each_node(&scene->node, -scene_output->x, -scene_output->y,
+			render_node_iterator, &data);
+	} else {
+		fprintf(stderr, "Output is disabled, dunno what to do\n");
+		exit(1);
+	}
+
+	pixman_region32_fini(&full_region);
+
+	wlr_output_render_software_cursors(output, &damage);
 
 	// Finish
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
@@ -180,9 +326,20 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	vk_renderer->should_copy_uv = true;
 	wlr_renderer_end(renderer);
 	vk_renderer->should_copy_uv = false;
+	pixman_region32_fini(&damage);
 
 	int tr_width, tr_height;
 	wlr_output_transformed_resolution(output, &tr_width, &tr_height);
+
+	enum wl_output_transform transform =
+		wlr_output_transform_invert(output->transform);
+
+	pixman_region32_t frame_damage;
+	pixman_region32_init(&frame_damage);
+	wlr_region_transform(&frame_damage, &scene_output->damage->current,
+		transform, tr_width, tr_height);
+	wlr_output_set_damage(output, &frame_damage);
+	pixman_region32_fini(&frame_damage);
 
 	return wlr_output_commit(output);
 }

@@ -14,13 +14,11 @@ struct Surface {
 	struct wl_list link;
 	struct wl_listener destroy;
 	struct wlr_surface *wlr_surface;
-	struct xdg_surface *xdg_surface;
-	
-	float id;			// Is a float since it gets written to the depth buffer
-	
-	struct Surface *toplevel;	// This points to the Surface data associated with the "main window" a
-					// surface belongs to. So all the titlebars and such can easily access the
-					// surface data of the main window.
+	// Is a float since it gets written to the depth buffer
+	float id;
+	// This points to the Surface data associated with the "main window" a surface belongs to. So all the
+	// titlebars and such can easily access the surface data of the main window.
+	struct Surface *toplevel;
 	bool is_toplevel;
 
 	mat4 matrix;
@@ -29,11 +27,12 @@ struct Surface {
 	// Set these and calc_matrices will do the rest. Rotations in radians, speeds in radians per frame.
 	double x_rot, y_rot, z_rot;
 	double x_rot_speed, y_rot_speed, z_rot_speed;
-
-	double x_offset, y_offset, z_offset;	// These get added to the scene node position
+	// These get added to the scene node position
+	double x_offset, y_offset, z_offset;
 
 	PhysicsBody body;
-	bool apply_physics;			// Physics will only be applied to the surface if this is enabled
+	// Physics will only be applied to the surface if this is enabled
+	bool apply_physics;
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);
