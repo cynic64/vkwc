@@ -1,2 +1,5 @@
 # vkwc
-A fork of TinyWL using Vulkan. The plan is for many fancy graphical effects not possible in X, like rotated windows and such. Useless, but cool and good for learning about Wayland.
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=1KfXl7QdMD8" target="_blank"><img src="http://img.youtube.com/vi/1KfXl7QdMD8/0.jpg" alt="Vulkan Wayland Compositor" width="800" height="600" border="10" /></a>
+
+A fork of TinyWL using Vulkan.
