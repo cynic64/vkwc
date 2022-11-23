@@ -387,26 +387,7 @@ static void handle_cursor_button(struct wl_listener *listener, void *data) {
 		return;
 	};
 
-	/*
-	// Focus view
-	struct View *view;
-	struct wlr_surface *wlr_surface;
-	wl_list_for_each(view, &server->views, link) {
-		if (view->type == XWAYLAND_VIEW) {
-			struct wlr_surface *xwayland_surface =
-				((struct XWaylandView *) view)->xwayland_surface->surface;
-			if (xwayland_surface == surface->toplevel->wlr_surface) {
-				wlr_surface = xwayland_surface;
-				break;
-			}
-		} else if (view->xdg_surface->surface == surface->toplevel->wlr_surface) {
-			wlr_surface = view->xdg_surface->surface;
-			break;
-		}
-	}
-
-	focus_view(view, wlr_surface);
-	*/
+	// TODO: Focus view that gets clicked
 }
 
 static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
@@ -868,16 +849,11 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurface) {
 	struct wlr_surface *wlr_surface = subsurface->surface;
 
-	// Listen for subsurfaces of the subsurface
-	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
-
-	// Pretty sure this never gets called, but better safe than sorry
-	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
-
 	// Make sure the surface doesn't already exist - this seems to never happen but it's worth checking
 	struct Surface *found_surface = find_surface(wlr_surface, &server->surfaces);
 	assert(found_surface == NULL);
 
+	// Create a new Surface
 	struct Surface *surface = create_surface(&server->surfaces, wlr_surface);
 	printf("Adding sneaky subsurface with geo %d %d %d %d\n", subsurface->current.x, subsurface->current.y,
 		wlr_surface->current.width, wlr_surface->current.height);
@@ -901,6 +877,16 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 		surface->toplevel = surface->toplevel->toplevel;
 		assert(surface->toplevel != NULL);
 	}
+
+	// Listen for subsurfaces of the subsurface
+	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
+
+	// Pretty sure this never gets called, but better safe than sorry
+	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
+
+	// Listen for surface destruction
+	surface->destroy.notify = surface_handle_destroy;
+	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
 
 	// Add existing subsurfaces above and below
 	struct wlr_subsurface *cur;
