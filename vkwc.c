@@ -385,6 +385,24 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			server->views.prev, next_view, link);
 		focus_view(next_view, next_view->xdg_surface->surface);
 		*/
+
+		struct Surface *surface;
+		wl_list_for_each(surface, &server->surfaces, link) {
+			if (surface->toplevel == surface) {
+				struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
+				assert(xdg_surface != NULL);
+
+				assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
+				wlr_xdg_toplevel_set_activated(xdg_surface, true);
+
+				struct wlr_seat *seat = server->seat;
+				struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+				assert(keyboard != NULL);
+				wlr_seat_keyboard_notify_enter(seat, surface->wlr_surface,
+					keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+			}
+		}
+
 		return true;
 	} else if (sym == XKB_KEY_F2) {
 		if (fork() == 0) {
@@ -874,6 +892,8 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 
 	// The width and height will be filled in by handle_xdg_map once it is known
 	struct Surface *surface = create_surface(&server->surfaces, wlr_surface);
+
+	surface->xdg_surface = xdg_surface;
 	surface->width = 0;
 	surface->height = 0;
 

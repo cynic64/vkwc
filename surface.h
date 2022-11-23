@@ -13,7 +13,7 @@ struct Surface {
 	struct wl_list link;
 	struct wl_listener destroy;
 	struct wlr_surface *wlr_surface;
-	struct xdg_surface *xdg_surface;
+	struct wlr_xdg_surface *xdg_surface;
 	
 	float id;			// Is a float since it gets written to the depth buffer
 	
