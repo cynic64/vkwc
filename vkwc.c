@@ -347,6 +347,68 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	}
 }
 
+static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
+	// Should only call this on toplevel Surfaces
+	assert(surface->toplevel == surface);
+
+	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
+	assert(xdg_surface != NULL);
+
+	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
+	wlr_xdg_toplevel_set_activated(xdg_surface, true);
+
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+	assert(keyboard != NULL);
+	wlr_seat_keyboard_notify_enter(seat, surface->wlr_surface,
+		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+}
+
+static void handle_cursor_button(struct wl_listener *listener, void *data) {
+	/* This	event is forwarded by the cursor when a	pointer	emits a	button
+	 * event. */
+	struct Server *server =
+		wl_container_of(listener, server, cursor_button);
+	struct wlr_event_pointer_button	*event = data;
+
+	/* Notify the client with pointer focus	that a button press has	occurred */
+	wlr_seat_pointer_notify_button(server->seat,
+			event->time_msec, event->button, event->state);
+
+	if (event->state == WLR_BUTTON_RELEASED) {
+		/* If you released any buttons,	we exit	interactive move/resize	mode. */
+		server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
+		return;
+	}
+
+	struct Surface *surface;
+	check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
+	if (surface == NULL) {
+		// Nothing under cursor
+		return;
+	};
+
+	/*
+	// Focus view
+	struct View *view;
+	struct wlr_surface *wlr_surface;
+	wl_list_for_each(view, &server->views, link) {
+		if (view->type == XWAYLAND_VIEW) {
+			struct wlr_surface *xwayland_surface =
+				((struct XWaylandView *) view)->xwayland_surface->surface;
+			if (xwayland_surface == surface->toplevel->wlr_surface) {
+				wlr_surface = xwayland_surface;
+				break;
+			}
+		} else if (view->xdg_surface->surface == surface->toplevel->wlr_surface) {
+			wlr_surface = view->xdg_surface->surface;
+			break;
+		}
+	}
+
+	focus_view(view, wlr_surface);
+	*/
+}
+
 static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
 	/* This	event is raised	when a modifier	key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
@@ -362,22 +424,6 @@ static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) 
 	/* Send	modifiers to the client. */
 	wlr_seat_keyboard_notify_modifiers(keyboard->server->seat,
 		&keyboard->device->keyboard->modifiers);
-}
-
-static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
-	// Should only call this on toplevel Surfaces
-	assert(surface->toplevel == surface);
-
-	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
-	assert(xdg_surface != NULL);
-
-	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
-	wlr_xdg_toplevel_set_activated(xdg_surface, true);
-
-	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-	assert(keyboard != NULL);
-	wlr_seat_keyboard_notify_enter(seat, surface->wlr_surface,
-		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
 }
 
 static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
@@ -1076,8 +1122,8 @@ int main(int argc, char	*argv[]) {
 	server.cursor_motion_absolute.notify = handle_cursor_motion_absolute;
 	wl_signal_add(&server.cursor->events.motion_absolute,
 			&server.cursor_motion_absolute);
-	//server.cursor_button.notify = handle_cursor_button; // TODO
-	//wl_signal_add(&server.cursor->events.button, &server.cursor_button);
+	server.cursor_button.notify = handle_cursor_button;
+	wl_signal_add(&server.cursor->events.button, &server.cursor_button);
 	server.cursor_axis.notify = handle_cursor_axis;
 	wl_signal_add(&server.cursor->events.axis, &server.cursor_axis);
 	server.cursor_frame.notify = handle_cursor_frame;
