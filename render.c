@@ -124,9 +124,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 	return true;
 }
 
-// TODO: get rid of output_damage
-static void render_texture(struct wlr_output *output, pixman_region32_t *output_damage,
-		struct wlr_texture *texture, mat4 matrix, float surface_id) {
+static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix, float surface_id) {
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
@@ -138,7 +136,7 @@ static void render_surface(struct wlr_output *output, struct Surface *surface) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
 	if (texture == NULL) return;
 
-	render_texture(output, NULL, texture, surface->matrix, surface->id);
+	render_texture(output, texture, surface->matrix, surface->id);
 }
 
 // surfaces should be a list of struct Surface, defined in vkwc.c

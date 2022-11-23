@@ -32,7 +32,6 @@
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_presentation_time.h>
-#include <wlr/types/wlr_output_damage.h>
 #include <wlr/types/wlr_matrix.h>
 #include <wlr/render/interface.h>
 #include <wlr/util/log.h>
@@ -823,6 +822,9 @@ static void handle_new_subsurface(struct wl_listener *listener, void *data) {
 	surface->apply_physics = false;
 
 	printf("Subsurface created, xywh: %d %d %d %d\n", surface->x, surface->y, surface->width, surface->height);
+
+	// Also need to listen for subsurfaces of the subsurface...
+	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
 
 	// Pretty sure this never gets called, but better safe than sorry
 	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
