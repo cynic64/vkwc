@@ -364,6 +364,22 @@ static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) 
 		&keyboard->device->keyboard->modifiers);
 }
 
+static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
+	// Should only call this on toplevel Surfaces
+	assert(surface->toplevel == surface);
+
+	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
+	assert(xdg_surface != NULL);
+
+	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
+	wlr_xdg_toplevel_set_activated(xdg_surface, true);
+
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+	assert(keyboard != NULL);
+	wlr_seat_keyboard_notify_enter(seat, surface->wlr_surface,
+		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+}
+
 static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 	/*
 	 * Here	we handle compositor keybindings. This is when the compositor is
@@ -375,32 +391,12 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 	if (sym == XKB_KEY_Escape) {
 		wl_display_terminate(server->wl_display);
 	} else if (sym == XKB_KEY_F1) {
-		/* Cycle to the	next view */
-		// TODO: fix this
-		/*
-		if (wl_list_length(&server->views) < 2)	{
-			return false;
-		}
-		struct View *next_view = wl_container_of(
-			server->views.prev, next_view, link);
-		focus_view(next_view, next_view->xdg_surface->surface);
-		*/
+		// Focus the next view
+		// TODO: Make it actually cycle instead of always taking the last
 
 		struct Surface *surface;
 		wl_list_for_each(surface, &server->surfaces, link) {
-			if (surface->toplevel == surface) {
-				struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
-				assert(xdg_surface != NULL);
-
-				assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
-				wlr_xdg_toplevel_set_activated(xdg_surface, true);
-
-				struct wlr_seat *seat = server->seat;
-				struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-				assert(keyboard != NULL);
-				wlr_seat_keyboard_notify_enter(seat, surface->wlr_surface,
-					keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
-			}
+			if (surface->toplevel == surface) focus_surface(server->seat, surface);
 		}
 
 		return true;
@@ -814,15 +810,7 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
 
-	// Focus it
-	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
-	wlr_xdg_toplevel_set_activated(xdg_surface, true);
-
-	struct wlr_seat *seat = server->seat;
-	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-	assert(keyboard != NULL);
-	wlr_seat_keyboard_notify_enter(seat, wlr_surface,
-		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+	focus_surface(server->seat, surface);
 
 	printf("Surface mapped, set dims to %d %d\n", surface->width, surface->height);
 }
