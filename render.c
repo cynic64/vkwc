@@ -165,6 +165,8 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	struct Surface *surface;
 	int surface_count = 0;
 	wl_list_for_each(surface, surfaces, link) {
+		//printf("Rendering surface with geo (%d %d %5.1f) %d %d\n", surface->x, surface->y, surface->z_offset,
+		//	surface->width, surface->height);
 		render_surface(output, surface);
 		surface_count++;
 	};

@@ -10,7 +10,6 @@
 #endif
 
 struct Surface {
-	struct Server *server;
 	struct wl_list link;
 	struct wl_listener destroy;
 	struct wlr_surface *wlr_surface;
@@ -21,7 +20,7 @@ struct Surface {
 	struct Surface *toplevel;	// This points to the Surface data associated with the "main window" a
 					// surface belongs to. So all the titlebars and such can easily access the
 					// surface data of the main window.
-	bool is_toplevel;
+					// If this _is_ the toplevel surface, set it to point to itself.
 
 	mat4 matrix;
 	int x, y, width, height;

@@ -149,13 +149,6 @@ struct Keyboard	{
 static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	struct Surface *surface = wl_container_of(listener, surface, destroy);
 
-	if (surface->server->grabbed_surface != NULL) {
-		// Maybe the grabbed surface or its parent got deleted
-		if (surface->server->grabbed_surface == surface || surface->server->grabbed_surface->toplevel == surface) {
-			surface->server->grabbed_surface = NULL;
-		};
-	};
-
 	// TODO: Why does this make it crash? :((
 	/*
 	if (surface->body != NULL) {
@@ -171,7 +164,7 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&surface->link);
 	wl_list_remove(&surface->destroy.link);
 
-	printf("Surface destroyed! There are now %d\n", wl_list_length(&surface->server->surfaces));
+	printf("Surface destroyed!\n");
 
 	free(surface);
 }
@@ -186,6 +179,7 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 		surface->y_rot += surface->y_rot_speed;
 		surface->z_rot += surface->z_rot_speed;
 
+		// If physics is enabled, clobber position and rotation with physics values
 		if (surface->apply_physics && surface->body != NULL) {
 			surface->x_offset = 0;
 			surface->y_offset = 0;
@@ -197,8 +191,11 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			surface->y_rot = 0;
 		}
 
+		assert(surface->toplevel != NULL);
+
 		// If physics is applied, transforms shouldn't be relative to the toplevel
-		if (surface->is_toplevel || surface->apply_physics) {
+		bool is_toplevel = surface->toplevel == surface;
+		if (is_toplevel || surface->apply_physics) {
 			glm_mat4_identity(surface->matrix);
 
 			mat4 view;
@@ -236,7 +233,6 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			// First we translate ourselves relative to toplevel, then apply toplevel transform
 			// This allows for child transforms to be relative to parent transform
 			struct Surface *toplevel = surface->toplevel;
-			assert(toplevel != NULL);
 
 			glm_mat4_identity(surface->matrix);
 
@@ -261,6 +257,7 @@ void create_bodies(struct wl_list *surfaces, struct wlr_scene_node *node, int cu
 		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
 		struct wlr_surface *wlr_surface = scene_surface->surface;
 		struct Surface *surface = find_surface(wlr_surface, surfaces);
+		assert(surface != NULL);
 
 		if (surface->body == NULL && surface->width >= 1 && surface->height >= 1) {
 			float x = cursor_x + surface->x + surface->x_offset;
@@ -775,28 +772,64 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 
 // Allocates a new Surface, zeroing the struct and setting server, wlr_surface, id, and destroy.
 // The user must still set the geometry, physics body, and toplevel.
-static struct Surface *create_surface(struct Server *server, struct wlr_surface *wlr_surface) {
+// Also adds surface to surfaces.
+static struct Surface *create_surface(struct wl_list *surfaces, struct wlr_surface *wlr_surface) {
 	struct Surface *surface = calloc(1, sizeof(struct Surface));
 	surface->wlr_surface = wlr_surface;
 	surface->toplevel = NULL;
 	surface->id = (double) rand() / RAND_MAX;
-	surface->server = server;
 
-	wl_list_insert(server->surfaces.prev, &surface->link);
+	wl_list_insert(surfaces->prev, &surface->link);
 
 	return surface;
 }
 
+// The Surface was already created, we just have to set the width and height
 static void handle_xdg_map(struct wl_listener *listener, void *data) {
 	struct Server *server = wl_container_of(listener, server, handle_xdg_map);
 	struct wlr_xdg_surface *xdg_surface = data;
 	struct wlr_surface *wlr_surface = xdg_surface->surface;
 
 	struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+	assert(surface != NULL);
+
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
 
 	printf("Surface mapped, set dims to %d %d\n", surface->width, surface->height);
+}
+
+// Adds a subsurface to the given list of surfaces. surfaces should be a list of type struct Surface.
+static void add_subsurface(struct wl_list *surfaces, struct wlr_subsurface *subsurface) {
+	struct wlr_surface *wlr_surface = subsurface->surface;
+
+	// Make sure the surface doesn't already exist - this seems to never happen but it's worth checking
+	struct Surface *found_surface = find_surface(wlr_surface, surfaces);
+	assert(found_surface == NULL);
+
+	struct Surface *surface = create_surface(surfaces, wlr_surface);
+	printf("Adding sneaky subsurface with geo %d %d %d %d\n", subsurface->current.x, subsurface->current.y,
+		wlr_surface->current.width, wlr_surface->current.height);
+	surface->width = wlr_surface->current.width;
+	surface->height = wlr_surface->current.height;
+	surface->x = subsurface->current.x;
+	surface->y = subsurface->current.y;
+	surface->z_offset = 2;
+
+	surface->toplevel = find_surface(subsurface->parent, surfaces);
+
+	// The x and y we just filled in are relative to our parent. However, it's possible that surface->toplevel is
+	// itself a subsurface, in which case we need to offset x and y by its position.
+	// 
+	// It's not necessary to adjust our position relative to the real toplevel, because calc_matrices already
+	// takes this into account.
+	assert(surface->toplevel != NULL);
+	while (surface->toplevel != surface->toplevel->toplevel) {
+		surface->x += surface->toplevel->x;
+		surface->y += surface->toplevel->y;
+		surface->toplevel = surface->toplevel->toplevel;
+		assert(surface->toplevel != NULL);
+	}
 }
 
 static void handle_new_subsurface(struct wl_listener *listener, void *data) {
@@ -804,30 +837,23 @@ static void handle_new_subsurface(struct wl_listener *listener, void *data) {
 	struct wlr_subsurface *subsurface = data;
 	struct wlr_surface *wlr_surface = subsurface->surface;
 
-	struct Surface *surface = create_surface(server, wlr_surface);
-	surface->x = subsurface->current.x;
-	surface->y = subsurface->current.y;
-	surface->width = wlr_surface->current.width;
-	surface->height = wlr_surface->current.height;
+	add_subsurface(&server->surfaces, subsurface);
 
-	surface->z_offset = (float) 10 / surface->width;
-
-	surface->is_toplevel = false;
-	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
-
-	surface->destroy.notify = surface_handle_destroy;
-	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
-
-	surface->body = NULL;
-	surface->apply_physics = false;
-
-	printf("Subsurface created, xywh: %d %d %d %d\n", surface->x, surface->y, surface->width, surface->height);
-
-	// Also need to listen for subsurfaces of the subsurface...
+	// Listen for subsurfaces of the subsurface
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
 
 	// Pretty sure this never gets called, but better safe than sorry
 	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
+
+	// Add existing subsurfaces above and below
+	struct wlr_subsurface *cur;
+	wl_list_for_each(cur, &wlr_surface->current.subsurfaces_below, current.link) {
+		add_subsurface(&server->surfaces, cur);
+	}
+
+	wl_list_for_each(cur, &wlr_surface->current.subsurfaces_above, current.link) {
+		add_subsurface(&server->surfaces, cur);
+	}
 }
 
 static void handle_subsurface_map(struct wl_listener *listener, void *data) {
@@ -847,20 +873,29 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	printf("New XDG surface!\n");
 
 	// The width and height will be filled in by handle_xdg_map once it is known
-	struct Surface *surface = create_surface(server, wlr_surface);
+	struct Surface *surface = create_surface(&server->surfaces, wlr_surface);
 	surface->width = 0;
 	surface->height = 0;
 
 	surface->destroy.notify = surface_handle_destroy;
 	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
 
-	surface->is_toplevel = true;
 	surface->toplevel = surface;
 	surface->body = NULL;
 	surface->apply_physics = false;
 
 	wl_signal_add(&xdg_surface->events.map, &server->handle_xdg_map);
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
+
+	// Check for subsurfaces above and below
+	struct wlr_subsurface *subsurface;
+	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_below, current.link) {
+		add_subsurface(&server->surfaces, subsurface);
+	}
+
+	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_above, current.link) {
+		add_subsurface(&server->surfaces, subsurface);
+	}
 
 	// Focus it
 	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
