@@ -354,7 +354,7 @@ static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
 	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
 	assert(xdg_surface != NULL);
 
-	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
+	if (xdg_surface->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL) return;
 	wlr_xdg_toplevel_set_activated(xdg_surface, true);
 
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
@@ -380,14 +380,13 @@ static void handle_cursor_button(struct wl_listener *listener, void *data) {
 		return;
 	}
 
+	// Focus surface under cursor
 	struct Surface *surface;
 	check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
-	if (surface == NULL) {
-		// Nothing under cursor
-		return;
-	};
+	// Nothing under cursor
+	if (surface == NULL) return;
 
-	// TODO: Focus view that gets clicked
+	focus_surface(server->seat, surface);
 }
 
 static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
@@ -948,44 +947,6 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_above, current.link) {
 		add_subsurface(server, subsurface);
 	}
-
-	/*
-	// We must add xdg popups to the scene graph so	they get rendered. The
-	// wlroots scene graph provides	a helper for this, but to use it we must
-	// provide the proper parent scene node	of the xdg popup. To enable this,
-	// we always set the user data field of	xdg_surfaces to	the corresponding
-	// scene node.
-	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
-		struct wlr_xdg_surface *parent = wlr_xdg_surface_from_wlr_surface(
-			xdg_surface->popup->parent);
-		struct wlr_scene_node *parent_node = parent->data;
-		xdg_surface->data = wlr_scene_xdg_surface_create(
-			parent_node, xdg_surface);
-		return;
-	}
-	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
-
-	// Allocate a View for this surface
-	view->xdg_surface = xdg_surface;
-	view->scene_node = wlr_scene_xdg_surface_create(&view->server->scene->node, view->xdg_surface);
-	view->scene_node->data = view;
-	xdg_surface->data = view->scene_node;
-
-	// Listen to the various events	it can emit
-	view->map.notify = handle_xdg_toplevel_map;
-	wl_signal_add(&xdg_surface->events.map,	&view->map);
-	view->unmap.notify = handle_xdg_toplevel_unmap;
-	wl_signal_add(&xdg_surface->events.unmap, &view->unmap);
-	view->destroy.notify = handle_xdg_toplevel_destroy;
-	wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
-
-	// cotd
-	struct wlr_xdg_toplevel	*toplevel = xdg_surface->toplevel;
-	view->request_move.notify = handle_xdg_toplevel_request_move;
-	wl_signal_add(&toplevel->events.request_move, &view->request_move);
-	view->request_resize.notify = handle_xdg_toplevel_request_resize;
-	wl_signal_add(&toplevel->events.request_resize,	&view->request_resize);
-	*/
 }
 
 int main(int argc, char	*argv[]) {
