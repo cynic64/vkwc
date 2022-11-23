@@ -870,7 +870,6 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 static void handle_new_subsurface(struct wl_listener *listener, void *data) {
 	struct Server *server = wl_container_of(listener, server, handle_new_subsurface);
 	struct wlr_subsurface *subsurface = data;
-	struct wlr_surface *wlr_surface = subsurface->surface;
 
 	add_subsurface(server, subsurface);
 }
