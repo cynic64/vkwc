@@ -816,14 +816,23 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 }
 
 // Adds a subsurface to the given list of surfaces. surfaces should be a list of type struct Surface.
-static void add_subsurface(struct wl_list *surfaces, struct wlr_subsurface *subsurface) {
+// 
+// I had to make this a helper function instead of merging it with handle_new_subsurface because otherwise
+// it couldn't call itself recursively.
+static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurface) {
 	struct wlr_surface *wlr_surface = subsurface->surface;
 
+	// Listen for subsurfaces of the subsurface
+	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
+
+	// Pretty sure this never gets called, but better safe than sorry
+	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
+
 	// Make sure the surface doesn't already exist - this seems to never happen but it's worth checking
-	struct Surface *found_surface = find_surface(wlr_surface, surfaces);
+	struct Surface *found_surface = find_surface(wlr_surface, &server->surfaces);
 	assert(found_surface == NULL);
 
-	struct Surface *surface = create_surface(surfaces, wlr_surface);
+	struct Surface *surface = create_surface(&server->surfaces, wlr_surface);
 	printf("Adding sneaky subsurface with geo %d %d %d %d\n", subsurface->current.x, subsurface->current.y,
 		wlr_surface->current.width, wlr_surface->current.height);
 	surface->width = wlr_surface->current.width;
@@ -832,7 +841,7 @@ static void add_subsurface(struct wl_list *surfaces, struct wlr_subsurface *subs
 	surface->y = subsurface->current.y;
 	surface->z_offset = 2;
 
-	surface->toplevel = find_surface(subsurface->parent, surfaces);
+	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
 
 	// The x and y we just filled in are relative to our parent. However, it's possible that surface->toplevel is
 	// itself a subsurface, in which case we need to offset x and y by its position.
@@ -846,6 +855,16 @@ static void add_subsurface(struct wl_list *surfaces, struct wlr_subsurface *subs
 		surface->toplevel = surface->toplevel->toplevel;
 		assert(surface->toplevel != NULL);
 	}
+
+	// Add existing subsurfaces above and below
+	struct wlr_subsurface *cur;
+	wl_list_for_each(cur, &wlr_surface->current.subsurfaces_below, current.link) {
+		add_subsurface(server, cur);
+	}
+
+	wl_list_for_each(cur, &wlr_surface->current.subsurfaces_above, current.link) {
+		add_subsurface(server, cur);
+	}
 }
 
 static void handle_new_subsurface(struct wl_listener *listener, void *data) {
@@ -853,23 +872,7 @@ static void handle_new_subsurface(struct wl_listener *listener, void *data) {
 	struct wlr_subsurface *subsurface = data;
 	struct wlr_surface *wlr_surface = subsurface->surface;
 
-	add_subsurface(&server->surfaces, subsurface);
-
-	// Listen for subsurfaces of the subsurface
-	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
-
-	// Pretty sure this never gets called, but better safe than sorry
-	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
-
-	// Add existing subsurfaces above and below
-	struct wlr_subsurface *cur;
-	wl_list_for_each(cur, &wlr_surface->current.subsurfaces_below, current.link) {
-		add_subsurface(&server->surfaces, cur);
-	}
-
-	wl_list_for_each(cur, &wlr_surface->current.subsurfaces_above, current.link) {
-		add_subsurface(&server->surfaces, cur);
-	}
+	add_subsurface(server, subsurface);
 }
 
 static void handle_subsurface_map(struct wl_listener *listener, void *data) {
@@ -908,11 +911,11 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	// Check for subsurfaces above and below
 	struct wlr_subsurface *subsurface;
 	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_below, current.link) {
-		add_subsurface(&server->surfaces, subsurface);
+		add_subsurface(server, subsurface);
 	}
 
 	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_above, current.link) {
-		add_subsurface(&server->surfaces, subsurface);
+		add_subsurface(server, subsurface);
 	}
 
 	/*
