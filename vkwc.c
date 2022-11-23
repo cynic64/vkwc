@@ -814,6 +814,16 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
 
+	// Focus it
+	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
+	wlr_xdg_toplevel_set_activated(xdg_surface, true);
+
+	struct wlr_seat *seat = server->seat;
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
+	assert(keyboard != NULL);
+	wlr_seat_keyboard_notify_enter(seat, wlr_surface,
+		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
+
 	printf("Surface mapped, set dims to %d %d\n", surface->width, surface->height);
 }
 
@@ -916,18 +926,6 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_above, current.link) {
 		add_subsurface(&server->surfaces, subsurface);
 	}
-
-	// Focus it
-	assert(xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL);
-	wlr_xdg_toplevel_set_activated(xdg_surface, true);
-
-	/*
-	struct wlr_seat *seat = server->seat;
-	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
-	assert(keyboard != NULL);
-	wlr_seat_keyboard_notify_enter(seat, wlr_surface,
-		keyboard->keycodes, keyboard->num_keycodes, &keyboard->modifiers);
-	*/
 
 	/*
 	// We must add xdg popups to the scene graph so	they get rendered. The
