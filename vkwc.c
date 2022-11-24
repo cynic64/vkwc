@@ -354,9 +354,6 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 }
 
 static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
-	// Should only call this on toplevel Surfaces
-	assert(surface->toplevel == surface);
-
 	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
 	assert(xdg_surface != NULL);
 
@@ -929,6 +926,20 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	surface->toplevel = surface;
 	surface->body = NULL;
 	surface->apply_physics = false;
+
+	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
+		struct wlr_xdg_popup *popup = xdg_surface->popup;
+		printf("It's a popup! Geo: %d %d %d %d\n", popup->geometry.x, popup->geometry.y,
+			popup->geometry.width, popup->geometry.height);
+
+		double relative_x, relative_y;
+		wlr_xdg_popup_get_position(popup, &relative_x, &relative_y);
+		surface->x = relative_x;
+		surface->y = relative_y;
+
+		surface->toplevel = find_surface(popup->parent, &server->surfaces);
+		assert(surface->toplevel != NULL);
+	}
 
 	wl_signal_add(&xdg_surface->events.map, &server->handle_xdg_map);
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
