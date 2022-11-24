@@ -55,8 +55,6 @@
 /* For brevity's sake, struct members are annotated where they are used. */
 enum CursorMode	{
 	VKWC_CURSOR_PASSTHROUGH,
-	VKWC_CURSOR_MOVE,
-	VKWC_CURSOR_RESIZE,
 	VKWC_CURSOR_XY_ROTATE,
 	VKWC_CURSOR_Z_ROTATE,
 	VKWC_CURSOR_X_ROTATE_SPEED,
@@ -207,7 +205,7 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			// Move it so its 0, 0 is at the center
 			glm_translate(surface->matrix, (vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
 			// Scale from 0..1, 0..1 to surface->width, surface->height
-			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, 1.0});
+			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, surface->width});
 
 			vec4 top_left = {-1, 1, 0, 1};
 			vec4 dst;
@@ -221,20 +219,39 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 			// Again, these are in backwards order
 
-			// Apply toplevel's transformation
-			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
-
 			// Translate ourselves, again as a factor of toplevel's dimensions
 			glm_translate(surface->matrix, (vec3) {
 				(float) surface->x / toplevel->width,
 				(float) surface->y / toplevel->height,
-				(float) surface->z,
+				0,
+			});
+
+			// Move it back
+			glm_translate(surface->matrix, (vec3) {
+				0.5 * surface->width / toplevel->width,
+				0.5 * surface->height / toplevel->height,
+				0,
+			});
+
+			// Rotate
+			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
+			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
+			glm_rotate_z(surface->matrix, surface->z_rot, surface->matrix);
+
+			// Move it so 0, 0 is at the center
+			glm_translate(surface->matrix, (vec3) {
+				-0.5 * surface->width / toplevel->width,
+				-0.5 * surface->height / toplevel->height,
+				0,
 			});
 
 			// Scale ourselves down so that our width and height becomes relative to toplevel (1 would
 			// be the same width as toplevel, 0.5 would be half, etc.)
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
 				(float) surface->height / toplevel->height, 1});
+
+			// Apply toplevel's transformation
+			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
 		}
 	}
 }
@@ -613,16 +630,7 @@ static void handle_selection_request(struct wl_listener	*listener, void	*data) {
 }
 
 static void process_cursor_motion(struct Server *server, uint32_t time) {
-	/* If the mode is non-passthrough, delegate to those functions.	*/
-	if (server->cursor_mode	== VKWC_CURSOR_MOVE) {
-		fprintf(stderr, "AHHHHH I don't know how to move things!!\n");
-		return;
-	} else if (server->cursor_mode == VKWC_CURSOR_RESIZE) {
-		fprintf(stderr, "AHHHHH I don't know how to resize things!!\n");
-		return;
-	}
-
-	/* Otherwise, find the Surface under the pointer and send the event along.	*/
+	// Find the Surface under the pointer and send the event along.
 	struct wlr_seat	*seat =	server->seat;
 
 	struct Surface *surface;
@@ -633,8 +641,7 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 		// If there's no view under the	cursor,	set the	cursor image to	a
 		// default. This is what makes the cursor image	appear when you	move it
 		// around the screen, not over any views.
-		wlr_xcursor_manager_set_cursor_image(
-				server->cursor_mgr, "left_ptr",	server->cursor);
+		wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
 	} else {
 		//
 		// Send	pointer	enter and motion events.
