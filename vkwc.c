@@ -179,20 +179,10 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 		surface->y_rot += surface->y_rot_speed;
 		surface->z_rot += surface->z_rot_speed;
 
-		// If physics is enabled, clobber position and rotation with physics values
-		if (surface->apply_physics && surface->body != NULL) {
-			surface->x = surface->body->position.x - output_width * 0.5;
-			surface->y = surface->body->position.y - output_height * 0.5;
-			surface->z_rot = surface->body->orient;
-			surface->x_rot = 0;
-			surface->y_rot = 0;
-		}
-
 		assert(surface->toplevel != NULL);
 
-		// If physics is applied, transforms shouldn't be relative to the toplevel
 		bool is_toplevel = surface->toplevel == surface;
-		if (is_toplevel || surface->apply_physics) {
+		if (is_toplevel) {
 			glm_mat4_identity(surface->matrix);
 
 			mat4 view;
@@ -229,14 +219,20 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 			glm_mat4_identity(surface->matrix);
 
+			// Again, these are in backwards order
+
+			// Apply toplevel's transformation
 			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
 
+			// Translate ourselves, again as a factor of toplevel's dimensions
 			glm_translate(surface->matrix, (vec3) {
-				((float) surface->x - toplevel->x) / toplevel->width,
-				((float) surface->y - toplevel->y) / toplevel->height,
-				0,
+				(float) surface->x / toplevel->width,
+				(float) surface->y / toplevel->height,
+				(float) surface->z,
 			});
 
+			// Scale ourselves down so that our width and height becomes relative to toplevel (1 would
+			// be the same width as toplevel, 0.5 would be half, etc.)
 			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
 				(float) surface->height / toplevel->height, 1});
 		}
@@ -475,7 +471,6 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 				check_uv(server, server->cursor->x, server->cursor->y,
 					&server->grabbed_surface, NULL, NULL);
 				if (server->grabbed_surface != NULL) {
-					server->grabbed_surface = server->grabbed_surface->toplevel;
 					server->cursor_mode = mode;
 				} else {
 					printf("No surface under cursor\n");
