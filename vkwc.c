@@ -181,9 +181,6 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 		// If physics is enabled, clobber position and rotation with physics values
 		if (surface->apply_physics && surface->body != NULL) {
-			surface->x_offset = 0;
-			surface->y_offset = 0;
-			surface->z_offset = 0;
 			surface->x = surface->body->position.x - output_width * 0.5;
 			surface->y = surface->body->position.y - output_height * 0.5;
 			surface->z_rot = surface->body->orient;
@@ -212,11 +209,7 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 			// These are in backwards order
 			// Move it
-			glm_translate(surface->matrix, (vec3) {
-				surface->x + surface->x_offset,
-				surface->y + surface->y_offset,
-				surface->z_offset
-			});
+			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, surface->z});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
@@ -260,8 +253,8 @@ void create_bodies(struct wl_list *surfaces, struct wlr_scene_node *node, int cu
 		assert(surface != NULL);
 
 		if (surface->body == NULL && surface->width >= 1 && surface->height >= 1) {
-			float x = cursor_x + surface->x + surface->x_offset;
-			float y = cursor_y + surface->y + surface->y_offset;
+			float x = cursor_x + surface->x;
+			float y = cursor_y + surface->y;
 			float width = surface->width, height = surface->height;
 			surface->body = CreatePhysicsBodyRectangle((Vector2) {x + width / 2, y + height / 2},
 				width, height, 1);
@@ -386,7 +379,7 @@ static void handle_cursor_button(struct wl_listener *listener, void *data) {
 	// Nothing under cursor
 	if (surface == NULL) return;
 
-	focus_surface(server->seat, surface);
+	focus_surface(server->seat, surface->toplevel);
 }
 
 static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
@@ -691,11 +684,11 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 		} else if (server->cursor_mode == VKWC_CURSOR_Z_ROTATE_SPEED) {
 			server->grabbed_surface->z_rot_speed += event->delta_x * 0.02 * 0.05;
 		} else if (server->cursor_mode == VKWC_CURSOR_X_MOVE) {			// Translation
-			server->grabbed_surface->x_offset += event->delta_x;
+			server->grabbed_surface->x += event->delta_x;
 		} else if (server->cursor_mode == VKWC_CURSOR_Y_MOVE) {			// Translation
-			server->grabbed_surface->y_offset += event->delta_y;
+			server->grabbed_surface->y += event->delta_y;
 		} else if (server->cursor_mode == VKWC_CURSOR_Z_MOVE) {			// Translation
-			server->grabbed_surface->z_offset += event->delta_y;
+			server->grabbed_surface->z += event->delta_y;
 		} else {
 			process_cursor_motion(server, event->time_msec);
 		}
@@ -860,7 +853,7 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 	surface->height = wlr_surface->current.height;
 	surface->x = subsurface->current.x;
 	surface->y = subsurface->current.y;
-	surface->z_offset = 2;
+	surface->z = 1;
 
 	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
 

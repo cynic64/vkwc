@@ -23,13 +23,12 @@ struct Surface {
 					// If this _is_ the toplevel surface, set it to point to itself.
 
 	mat4 matrix;
-	int x, y, width, height;
+	int width, height;
 
 	// Set these and calc_matrices will do the rest. Rotations in radians, speeds in radians per frame.
+	float x, y, z;
 	double x_rot, y_rot, z_rot;
 	double x_rot_speed, y_rot_speed, z_rot_speed;
-
-	double x_offset, y_offset, z_offset;	// These get added to the scene node position
 
 	PhysicsBody body;
 	bool apply_physics;			// Physics will only be applied to the surface if this is enabled
