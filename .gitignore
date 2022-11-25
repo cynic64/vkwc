@@ -4,6 +4,21 @@ todo.txt
 vkwc
 stdout
 stderr
+subprojects
 .cache
 *-protocol.c
 *-protocol.h
+
+# All the junk meson generated in vulkan/
+vulkan/.ninja_deps
+vulkan/.ninja_log
+vulkan/build.ninja
+vulkan/compile_commands.json
+vulkan/libxdg_shell.a
+vulkan/libxdg_shell.a.p/
+vulkan/meson-info/
+vulkan/meson-logs/
+vulkan/meson-private/
+vulkan/shaders/meson.build
+vulkan/vkwc.p/
+vulkan/vulkan/
