@@ -159,8 +159,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 	return true;
 }
 
-static void render_texture(struct wlr_output *output, pixman_region32_t *output_damage,
-		struct wlr_texture *texture, mat4 matrix, float surface_id) {
+static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix, float surface_id) {
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
@@ -173,36 +172,7 @@ static void render_node_iterator(struct	wlr_scene_node *node, int _x, int _y, vo
 	struct wlr_output *output = data->output;
 	pixman_region32_t *output_damage = data->damage;
 
-	struct wlr_texture *texture;
-	switch (node->type) {
-	case WLR_SCENE_NODE_ROOT:
-	case WLR_SCENE_NODE_TREE:
-		/* Root	or tree	node has nothing to render itself */
-		break;
-	case WLR_SCENE_NODE_SURFACE:;
-		struct wlr_scene_surface *scene_surface	= wlr_scene_surface_from_node(node);
-		struct wlr_surface *wlr_surface = scene_surface->surface;
-		struct Surface *surface = find_surface(wlr_surface, data->surfaces);
-		assert(surface->toplevel != NULL);
-
-		texture	= wlr_surface_get_texture(wlr_surface);
-		if (texture == NULL) {
-			return;
-		}
-
-		render_texture(output, output_damage, texture, surface->matrix, surface->id);
-
-		if (data->presentation != NULL && scene_surface->primary_output	== output) {
-			wlr_presentation_surface_sampled_on_output(data->presentation, wlr_surface, output);
-		}
-		break;
-	case WLR_SCENE_NODE_RECT:;
-		fprintf(stderr, "Rect rendering unimplemented\n");
-		exit(1);
-	case WLR_SCENE_NODE_BUFFER:;
-		fprintf(stderr, "Buffer rendering unimplemented\n");
-		exit(1);
-	}
+	render_texture(output, texture, surface->matrix, surface->id);
 }
 
 // surfaces should be a list of struct Surface, defined in vkwc.c
@@ -259,11 +229,15 @@ bool draw_frame(struct wlr_scene_output *scene_output, struct wl_list *surfaces,
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
 	render_rect_simple(renderer, color, 10,	10, 10, 10);
 
-	// Draw physics bodies
-	/*
-	int body_count = GetPhysicsBodiesCount();
-	for (int i = 0; i < body_count; i++) {
-		PhysicsBody body = GetPhysicsBody(i);
+	// Actually draw stuff
+	struct Surface *surface;
+	int surface_count = 0;
+	wl_list_for_each(surface, surfaces, link) {
+		//printf("Rendering surface with geo (%d %d %5.1f) %d %d\n", surface->x, surface->y, surface->z_offset,
+		//	surface->width, surface->height);
+		render_surface(output, surface);
+		surface_count++;
+	};
 
 		float color[4] = { i % 2, i % 3 == 0, i % 5 == 0, 1 };
 		if (body->shape.type == PHYSICS_POLYGON) {

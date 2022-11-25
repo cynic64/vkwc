@@ -14,8 +14,6 @@ struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystac
 		}
 	}
 
-	fprintf(stderr, "Couldn't find surface. Looked through %d using needle %p\n",
-		wl_list_length(haystack), (void *) needle);
-	exit(1);
+	return NULL;
 }
 
