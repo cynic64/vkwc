@@ -172,12 +172,23 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 // x and y is the position of the parent node, since a surface only knows its position relative to its parent
 void calc_matrices(struct wl_list *surfaces, int output_width, int output_height) {
 	struct Surface *surface;
+
 	wl_list_for_each(surface, surfaces, link) {
 		surface->x_rot += surface->x_rot_speed;
 		surface->y_rot += surface->y_rot_speed;
 		surface->z_rot += surface->z_rot_speed;
 
 		assert(surface->toplevel != NULL);
+
+		if (surface->apply_physics) {
+			surface->x = surface->body->position.x;
+			surface->y = surface->body->position.y;
+			printf("body pos: %f %f\n", surface->body->position.x, surface->body->position.y);
+
+			surface->x_rot = 0;
+			surface->y_rot = 0;
+			surface->z_rot = surface->body->orient;
+		}
 
 		bool is_toplevel = surface->toplevel == surface;
 		if (is_toplevel) {
@@ -257,28 +268,18 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 }
 
 // We require the cursor position so we can spawn them wherever the cursor is
-void create_bodies(struct wl_list *surfaces, struct wlr_scene_node *node, int cursor_x, int cursor_y) {
-	if (node->type == WLR_SCENE_NODE_SURFACE) {
-		// Find the Surface this node corresponds to
-		struct wlr_scene_surface *scene_surface = wlr_scene_surface_from_node(node);
-		struct wlr_surface *wlr_surface = scene_surface->surface;
-		struct Surface *surface = find_surface(wlr_surface, surfaces);
-		assert(surface != NULL);
+void create_body(struct Surface *surface) {
+	assert(surface->body == NULL);
+	assert(surface->width > 0 && surface->height > 0);
+	assert(surface->toplevel == surface);
 
-		if (surface->body == NULL && surface->width >= 1 && surface->height >= 1) {
-			float x = cursor_x + surface->x;
-			float y = cursor_y + surface->y;
-			float width = surface->width, height = surface->height;
-			surface->body = CreatePhysicsBodyRectangle((Vector2) {x + width / 2, y + height / 2},
-				width, height, 1);
-			surface->body->restitution = 0;
-		};
-	}
-
-	struct wlr_scene_node *cur;
-	wl_list_for_each(cur, &node->state.children, state.link) {
-		create_bodies(surfaces, cur, cursor_x, cursor_y);
-	};
+	printf("Creating physics body!\n");
+	float x = surface->x;
+	float y = surface->y;
+	float width = surface->width, height = surface->height;
+	surface->body = CreatePhysicsBodyRectangle((Vector2) {x - width / 2, y - height / 2},
+		width, height, 1);
+	surface->body->restitution = 0;
 }
 
 void check_uv(struct Server *server, int cursor_x, int cursor_y,
@@ -739,6 +740,9 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct Server *server = wl_container_of(listener, server, output_frame);
 	struct wlr_output *output = server->output;
 
+	// Move the floor back to the right position
+	server->floor->position.y = 0.5 * server->output->height;
+
 	// Pre-frame processing
 	struct wl_list *surfaces = &server->surfaces;
 	calc_matrices(surfaces, output->width, output->height);
@@ -827,6 +831,13 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
+
+	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL) {
+		create_body(surface);
+		surface->apply_physics = true;
+		surface->body->position.x = server->cursor->x - 0.5 * server->output->width;
+		surface->body->position.y = server->cursor->y - 0.5 * server->output->height;
+	}
 
 	focus_surface(server->seat, surface);
 
