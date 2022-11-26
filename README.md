@@ -40,8 +40,7 @@ $ meson build/
 $ ninja -C build
 ```
 
-An executable called `vkwc` will be created in the current directory. Feel free to raise an issue if this doesn't
-work.
+An executable called `vkwc` will be created in `build/`. Feel free to raise an issue if this doesn't work.
 
 ## Usage
 I **highly** recommend running vkwc nested a more stable compositor like Sway. If you run this in its own TTY, it may
