@@ -19,6 +19,5 @@ vulkan/libxdg_shell.a.p/
 vulkan/meson-info/
 vulkan/meson-logs/
 vulkan/meson-private/
-vulkan/shaders/meson.build
 vulkan/vkwc.p/
 vulkan/vulkan/

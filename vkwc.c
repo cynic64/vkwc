@@ -183,7 +183,6 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 		if (surface->apply_physics) {
 			surface->x = surface->body->position.x;
 			surface->y = surface->body->position.y;
-			printf("body pos: %f %f\n", surface->body->position.x, surface->body->position.y);
 
 			surface->x_rot = 0;
 			surface->y_rot = 0;

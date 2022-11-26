@@ -81,6 +81,6 @@ executable(
       xkbcommon,
       xdg_shell,
       cglm,
-    ],
+    ]
 )
 
