@@ -20,11 +20,11 @@
 
 #include "render/pixel_format.h"
 #include "render/vulkan.h"
-#include "build/vulkan/shaders/common.vert.h"
-#include "build/vulkan/shaders/texture.frag.h"
-#include "build/vulkan/shaders/quad.frag.h"
-#include "build/vulkan/shaders/postprocess.vert.h"
-#include "build/vulkan/shaders/postprocess.frag.h"
+#include "vulkan/shaders/common.vert.h"
+#include "vulkan/shaders/texture.frag.h"
+#include "vulkan/shaders/quad.frag.h"
+#include "vulkan/shaders/postprocess.vert.h"
+#include "vulkan/shaders/postprocess.frag.h"
 #include <wlr/types/wlr_buffer.h>
 
 // TODO:
