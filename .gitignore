@@ -8,6 +8,8 @@ subprojects
 .cache
 *-protocol.c
 *-protocol.h
+*.swp
+tags
 
 # All the junk meson generated in vulkan/
 vulkan/.ninja_deps

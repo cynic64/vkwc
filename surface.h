@@ -2,7 +2,6 @@
 #define surface_h_INCLUDED
 
 #include <cglm/cglm.h>
-#include <wlr/types/wlr_surface.h>
 
 #ifndef PHYSAC_IMPLEMENTATION
 #define PHYSAC_STANDALONE

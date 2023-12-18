@@ -10,6 +10,7 @@
 #include <wlr/util/log.h>
 #include "render/pixel_format.h"
 #include "render/vulkan.h"
+#include <stdio.h>
 
 static const struct wlr_texture_impl texture_impl;
 
@@ -26,14 +27,6 @@ static VkImageAspectFlagBits mem_plane_aspect(unsigned i) {
 	case 3: return VK_IMAGE_ASPECT_MEMORY_PLANE_3_BIT_EXT;
 	default: abort(); // unreachable
 	}
-}
-
-static bool vulkan_texture_is_opaque(struct wlr_texture *wlr_texture) {
-	struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
-	const struct wlr_pixel_format_info *format_info = drm_get_pixel_format_info(
-			texture->format->drm_format);
-	assert(format_info);
-	return !format_info->has_alpha;
 }
 
 // Will transition the texture to shaderReadOnlyOptimal layout for reading
@@ -140,11 +133,21 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 }
 
 static bool vulkan_texture_write_pixels(struct wlr_texture *wlr_texture,
-		uint32_t stride, uint32_t width, uint32_t height, uint32_t src_x,
-		uint32_t src_y, uint32_t dst_x, uint32_t dst_y, const void *vdata) {
-	return write_pixels(wlr_texture, stride, width, height, src_x, src_y,
-		dst_x, dst_y, vdata, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		struct wlr_buffer *buffer, pixman_region32_t *damage) {
+	size_t stride;
+	void *data;
+	uint32_t format;
+
+	wlr_buffer_begin_data_ptr_access(buffer, 0 /* flags */, &data, &format, &stride);
+	printf("[vulkan_texture_write_pixels] stride: %lu, data: %p, format: %u\n",
+		stride, data, format);
+	bool return_val = write_pixels(wlr_texture, stride, buffer->width, buffer->height,
+		0 /* src_x */, 0 /* src_y */, damage->extents.x1, damage->extents.y1, data,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+	wlr_buffer_end_data_ptr_access(buffer);
+
+	return return_val;
 }
 
 void vulkan_texture_destroy(struct wlr_vk_texture *texture) {
@@ -153,7 +156,7 @@ void vulkan_texture_destroy(struct wlr_vk_texture *texture) {
 		return;
 	}
 
-	// when we recorded a command to fill this image _this_ frame,
+	// When we recorded a command to fill this image _this_ frame,
 	// it has to be executed before the texture can be destroyed.
 	// Add it to the renderer->destroy_textures list, destroying
 	// _after_ the stage command buffer has exectued
@@ -194,8 +197,7 @@ static void vulkan_texture_unref(struct wlr_texture *wlr_texture) {
 }
 
 static const struct wlr_texture_impl texture_impl = {
-	.is_opaque = vulkan_texture_is_opaque,
-	.write_pixels = vulkan_texture_write_pixels,
+	.update_from_buffer = vulkan_texture_write_pixels,
 	.destroy = vulkan_texture_unref,
 };
 
@@ -221,9 +223,6 @@ static struct wlr_texture *vulkan_texture_from_pixels(struct wlr_renderer *wlr_r
 
 	VkResult res;
 	VkDevice dev = renderer->dev->dev;
-
-	wlr_log(WLR_DEBUG, "vulkan_texture_from_pixels: %.4s, %dx%d",
-		(const char*) &drm_fmt, width, height);
 
 	const struct wlr_vk_format_props *fmt =
 		vulkan_format_props_from_drm(renderer->dev, drm_fmt);

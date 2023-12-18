@@ -862,7 +862,8 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	// Refresh projection matrix.
 	// wlr_matrix_projection assumes a GL coordinate system so we need
 	// to pass WL_OUTPUT_TRANSFORM_FLIPPED_180 to adjust it for vulkan.
-	wlr_matrix_projection(renderer->projection, width, height, WL_OUTPUT_TRANSFORM_FLIPPED_180);
+	// FIXME
+	//wlr_matrix_projection(renderer->projection, width, height, WL_OUTPUT_TRANSFORM_FLIPPED_180);
 
 	renderer->render_width = width;
 	renderer->render_height = height;
@@ -1314,7 +1315,7 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 }
 
 static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
-		uint32_t drm_format, uint32_t *flags, uint32_t stride,
+		uint32_t drm_format, uint32_t stride,
 		uint32_t width, uint32_t height, uint32_t src_x, uint32_t src_y,
 		uint32_t dst_x, uint32_t dst_y, void *data) {
 	bool success = false;

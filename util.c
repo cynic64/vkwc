@@ -22,15 +22,17 @@ struct wlr_scene_node *get_toplevel_node(struct wlr_scene_node *node) {
 	// Go up until we hit the root
 	assert(cur->parent != NULL);
 	while (1) {
-		cur = cur->parent;
+		cur = &cur->parent->node;
 		assert(cur->parent != NULL);
 
-		if (cur->parent->type == WLR_SCENE_NODE_ROOT) break;
+		// If our parent doesn't have a parent, our parent is the root
+		// node and we are the toplevel window, so stop.
+		if (cur->parent->node.parent == NULL) break;
 	}
 
 	// Go down until we hit	a surface
 	while (cur->type == WLR_SCENE_NODE_TREE) {
-		cur = wl_container_of(cur->state.children.next,	cur, state.link);
+		cur = wl_container_of(cur->parent->children.next, cur, link);
 		assert(cur != NULL);	// Couldn't find a surface
 	}
 
@@ -40,19 +42,13 @@ struct wlr_scene_node *get_toplevel_node(struct wlr_scene_node *node) {
 void print_scene_graph(struct wlr_scene_node *node, int	level) {
 	for (int i = 0;	i < level; i++)	printf("\t");
 	printf("Node type: %s, %d children, xy relative to parent: %d %d\n",
-		SCENE_NODE_TYPE_LOOKUP[node->type], wl_list_length(&node->state.children),
-		node->state.x, node->state.y);
+		SCENE_NODE_TYPE_LOOKUP[node->type], wl_list_length(&node->parent->children),
+		node->x, node->y);
 
 	for (int i = 0;	i < level; i++)	printf("\t");
-	if (node->type == WLR_SCENE_NODE_ROOT) {
-		struct wlr_scene *scene = (struct wlr_scene *) node;
-		printf("Cast as ROOT. %d outputs\n", wl_list_length(&scene->outputs));
-	} else if (node->type == WLR_SCENE_NODE_TREE) {
+
+	if (node->type == WLR_SCENE_NODE_TREE) {
 		printf("Cast as TREE. Nothing interesting\n");
-	} else if (node->type == WLR_SCENE_NODE_SURFACE) {
-		struct wlr_scene_surface *scene_surface = (struct wlr_scene_surface *) node;
-		struct wlr_surface_state surface_state = scene_surface->surface->current;
-		printf("Cast as SURFACE. Dims: %d x %d\n", surface_state.width, surface_state.height);
 	} else if (node->type == WLR_SCENE_NODE_RECT) {
 		struct wlr_scene_rect *scene_rect = (struct wlr_scene_rect *) node;
 		printf("Cast as RECT. Dims: %d x %d, color: %f %f %f %f\n",
@@ -68,7 +64,7 @@ void print_scene_graph(struct wlr_scene_node *node, int	level) {
 	}
 
 	struct wlr_scene_node *child;
-	wl_list_for_each(child,	&node->state.children, state.link) {
+	wl_list_for_each(child,	&node->parent->children, link) {
 		print_scene_graph(child, level + 1);
 	}
 }

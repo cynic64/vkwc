@@ -16,7 +16,7 @@ void main() {
 
 	if (tex_color.a == 0) discard;
 
-	out_color = tex_color;
+	out_color = vec4(tex_color.xyz, 0.5);
 	out_uv = vec4(uv, data.surface_id, 1);
 }
 

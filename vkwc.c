@@ -40,6 +40,7 @@
 #include <wlr/xwayland.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
+#include <wlr/types/wlr_subcompositor.h>
 
 #define PHYSAC_IMPLEMENTATION
 #define PHYSAC_STANDALONE
@@ -138,7 +139,7 @@ struct Server {
 struct Keyboard	{
 	struct wl_list link;
 	struct Server *server;
-	struct wlr_input_device	*device;
+	struct wlr_keyboard *keyboard;
 
 	struct wl_listener modifiers;
 	struct wl_listener key;
@@ -358,7 +359,9 @@ static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
 	assert(xdg_surface != NULL);
 
 	if (xdg_surface->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL) return;
-	wlr_xdg_toplevel_set_activated(xdg_surface, true);
+	// Convert it to its container struct
+	struct wlr_xdg_toplevel *toplevel = wl_container_of(xdg_surface, toplevel, base);
+	wlr_xdg_toplevel_set_activated(toplevel, true);
 
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
 	assert(keyboard != NULL);
@@ -371,7 +374,7 @@ static void handle_cursor_button(struct wl_listener *listener, void *data) {
 	 * event. */
 	struct Server *server =
 		wl_container_of(listener, server, cursor_button);
-	struct wlr_event_pointer_button	*event = data;
+	struct wlr_pointer_button_event *event = data;
 
 	/* Notify the client with pointer focus	that a button press has	occurred */
 	wlr_seat_pointer_notify_button(server->seat,
@@ -403,10 +406,10 @@ static void handle_keyboard_modifiers(struct wl_listener *listener, void *data) 
 	 * same	seat. You can swap out the underlying wlr_keyboard like	this and
 	 * wlr_seat handles this transparently.
 	 */
-	wlr_seat_set_keyboard(keyboard->server->seat, keyboard->device);
+	wlr_seat_set_keyboard(keyboard->server->seat, keyboard->keyboard);
 	/* Send	modifiers to the client. */
 	wlr_seat_keyboard_notify_modifiers(keyboard->server->seat,
-		&keyboard->device->keyboard->modifiers);
+		&keyboard->keyboard->modifiers);
 }
 
 static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
@@ -503,7 +506,7 @@ static void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	struct Keyboard	*keyboard =
 		wl_container_of(listener, keyboard, key);
 	struct Server *server =	keyboard->server;
-	struct wlr_event_keyboard_key *event = data;
+	struct wlr_keyboard_key_event *event = data;
 	struct wlr_seat	*seat =	server->seat;
 
 	/* Translate libinput keycode -> xkbcommon */
@@ -511,10 +514,10 @@ static void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	/* Get a list of keysyms based on the keymap for this keyboard */
 	const xkb_keysym_t *syms;
 	int nsyms = xkb_state_key_get_syms(
-			keyboard->device->keyboard->xkb_state, keycode,	&syms);
+			keyboard->keyboard->xkb_state, keycode,	&syms);
 
 	bool handled = false;
-	uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->device->keyboard);
+	uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->keyboard);
 	if ((modifiers & WLR_MODIFIER_ALT) &&
 			event->state ==	WL_KEYBOARD_KEY_STATE_PRESSED) {
 		/* If alt is held down and this	button was _pressed_, we attempt to
@@ -526,7 +529,7 @@ static void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	if (!handled) {
 		/* Otherwise, we pass it along to the client. */
-		wlr_seat_set_keyboard(seat, keyboard->device);
+		wlr_seat_set_keyboard(seat, keyboard->keyboard);
 		wlr_seat_keyboard_notify_key(seat, event->time_msec,
 			event->keycode,	event->state);
 	}
@@ -536,7 +539,7 @@ static void server_new_keyboard(struct Server *server, struct wlr_input_device *
 	struct Keyboard	*keyboard =
 		calloc(1, sizeof(struct	Keyboard));
 	keyboard->server = server;
-	keyboard->device = device;
+	keyboard->keyboard = wl_container_of(device, keyboard->keyboard, base);
 
 	/* We need to prepare an XKB keymap and	assign it to the keyboard. This
 	 * assumes the defaults	(e.g. layout = "us"). */
@@ -544,18 +547,20 @@ static void server_new_keyboard(struct Server *server, struct wlr_input_device *
 	struct xkb_keymap *keymap = xkb_keymap_new_from_names(context, NULL,
 		XKB_KEYMAP_COMPILE_NO_FLAGS);
 
-	wlr_keyboard_set_keymap(device->keyboard, keymap);
+	wlr_keyboard_set_keymap(keyboard->keyboard, keymap);
 	xkb_keymap_unref(keymap);
 	xkb_context_unref(context);
-	wlr_keyboard_set_repeat_info(device->keyboard, 25, 600);
+	wlr_keyboard_set_repeat_info(keyboard->keyboard, 25, 600);
 
 	/* Here	we set up listeners for	keyboard events. */
 	keyboard->modifiers.notify = handle_keyboard_modifiers;
-	wl_signal_add(&device->keyboard->events.modifiers, &keyboard->modifiers);
+	wl_signal_add(&keyboard->keyboard->events.modifiers, &keyboard->modifiers);
 	keyboard->key.notify = handle_keyboard_key;
-	wl_signal_add(&device->keyboard->events.key, &keyboard->key);
-
-	wlr_seat_set_keyboard(server->seat, device);
+	wl_signal_add(&keyboard->keyboard->events.key, &keyboard->key);
+	
+	// Get the keyboard from the input device
+	struct wlr_keyboard *wlr_keyboard = wl_container_of(device, wlr_keyboard, base);
+	wlr_seat_set_keyboard(server->seat, wlr_keyboard);
 
 	/* And add the keyboard	to our list of keyboards */
 	wl_list_insert(&server->keyboards, &keyboard->link);
@@ -661,13 +666,13 @@ static void handle_cursor_motion_relative(struct wl_listener *listener,	void *da
 	 * pointer motion event	(i.e. a	delta) */
 	struct Server *server =
 		wl_container_of(listener, server, cursor_motion);
-	struct wlr_event_pointer_motion	*event = data;
+	struct wlr_pointer_motion_event *event = data;
 	/* The cursor doesn't move unless we tell it to. The cursor automatically
 	 * handles constraining	the motion to the output layout, as well as any
 	 * special configuration applied for the specific input	device which
 	 * generated the event.	You can	pass NULL for the device if you	want to	move
 	 * the cursor around without any input.	*/
-	wlr_cursor_move(server->cursor,	event->device, event->delta_x, event->delta_y);
+	wlr_cursor_move(server->cursor,	&event->pointer->base, event->delta_x, event->delta_y);
 
 	// If we're in a transform mode, don't bother processing the motion
 	if (server->grabbed_surface != NULL) {
@@ -705,8 +710,8 @@ static void handle_cursor_motion_absolute(struct wl_listener *listener, void *da
 	 * emits these events. */
 	struct Server *server =
 		wl_container_of(listener, server, cursor_motion_absolute);
-	struct wlr_event_pointer_motion_absolute *event	= data;
-	wlr_cursor_warp_absolute(server->cursor, event->device,	event->x, event->y);
+	struct wlr_pointer_motion_absolute_event *event = data;
+	wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
 	process_cursor_motion(server, event->time_msec);
 }
 
@@ -715,7 +720,7 @@ static void handle_cursor_axis(struct wl_listener *listener, void *data) {
 	 * for example when you	move the scroll	wheel. */
 	struct Server *server =
 		wl_container_of(listener, server, cursor_axis);
-	struct wlr_event_pointer_axis *event = data;
+	struct wlr_pointer_axis_event *event = data;
 	/* Notify the client with pointer focus	of the axis event. */
 	wlr_seat_pointer_notify_axis(server->seat,
 			event->time_msec, event->orientation, event->delta,
@@ -939,8 +944,9 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 
 	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
 		struct wlr_xdg_popup *popup = xdg_surface->popup;
-		printf("It's a popup! Geo: %d %d %d %d\n", popup->geometry.x, popup->geometry.y,
-			popup->geometry.width, popup->geometry.height);
+		struct wlr_surface *popup_surface = popup->base->surface;
+		printf("It's a popup! Geo: %d %d %d %d\n", popup_surface->sx, popup_surface->sy,
+			popup_surface->current.width, popup_surface->current.height);
 
 		double relative_x, relative_y;
 		wlr_xdg_popup_get_position(popup, &relative_x, &relative_y);
@@ -1023,6 +1029,8 @@ int main(int argc, char	*argv[]) {
 	struct wlr_compositor *compositor = wlr_compositor_create(server.wl_display, server.renderer);
 	wlr_data_device_manager_create(server.wl_display);
 
+	struct wlr_subcompositor *subcompositor = wlr_subcompositor_create(server.wl_display);
+
 	// I used to listen to the new surface event. Now, we instead map listeners to xdg_surface->map and
 	// xdg_surface->subsurface->map to get positioning information.
 	wl_list_init(&server.surfaces);
@@ -1041,7 +1049,7 @@ int main(int argc, char	*argv[]) {
 	 *
 	 * https://drewdevault.com/2018/07/29/Wayland-shells.html
 	 */
-	server.xdg_shell = wlr_xdg_shell_create(server.wl_display);
+	server.xdg_shell = wlr_xdg_shell_create(server.wl_display, 1);
 
 	server.new_xdg_surface.notify =	handle_new_xdg_surface;
 	wl_signal_add(&server.xdg_shell->events.new_surface,
