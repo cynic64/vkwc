@@ -49,22 +49,10 @@
 #include "vulkan.h"
 #include "render.h"
 #include "util.h"
+#include "vkwc.h"
 #include "render/vulkan.h"
 
 #define PHYSAC_BOUNDARY_THICKNESS	10
-
-/* For brevity's sake, struct members are annotated where they are used. */
-enum CursorMode	{
-	VKWC_CURSOR_PASSTHROUGH,
-	VKWC_CURSOR_XY_ROTATE,
-	VKWC_CURSOR_Z_ROTATE,
-	VKWC_CURSOR_X_ROTATE_SPEED,
-	VKWC_CURSOR_Y_ROTATE_SPEED,
-	VKWC_CURSOR_Z_ROTATE_SPEED,
-	VKWC_CURSOR_X_MOVE,
-	VKWC_CURSOR_Y_MOVE,
-	VKWC_CURSOR_Z_MOVE,
-};
 
 enum CursorMode TRANSFORM_MODES[] = {
 	VKWC_CURSOR_XY_ROTATE,
@@ -86,54 +74,6 @@ xkb_keysym_t TRANSFORM_KEYS[] = {
 	XKB_KEY_z,
 	XKB_KEY_x,
 	XKB_KEY_c,
-};
-
-struct Server {
-	struct wl_display *wl_display;
-	struct wlr_backend *backend;
-	struct wlr_renderer *renderer;
-	struct wlr_allocator *allocator;
-
-	struct wlr_xdg_shell *xdg_shell;
-	struct wl_listener new_xdg_surface;
-	struct wl_listener handle_xdg_map;
-	struct wl_listener handle_new_subsurface;
-	struct wl_listener handle_subsurface_map;
-
-	struct wlr_cursor *cursor;
-	struct wlr_xcursor_manager *cursor_mgr;
-	struct wl_listener cursor_motion;
-	struct wl_listener cursor_motion_absolute;
-	struct wl_listener cursor_button;
-	struct wl_listener cursor_axis;
-	struct wl_listener cursor_frame;
-
-	struct wlr_seat	*seat;
-	struct wl_listener new_input;
-	struct wl_listener request_cursor;
-	struct wl_listener request_set_selection;
-	struct wl_list keyboards;
-	enum CursorMode	cursor_mode;
-	double grab_x, grab_y;
-	struct wlr_box grab_geobox;
-	uint32_t resize_edges;
-	struct Surface *grabbed_surface;
-
-	struct wlr_output *output;
-	struct wlr_output_layout *output_layout;	// Even though we only support one output, the screencopy API
-							// requires this
-	struct wl_listener output_frame;
-	struct wl_listener new_output;
-
-	struct wl_listener new_xwayland_surface;
-
-	struct wl_list windows;
-
-	struct wl_listener new_surface;
-	struct wl_list surfaces;
-
-	// We have to update the position of this if the screen size changes
-	PhysicsBody floor;
 };
 
 struct Keyboard	{
@@ -359,9 +299,7 @@ static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
 	assert(xdg_surface != NULL);
 
 	if (xdg_surface->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL) return;
-	// Convert it to its container struct
-	struct wlr_xdg_toplevel *toplevel = wl_container_of(xdg_surface, toplevel, base);
-	wlr_xdg_toplevel_set_activated(toplevel, true);
+	wlr_xdg_toplevel_set_activated(xdg_surface->toplevel, true);
 
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
 	assert(keyboard != NULL);
@@ -813,8 +751,10 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 // Allocates a new Surface, zeroing the struct and setting server, wlr_surface, id, and destroy.
 // The user must still set the geometry, physics body, and toplevel.
 // Also adds surface to surfaces.
-static struct Surface *create_surface(struct wl_list *surfaces, struct wlr_surface *wlr_surface) {
+static struct Surface *create_surface(struct Server *server, struct wl_list *surfaces,
+		struct wlr_surface *wlr_surface) {
 	struct Surface *surface = calloc(1, sizeof(struct Surface));
+	surface->server = server;
 	surface->wlr_surface = wlr_surface;
 	surface->toplevel = NULL;
 	surface->id = (double) rand() / RAND_MAX;
@@ -826,12 +766,12 @@ static struct Surface *create_surface(struct wl_list *surfaces, struct wlr_surfa
 
 // The Surface was already created, we just have to set the width and height
 static void handle_xdg_map(struct wl_listener *listener, void *data) {
-	struct Server *server = wl_container_of(listener, server, handle_xdg_map);
-	struct wlr_xdg_surface *xdg_surface = data;
-	struct wlr_surface *wlr_surface = xdg_surface->surface;
-
-	struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+	printf("handle_xdg_map called with data: %p\n", data);
+	struct Surface *surface = wl_container_of(listener, surface, map);
 	assert(surface != NULL);
+	struct Server *server = surface->server;
+	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
+	struct wlr_surface *wlr_surface = xdg_surface->surface;
 
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
@@ -860,7 +800,7 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 	assert(found_surface == NULL);
 
 	// Create a new Surface
-	struct Surface *surface = create_surface(&server->surfaces, wlr_surface);
+	struct Surface *surface = create_surface(server, &server->surfaces, wlr_surface);
 	printf("Adding sneaky subsurface with geo %d %d %d %d\n", subsurface->current.x, subsurface->current.y,
 		wlr_surface->current.width, wlr_surface->current.height);
 	surface->width = wlr_surface->current.width;
@@ -926,14 +866,17 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	struct wlr_xdg_surface *xdg_surface = data;
 	struct wlr_surface *wlr_surface = xdg_surface->surface;
 
-	printf("New XDG surface!\n");
+	printf("New XDG surface with role %d!\n", xdg_surface->role);
 
 	// The width and height will be filled in by handle_xdg_map once it is known
-	struct Surface *surface = create_surface(&server->surfaces, wlr_surface);
+	struct Surface *surface = create_surface(server, &server->surfaces, wlr_surface);
 
 	surface->xdg_surface = xdg_surface;
 	surface->width = 0;
 	surface->height = 0;
+
+	surface->map.notify = handle_xdg_map;
+	wl_signal_add(&xdg_surface->events.map, &surface->map);
 
 	surface->destroy.notify = surface_handle_destroy;
 	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
@@ -957,7 +900,6 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 		assert(surface->toplevel != NULL);
 	}
 
-	wl_signal_add(&xdg_surface->events.map, &server->handle_xdg_map);
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
 
 	// Check for subsurfaces above and below
@@ -1055,7 +997,6 @@ int main(int argc, char	*argv[]) {
 	wl_signal_add(&server.xdg_shell->events.new_surface,
 			&server.new_xdg_surface);
 
-	server.handle_xdg_map.notify = handle_xdg_map;
 	server.handle_new_subsurface.notify = handle_new_subsurface;
 	server.handle_subsurface_map.notify = handle_subsurface_map;
 

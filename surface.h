@@ -8,11 +8,18 @@
 #include "physac.h"
 #endif
 
+#include "vkwc.h"
+
 struct Surface {
 	struct wl_list link;
+	struct wl_listener map;
 	struct wl_listener destroy;
 	struct wlr_surface *wlr_surface;
 	struct wlr_xdg_surface *xdg_surface;
+
+	// I hate having to point back to the server but it's necessary because
+	// handle_xdg_map has to be able to focus the surface once it's mapped.
+	struct Server *server;
 	
 	float id;			// Is a float since it gets written to the depth buffer
 	
@@ -20,6 +27,7 @@ struct Surface {
 					// surface belongs to. So all the titlebars and such can easily access the
 					// surface data of the main window.
 					// If this _is_ the toplevel surface, set it to point to itself.
+					// TODO: make it null when toplevel instead
 
 	mat4 matrix;
 	int width, height;
