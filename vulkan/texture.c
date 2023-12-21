@@ -132,22 +132,37 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 	return true;
 }
 
-static bool vulkan_texture_write_pixels(struct wlr_texture *wlr_texture,
+static bool vulkan_texture_update_from_buffer(struct wlr_texture *wlr_texture,
 		struct wlr_buffer *buffer, pixman_region32_t *damage) {
 	size_t stride;
 	void *data;
 	uint32_t format;
 
 	wlr_buffer_begin_data_ptr_access(buffer, 0 /* flags */, &data, &format, &stride);
-	printf("[vulkan_texture_write_pixels] stride: %lu, data: %p, format: %u\n",
-		stride, data, format);
-	bool return_val = write_pixels(wlr_texture, stride, buffer->width, buffer->height,
-		0 /* src_x */, 0 /* src_y */, damage->extents.x1, damage->extents.y1, data,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+
+	// The user can pass multiple rectangles. So we iterate over them.
+	int rects_len = 0;
+	pixman_box32_t *rects = pixman_region32_rectangles(damage, &rects_len);
+
+	printf("[vulkan_texture_update_from_buffer] stride: %lu, data: %p, format: %u, rect count: %d\n",
+		stride, data, format, rects_len);
+
+	bool is_ok;
+	for (int i = 0; i < rects_len; i++) {
+		int x = rects[i].x1, y = rects[i].y1;
+		int width = rects[i].x2 - rects[i].x1;
+		int height = rects[i].y2 - rects[i].y1;
+
+		is_ok = write_pixels(wlr_texture, stride, width, height,
+			x, y, x, y, data,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+
+		if (!is_ok) break;
+	}
 	wlr_buffer_end_data_ptr_access(buffer);
 
-	return return_val;
+	return is_ok;
 }
 
 void vulkan_texture_destroy(struct wlr_vk_texture *texture) {
@@ -197,7 +212,7 @@ static void vulkan_texture_unref(struct wlr_texture *wlr_texture) {
 }
 
 static const struct wlr_texture_impl texture_impl = {
-	.update_from_buffer = vulkan_texture_write_pixels,
+	.update_from_buffer = vulkan_texture_update_from_buffer,
 	.destroy = vulkan_texture_unref,
 };
 
