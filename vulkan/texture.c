@@ -21,11 +21,11 @@ struct wlr_vk_texture *vulkan_get_texture(struct wlr_texture *wlr_texture) {
 
 static VkImageAspectFlagBits mem_plane_aspect(unsigned i) {
 	switch (i) {
-	case 0: return VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT;
-	case 1: return VK_IMAGE_ASPECT_MEMORY_PLANE_1_BIT_EXT;
-	case 2: return VK_IMAGE_ASPECT_MEMORY_PLANE_2_BIT_EXT;
-	case 3: return VK_IMAGE_ASPECT_MEMORY_PLANE_3_BIT_EXT;
-	default: abort(); // unreachable
+		case 0: return VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT;
+		case 1: return VK_IMAGE_ASPECT_MEMORY_PLANE_1_BIT_EXT;
+		case 2: return VK_IMAGE_ASPECT_MEMORY_PLANE_2_BIT_EXT;
+		case 3: return VK_IMAGE_ASPECT_MEMORY_PLANE_3_BIT_EXT;
+		default: abort(); // unreachable
 	}
 }
 
