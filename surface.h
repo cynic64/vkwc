@@ -3,11 +3,6 @@
 
 #include <cglm/cglm.h>
 
-#ifndef PHYSAC_IMPLEMENTATION
-#define PHYSAC_STANDALONE
-#include "physac.h"
-#endif
-
 #include "vkwc.h"
 
 struct Surface {
@@ -36,9 +31,6 @@ struct Surface {
 	float x, y, z;
 	double x_rot, y_rot, z_rot;
 	double x_rot_speed, y_rot_speed, z_rot_speed;
-
-	PhysicsBody body;
-	bool apply_physics;			// Physics will only be applied to the surface if this is enabled
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);

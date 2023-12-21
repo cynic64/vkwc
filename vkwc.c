@@ -42,17 +42,11 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
 
-#define PHYSAC_IMPLEMENTATION
-#define PHYSAC_STANDALONE
-#include "physac.h"
-
 #include "vulkan.h"
 #include "render.h"
 #include "util.h"
 #include "vkwc.h"
 #include "render/vulkan.h"
-
-#define PHYSAC_BOUNDARY_THICKNESS	10
 
 enum CursorMode TRANSFORM_MODES[] = {
 	VKWC_CURSOR_XY_ROTATE,
@@ -88,18 +82,6 @@ struct Keyboard	{
 static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 	struct Surface *surface = wl_container_of(listener, surface, destroy);
 
-	// TODO: Why does this make it crash? :((
-	/*
-	if (surface->body != NULL) {
-		DestroyPhysicsBody(surface->body);
-	}
-	*/
-	if (surface->body != NULL) {
-		surface->body->position.x = 10000;
-		surface->body->position.y = 10000;
-		surface->body->enabled = false;
-	}
-
 	wl_list_remove(&surface->link);
 	wl_list_remove(&surface->destroy.link);
 
@@ -120,15 +102,6 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 		surface->z_rot += surface->z_rot_speed;
 
 		assert(surface->toplevel != NULL);
-
-		if (surface->apply_physics) {
-			surface->x = surface->body->position.x;
-			surface->y = surface->body->position.y;
-
-			surface->x_rot = 0;
-			surface->y_rot = 0;
-			surface->z_rot = surface->body->orient;
-		}
 
 		bool is_toplevel = surface->toplevel == surface;
 		if (is_toplevel) {
@@ -205,21 +178,6 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
 		}
 	}
-}
-
-// We require the cursor position so we can spawn them wherever the cursor is
-void create_body(struct Surface *surface) {
-	assert(surface->body == NULL);
-	assert(surface->width > 0 && surface->height > 0);
-	assert(surface->toplevel == surface);
-
-	printf("Creating physics body!\n");
-	float x = surface->x;
-	float y = surface->y;
-	float width = surface->width, height = surface->height;
-	surface->body = CreatePhysicsBodyRectangle((Vector2) {x - width / 2, y - height / 2},
-		width, height, 1);
-	surface->body->restitution = 0;
 }
 
 void check_uv(struct Server *server, int cursor_x, int cursor_y,
@@ -682,9 +640,6 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct Server *server = wl_container_of(listener, server, output_frame);
 	struct wlr_output *output = server->output;
 
-	// Move the floor back to the right position
-	server->floor->position.y = 0.5 * server->output->height;
-
 	// Pre-frame processing
 	struct wl_list *surfaces = &server->surfaces;
 	calc_matrices(surfaces, output->width, output->height);
@@ -749,7 +704,7 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 }
 
 // Allocates a new Surface, zeroing the struct and setting server, wlr_surface, id, and destroy.
-// The user must still set the geometry, physics body, and toplevel.
+// The user must still set the geometry and toplevel.
 // Also adds surface to surfaces.
 static struct Surface *create_surface(struct Server *server, struct wl_list *surfaces,
 		struct wlr_surface *wlr_surface) {
@@ -775,13 +730,6 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
-
-	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL) {
-		create_body(surface);
-		surface->apply_physics = true;
-		surface->body->position.x = server->cursor->x - 0.5 * server->output->width;
-		surface->body->position.y = server->cursor->y - 0.5 * server->output->height;
-	}
 
 	focus_surface(server->seat, surface);
 
@@ -882,8 +830,6 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	wl_signal_add(&wlr_surface->events.destroy, &surface->destroy);
 
 	surface->toplevel = surface;
-	surface->body = NULL;
-	surface->apply_physics = false;
 
 	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
 		struct wlr_xdg_popup *popup = xdg_surface->popup;
@@ -1117,12 +1063,6 @@ int main(int argc, char	*argv[]) {
 		}
 	}
 
-	// Start the physics engine
-	InitPhysics();
-	// Make the floor (it's huge so we don't have to resize it later)
-	server.floor = CreatePhysicsBodyRectangle((Vector2) {0, 0}, 10000, PHYSAC_BOUNDARY_THICKNESS, 10);
-	server.floor->enabled = false;
-
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting	the backend rigged up all of the necessary event
 	 * loop	configuration to listen	to libinput events, DRM	events,	generate
@@ -1132,7 +1072,6 @@ int main(int argc, char	*argv[]) {
 	wl_display_run(server.wl_display);
 
 	/* Once	wl_display_run returns,	we shut	down the server. */
-	ClosePhysics();
 	wl_display_destroy_clients(server.wl_display);
 	wl_display_destroy(server.wl_display);
 	return 0;

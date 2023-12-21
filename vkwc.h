@@ -81,9 +81,6 @@ struct Server {
 
 	struct wl_listener new_surface;
 	struct wl_list surfaces;
-
-	// We have to update the position of this if the screen size changes
-	PhysicsBody floor;
 };
 
 #endif // vkwc_h_INCLUDED

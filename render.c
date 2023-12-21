@@ -46,9 +46,6 @@
 
 #define	M_PI 3.14159265358979323846
 
-#define PHYSAC_STANDALONE
-#include "physac.h"
-
 struct VertPcrData {
 	float mat4[4][4];
 	float uv_off[2];
