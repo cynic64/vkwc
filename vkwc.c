@@ -182,12 +182,13 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 void check_uv(struct Server *server, int cursor_x, int cursor_y,
         	struct Surface **surface_out, int *surface_x, int *surface_y) {
-	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor and the x
-	// and y relative to this surface.
+	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor
+	// and the x and y relative to this surface.
 	// Returns NULL to surface if there is no surface under the cursor.
 	
-	// There are multiple render buffers, so we have to find the right one. I do this just by checking whether
-	// the render buffer's dimensions match those of the first output, which isn't a great way but works for now.
+	// There are multiple render buffers, so we have to find the right one. I do this just by
+	// checking whether the render buffer's dimensions match those of the first output, which isn't
+	// a great way but works for now.
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
 	struct wlr_vk_render_buffer *render_buffer = NULL;
 	struct wlr_output *output = server->output;
@@ -464,6 +465,7 @@ static void server_new_keyboard(struct Server *server, struct wlr_input_device *
 
 static void server_new_pointer(struct Server *server,
 		struct wlr_input_device	*device) {
+	printf("New pointer\n");
 	/* We don't do anything	special	with pointers. All of our pointer handling
 	 * is proxied through wlr_cursor. On another compositor, you might take	this
 	 * opportunity to do libinput configuration on the device to set
@@ -485,6 +487,7 @@ static void handle_new_input(struct wl_listener	*listener, void	*data) {
 		server_new_pointer(server, device);
 		break;
 	default:
+		fprintf(stderr, "Unknown input device: %d\n", device->type);
 		break;
 	}
 	/* We need to let the wlr_seat know what our capabilities are, which is
@@ -539,6 +542,7 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 		// If there's no view under the	cursor,	set the	cursor image to	a
 		// default. This is what makes the cursor image	appear when you	move it
 		// around the screen, not over any views.
+		printf("Set cursor image\n");
 		wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
 	} else {
 		//
@@ -607,6 +611,7 @@ static void handle_cursor_motion_absolute(struct wl_listener *listener, void *da
 	struct Server *server =
 		wl_container_of(listener, server, cursor_motion_absolute);
 	struct wlr_pointer_motion_absolute_event *event = data;
+	printf("Absolute cursor motion to %f %f\n", event->x, event->y);
 	wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
 	process_cursor_motion(server, event->time_msec);
 }
@@ -698,6 +703,9 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 	}
 
 	wlr_output_layout_add_auto(server->output_layout, server->output);
+
+	// Screw hardware cursors
+	wlr_output_lock_software_cursors(server->output, true);
 
 	/* Sets	up a listener for the frame notify event. */
 	wl_signal_add(&server->output->events.frame, &server->output_frame);

@@ -168,7 +168,13 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 		surface_count++;
 	};
 
-	//wlr_output_render_software_cursors(output, &damage);
+	struct wlr_output_cursor *cursor;
+	printf("Hardware cursor: %p\n", output->hardware_cursor);
+	wl_list_for_each(cursor, &output->cursors, link) {
+		printf("Cursor %p. enabled: %d, visible: %d\n",
+			cursor, cursor->enabled, cursor->visible);
+	}
+	wlr_output_render_software_cursors(output, NULL);
 
 	// Finish
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
