@@ -542,7 +542,6 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 		// If there's no view under the	cursor,	set the	cursor image to	a
 		// default. This is what makes the cursor image	appear when you	move it
 		// around the screen, not over any views.
-		printf("Set cursor image\n");
 		wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
 	} else {
 		//
@@ -611,7 +610,6 @@ static void handle_cursor_motion_absolute(struct wl_listener *listener, void *da
 	struct Server *server =
 		wl_container_of(listener, server, cursor_motion_absolute);
 	struct wlr_pointer_motion_absolute_event *event = data;
-	printf("Absolute cursor motion to %f %f\n", event->x, event->y);
 	wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
 	process_cursor_motion(server, event->time_msec);
 }
@@ -703,9 +701,6 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 	}
 
 	wlr_output_layout_add_auto(server->output_layout, server->output);
-
-	// Screw hardware cursors
-	wlr_output_lock_software_cursors(server->output, true);
 
 	/* Sets	up a listener for the frame notify event. */
 	wl_signal_add(&server->output->events.frame, &server->output_frame);

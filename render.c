@@ -64,7 +64,7 @@ struct RenderData {
 void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int x, int	y, int width, int height) {
 	struct wlr_box box = { .x = x, .y = y, .width =	width, .height = height	};
 	float identity_matrix[9] = { 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,	0.0, 1.0 };
-	wlr_render_rect(renderer, &box,	color, identity_matrix);;
+	wlr_render_rect(renderer, &box,	color, identity_matrix);
 }
 
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, struct wlr_texture	*wlr_texture,
@@ -154,27 +154,17 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 
 	wlr_renderer_scissor(renderer, NULL);
 
-	// Draw frame counter
-	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	render_rect_simple(renderer, color, 10,	10, 10, 10);
-
 	// Actually draw stuff
 	struct Surface *surface;
 	int surface_count = 0;
 	wl_list_for_each(surface, surfaces, link) {
-		//printf("Rendering surface with geo (%d %d %5.1f) %d %d\n", surface->x, surface->y, surface->z_offset,
-		//	surface->width, surface->height);
 		render_surface(output, surface);
 		surface_count++;
 	};
 
-	struct wlr_output_cursor *cursor;
-	printf("Hardware cursor: %p\n", output->hardware_cursor);
-	wl_list_for_each(cursor, &output->cursors, link) {
-		printf("Cursor %p. enabled: %d, visible: %d\n",
-			cursor, cursor->enabled, cursor->visible);
-	}
-	wlr_output_render_software_cursors(output, NULL);
+	// Draw frame counter
+	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
+	render_rect_simple(renderer, color, 10,	10, 10, 10);
 
 	// Finish
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;

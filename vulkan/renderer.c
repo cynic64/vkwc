@@ -17,6 +17,7 @@
 #include <wlr/render/vulkan.h>
 #include <wlr/backend/interface.h>
 #include <wlr/types/wlr_linux_dmabuf_v1.h>
+#include <cglm/cglm.h>
 
 #include "render/pixel_format.h"
 #include "render/vulkan.h"
@@ -863,6 +864,19 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	// wlr_matrix_projection assumes a GL coordinate system so we need
 	// to pass WL_OUTPUT_TRANSFORM_FLIPPED_180 to adjust it for vulkan.
 	// FIXME
+        // We need a matrix that turns pixels into -1..1 for vulkan.
+        memset(renderer->projection, 0, sizeof(renderer->projection[0]) * 9);
+        // Scale X down by width
+        renderer->projection[0] = 2.0f / width;
+        // Scale Y down by height
+        renderer->projection[4] = 2.0f / height;
+        // Leave Z alone
+        renderer->projection[8] = 1;
+        // Move X down by -1
+        renderer->projection[2] = -1;
+        // Move Y down by -1
+        renderer->projection[5] = -1;
+
 	//wlr_matrix_projection(renderer->projection, width, height, WL_OUTPUT_TRANSFORM_FLIPPED_180);
 
 	renderer->render_width = width;
