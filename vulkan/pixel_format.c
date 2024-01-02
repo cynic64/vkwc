@@ -49,18 +49,12 @@ static const VkImageUsageFlags dma_tex_usage =
 static const VkFormatFeatureFlags tex_features =
 	VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
 	VK_FORMAT_FEATURE_TRANSFER_DST_BIT |
-	VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
-	// NOTE: we don't strictly require this, we could create a NEAREST
-	// sampler for formats that need it, in case this ever makes problems.
-	VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+	VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
 static const VkFormatFeatureFlags render_features =
 	VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
 	VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
 static const VkFormatFeatureFlags dma_tex_features =
-	VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
-	// NOTE: we don't strictly require this, we could create a NEAREST
-	// sampler for formats that need it, in case this ever makes problems.
-	VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+	VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
 
 static bool query_modifier_support(struct wlr_vk_device *dev,
 		struct wlr_vk_format_props *props, size_t modifier_count,

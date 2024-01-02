@@ -12,6 +12,8 @@
 #include "render/vulkan.h"
 #include <stdio.h>
 
+#include <wlr/interfaces/wlr_buffer.h>
+
 static const struct wlr_texture_impl texture_impl;
 
 struct wlr_vk_texture *vulkan_get_texture(struct wlr_texture *wlr_texture) {
@@ -41,7 +43,7 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 	struct wlr_vk_renderer *renderer = texture->renderer;
 	VkDevice dev = texture->renderer->dev->dev;
 
-	// make sure assumptions are met
+	// Make sure assumptions are met
 	assert(src_x + width <= texture->wlr_texture.width);
 	assert(src_y + height <= texture->wlr_texture.height);
 	assert(dst_x + width <= texture->wlr_texture.width);
@@ -51,13 +53,13 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 			texture->format->drm_format);
 	assert(format_info);
 
-	// deferred upload by transfer; using staging buffer
-	// calculate maximum side needed
+	// Deferred upload by transfer; using staging buffer
+	// Calculate maximum side needed
 	uint32_t bsize = 0;
 	unsigned bytespb = format_info->bpp / 8;
 	bsize += height * bytespb * width;
 
-	// get staging buffer
+	// Get staging buffer
 	struct wlr_vk_buffer_span span = vulkan_get_stage_span(renderer, bsize);
 	if (!span.buffer || span.alloc.size != bsize) {
 		wlr_log(WLR_ERROR, "Failed to retrieve staging buffer");
@@ -90,6 +92,7 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 	// write data into staging buffer span
 	pdata += stride * src_y;
 	pdata += bytespb * src_x;
+
 	if (src_x == 0 && width == texture->wlr_texture.width &&
 			stride == packed_stride) {
 		memcpy(map, pdata, packed_stride * height);
@@ -138,14 +141,15 @@ static bool vulkan_texture_update_from_buffer(struct wlr_texture *wlr_texture,
 	void *data;
 	uint32_t format;
 
-	wlr_buffer_begin_data_ptr_access(buffer, 0 /* flags */, &data, &format, &stride);
+	if (!wlr_buffer_begin_data_ptr_access(buffer,
+                        WLR_BUFFER_DATA_PTR_ACCESS_READ, &data, &format, &stride)) {
+                return false;
+        }
+        assert(data != NULL);
 
 	// The user can pass multiple rectangles. So we iterate over them.
 	int rects_len = 0;
 	pixman_box32_t *rects = pixman_region32_rectangles(damage, &rects_len);
-
-	printf("[vulkan_texture_update_from_buffer] stride: %lu, data: %p, format: %u, rect count: %d\n",
-		stride, data, format, rects_len);
 
 	bool is_ok;
 	for (int i = 0; i < rects_len; i++) {
@@ -459,7 +463,7 @@ VkImage vulkan_import_dmabuf(struct wlr_vk_renderer *renderer,
 		| VK_IMAGE_USAGE_TRANSFER_SRC_BIT
 		| VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
 		:
-		VK_IMAGE_USAGE_SAMPLED_BIT;
+		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	if (disjoint) {
 		img_info.flags = VK_IMAGE_CREATE_DISJOINT_BIT;
 	}
