@@ -105,9 +105,12 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 			mat4 view;
 			mat4 projection;
-			glm_perspective_rh_zo(1, (float) output_width / (float) output_height, 1, 10000, projection);
+			glm_perspective_rh_zo(1, (float) output_width / (float) output_height,
+                                1, 10000, projection);
 
-			vec3 eye = {0, 0, 1000};
+                        // height * 0.914 makes the pixels 1:1 - don't ask me why...
+			//vec3 eye = {0, 0, (float) output_height * 0.914};
+			vec3 eye = {0, 0, (float) output_height * 0.914};
 			vec3 center = {0, 0, 0};
 			vec3 up = {0, 1, 0};
 			glm_lookat_rh_zo(eye, center, up, view);
@@ -726,7 +729,6 @@ static struct Surface *create_surface(struct Server *server, struct wl_list *sur
 
 // The Surface was already created, we just have to set the width and height
 static void handle_xdg_map(struct wl_listener *listener, void *data) {
-	printf("handle_xdg_map called with data: %p\n", data);
 	struct Surface *surface = wl_container_of(listener, surface, map);
 	assert(surface != NULL);
 	struct Server *server = surface->server;
@@ -754,7 +756,8 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 
 	// Create a new Surface
 	struct Surface *surface = create_surface(server, &server->surfaces, wlr_surface);
-	printf("Adding sneaky subsurface with geo %d %d %d %d\n", subsurface->current.x, subsurface->current.y,
+	printf("Adding sneaky subsurface with geo %d %d %d %d\n",
+                subsurface->current.x, subsurface->current.y,
 		wlr_surface->current.width, wlr_surface->current.height);
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
@@ -806,10 +809,26 @@ static void handle_new_subsurface(struct wl_listener *listener, void *data) {
 }
 
 static void handle_subsurface_map(struct wl_listener *listener, void *data) {
-	// It seems that surfaces are always mapped by the time handle_new_subsurface gets called, so this is
-	// redundant I think.
-	fprintf(stderr, "This can't happen\n");
-	exit(1);
+        // This only gets called by some windows - Firefox is an example.
+
+        // Most of the time it seems that surfaces are already mapped by the
+        // time handle_new_subsurface gets called and this doesn't get called.
+
+        // But if this does it called, we need to fill in the right dimensions.
+
+        struct wlr_subsurface *subsurface = data;
+        struct wlr_surface *wlr_surface = subsurface->surface;
+
+        struct Server *server = wl_container_of(listener, server, handle_subsurface_map);
+        struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
+        assert(surface != NULL);
+
+        surface->width = wlr_surface->current.width;
+        surface->height = wlr_surface->current.height;
+
+        printf("[handle_subsurface_map] dims: %d %d, surf: %p, cur: %d %d\n",
+                wlr_surface->current.width, wlr_surface->current.height,
+                surface, surface->width, surface->height);
 }
 
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {

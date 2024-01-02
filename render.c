@@ -131,7 +131,10 @@ static void render_texture(struct wlr_output *output, struct wlr_texture *textur
 
 static void render_surface(struct wlr_output *output, struct Surface *surface) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
-	if (texture == NULL) return;
+	if (texture == NULL) {
+                printf("Could not render surface (dims %d %d)\n", surface->width, surface->height);
+                return;
+        }
 
 	render_texture(output, texture, surface->matrix, surface->id);
 }
