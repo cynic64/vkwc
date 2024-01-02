@@ -50,26 +50,20 @@
 #include "vkwc.h"
 #include "render/vulkan.h"
 
-enum CursorMode TRANSFORM_MODES[] = {
-	VKWC_CURSOR_XY_ROTATE,
-	VKWC_CURSOR_Z_ROTATE,
-	VKWC_CURSOR_X_ROTATE_SPEED,
-	VKWC_CURSOR_Y_ROTATE_SPEED,
-	VKWC_CURSOR_Z_ROTATE_SPEED,
-	VKWC_CURSOR_X_MOVE,
-	VKWC_CURSOR_Y_MOVE,
-	VKWC_CURSOR_Z_MOVE,
+struct CursorBinding {
+        enum CursorMode mode;
+        xkb_keysym_t key;
 };
 
-xkb_keysym_t TRANSFORM_KEYS[] = {
-	XKB_KEY_q,
-	XKB_KEY_e,
-	XKB_KEY_a,
-	XKB_KEY_s,
-	XKB_KEY_d,
-	XKB_KEY_z,
-	XKB_KEY_x,
-	XKB_KEY_c,
+struct CursorBinding TRANSFORM_MODES[] = {
+	{ VKWC_CURSOR_XY_ROTATE, XKB_KEY_q },
+	{ VKWC_CURSOR_Z_ROTATE, XKB_KEY_e },
+	{ VKWC_CURSOR_X_ROTATE_SPEED, XKB_KEY_a },
+	{ VKWC_CURSOR_Y_ROTATE_SPEED, XKB_KEY_s },
+	{ VKWC_CURSOR_Z_ROTATE_SPEED, XKB_KEY_d },
+	{ VKWC_CURSOR_X_MOVE, XKB_KEY_z },
+	{ VKWC_CURSOR_Y_MOVE, XKB_KEY_x },
+	{ VKWC_CURSOR_Z_MOVE, XKB_KEY_c },
 };
 
 struct Keyboard	{
@@ -381,12 +375,9 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 		vk_renderer->render_mode = (vk_renderer->render_mode + 1) % WLR_VK_RENDER_MODE_COUNT;
 	}
 
-	assert(sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0])
-                == sizeof(TRANSFORM_KEYS) / sizeof(TRANSFORM_KEYS[0]));
-
 	for (int i = 0; i < sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0]); i++) {
-		enum CursorMode mode = TRANSFORM_MODES[i];
-		xkb_keysym_t key = TRANSFORM_KEYS[i];
+		enum CursorMode mode = TRANSFORM_MODES[i].mode;
+		xkb_keysym_t key = TRANSFORM_MODES[i].key;
 
 		if (sym == key) {
 			if (server->cursor_mode == mode) {
@@ -931,10 +922,11 @@ int main(int argc, char	*argv[]) {
 	struct wlr_compositor *compositor = wlr_compositor_create(server.wl_display, server.renderer);
 	wlr_data_device_manager_create(server.wl_display);
 
-	struct wlr_subcompositor *subcompositor = wlr_subcompositor_create(server.wl_display);
+	wlr_subcompositor_create(server.wl_display);
 
-	// I used to listen to the new surface event. Now, we instead map listeners to xdg_surface->map and
-	// xdg_surface->subsurface->map to get positioning information.
+        // I used to listen to the new surface event. Now, we instead map
+        // listeners to xdg_surface->map and xdg_surface->subsurface->map to
+        // get positioning information.
 	wl_list_init(&server.surfaces);
 
 	// We only support one output, which will be whichever one is added first.
