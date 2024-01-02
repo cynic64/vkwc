@@ -41,6 +41,8 @@
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_server_decoration.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 
 #include "vulkan.h"
 #include "render.h"
@@ -253,6 +255,13 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	}
 }
 
+static void handle_xdg_new_toplevel_decoration(struct wl_listener *listener, void *data) {
+        // Tell windows not to make their own decoration
+        struct wlr_xdg_toplevel_decoration_v1 *decoration = data;
+        wlr_xdg_toplevel_decoration_v1_set_mode(decoration,
+                WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+}
+
 static void focus_surface(struct wlr_seat *seat, struct Surface *surface) {
 	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
 	assert(xdg_surface != NULL);
@@ -372,7 +381,9 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 		vk_renderer->render_mode = (vk_renderer->render_mode + 1) % WLR_VK_RENDER_MODE_COUNT;
 	}
 
-	assert(sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0]) == sizeof(TRANSFORM_KEYS) / sizeof(TRANSFORM_KEYS[0]));
+	assert(sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0])
+                == sizeof(TRANSFORM_KEYS) / sizeof(TRANSFORM_KEYS[0]));
+
 	for (int i = 0; i < sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0]); i++) {
 		enum CursorMode mode = TRANSFORM_MODES[i];
 		xkb_keysym_t key = TRANSFORM_KEYS[i];
@@ -1041,6 +1052,18 @@ int main(int argc, char	*argv[]) {
 		wlr_xwayland_set_cursor(xwayland, image->buffer, image->width *	4, image->width, image->height,
 					image->hotspot_x, image->hotspot_y);
 	};
+
+        // Decoration handling - tell windows not to create their own decorations
+        struct wlr_server_decoration_manager *decoration_manager =
+                wlr_server_decoration_manager_create(server.wl_display);
+        wlr_server_decoration_manager_set_default_mode(decoration_manager,
+                WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+
+        struct wlr_xdg_decoration_manager_v1 *xdg_decoration_manager =
+                wlr_xdg_decoration_manager_v1_create(server.wl_display);
+        server.xdg_new_toplevel_decoration.notify = handle_xdg_new_toplevel_decoration;
+        wl_signal_add(&xdg_decoration_manager->events.new_toplevel_decoration,
+                &server.xdg_new_toplevel_decoration);
 
 	/* Add a Unix socket to	the Wayland display. */
 	const char *socket = wl_display_add_socket_auto(server.wl_display);

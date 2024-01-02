@@ -58,6 +58,8 @@ struct Server {
 	struct wl_listener cursor_axis;
 	struct wl_listener cursor_frame;
 
+        struct wl_listener xdg_new_toplevel_decoration;
+
 	struct wlr_seat	*seat;
 	struct wl_listener new_input;
 	struct wl_listener request_cursor;
@@ -70,8 +72,8 @@ struct Server {
 	struct Surface *grabbed_surface;
 
 	struct wlr_output *output;
-	struct wlr_output_layout *output_layout;	// Even though we only support one output, the screencopy API
-							// requires this
+	struct wlr_output_layout *output_layout;	// Even though we only support one output,
+                                                        // the screencopy API requires this
 	struct wl_listener output_frame;
 	struct wl_listener new_output;
 
