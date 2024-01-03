@@ -571,8 +571,9 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 		// Note	that wlroots will avoid	sending	duplicate enter/motion events if
 		// the surface has already has pointer focus or	if the client is already
 		// aware of the	coordinates passed.
+
 		wlr_seat_pointer_notify_enter(seat, surface->wlr_surface, surface_x, surface_y);
-                //printf("Send %d %d\n", surface_x, surface_y);
+                //printf("Send %d %d to id %f\n", surface_x, surface_y, surface->id);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
 		wlr_seat_pointer_notify_frame(server->seat);
 	}
@@ -780,6 +781,7 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 	surface->z = 1;
 
 	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
+        printf("subsurface's toplevel has id %f\n", surface->toplevel->id);
 
 	// The x and y we just filled in are relative to our parent. However, it's possible that surface->toplevel is
 	// itself a subsurface, in which case we need to offset x and y by its position.
@@ -828,7 +830,7 @@ static void handle_subsurface_map(struct wl_listener *listener, void *data) {
         // Most of the time it seems that surfaces are already mapped by the
         // time handle_new_subsurface gets called and this doesn't get called.
         //
-        // But if this does it called, we need to fill in the right dimensions.
+        // But if this does get called, we need to fill in the right dimensions.
 
         struct wlr_subsurface *subsurface = data;
         struct wlr_surface *wlr_surface = subsurface->surface;
@@ -836,13 +838,15 @@ static void handle_subsurface_map(struct wl_listener *listener, void *data) {
         struct Server *server = wl_container_of(listener, server, handle_subsurface_map);
         struct Surface *surface = find_surface(wlr_surface, &server->surfaces);
         assert(surface != NULL);
+        assert(surface->width == 0);
+        assert(surface->height == 0);
 
         surface->width = wlr_surface->current.width;
         surface->height = wlr_surface->current.height;
 
-        printf("[handle_subsurface_map] dims: %d %d, ID: %f, cur: %d %d\n",
+        printf("[handle_subsurface_map] dims: %d %d, ID: %f, cur: %d %d, xdg_surface %p\n",
                 wlr_surface->current.width, wlr_surface->current.height,
-                surface->id, surface->width, surface->height);
+                surface->id, surface->width, surface->height, surface->xdg_surface);
 }
 
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {

@@ -55,13 +55,6 @@ struct wlr_vk_renderer *vulkan_get_renderer(struct wlr_renderer *wlr_renderer) {
 static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		struct wlr_vk_renderer *renderer, VkFormat format);
 
-// vertex shader push constant range data
-struct vert_pcr_data {
-	float mat4[4][4];
-	float uv_off[2];
-	float uv_size[2];
-};
-
 // https://www.w3.org/Graphics/Color/srgb
 static float color_to_linear(float non_linear) {
 	return (non_linear > 0.04045) ?
@@ -861,9 +854,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
 	vkCmdSetScissor(cb, 0, 1, &rect);
 
 	// Refresh projection matrix.
-	// wlr_matrix_projection assumes a GL coordinate system so we need
-	// to pass WL_OUTPUT_TRANSFORM_FLIPPED_180 to adjust it for vulkan.
-	// FIXME
+        //
         // We need a matrix that turns pixels into -1..1 for vulkan.
         memset(renderer->projection, 0, sizeof(renderer->projection[0]) * 9);
         // Scale X down by width
@@ -876,8 +867,6 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer,
         renderer->projection[2] = -1;
         // Move Y down by -1
         renderer->projection[5] = -1;
-
-	//wlr_matrix_projection(renderer->projection, width, height, WL_OUTPUT_TRANSFORM_FLIPPED_180);
 
 	renderer->render_width = width;
 	renderer->render_height = height;
@@ -1140,7 +1129,7 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 	float final_matrix[9];
 	wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
 
-	struct vert_pcr_data vert_pcr_data;
+	struct PushConstants vert_pcr_data;
 	mat3_to_mat4(final_matrix, vert_pcr_data.mat4);
 
 	vert_pcr_data.uv_off[0] = box->x / wlr_texture->width;
@@ -1149,7 +1138,8 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 	vert_pcr_data.uv_size[1] = box->height / wlr_texture->height;
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vert_pcr_data), &vert_pcr_data);
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0, sizeof(vert_pcr_data), &vert_pcr_data);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 	texture->last_used = renderer->frame;
 
@@ -1220,12 +1210,12 @@ static void vulkan_render_quad_with_matrix(struct wlr_renderer *wlr_renderer,
 	float final_matrix[9];
 	wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
 
-	struct vert_pcr_data vert_pcr_data;
-	mat3_to_mat4(final_matrix, vert_pcr_data.mat4);
-	vert_pcr_data.uv_off[0] = 0.f;
-	vert_pcr_data.uv_off[1] = 0.f;
-	vert_pcr_data.uv_size[0] = 1.f;
-	vert_pcr_data.uv_size[1] = 1.f;
+	struct PushConstants push_constants;
+	mat3_to_mat4(final_matrix, push_constants.mat4);
+	push_constants.uv_off[0] = 0.f;
+	push_constants.uv_off[1] = 0.f;
+	push_constants.uv_size[0] = 1.f;
+	push_constants.uv_size[1] = 1.f;
 
 	// Input color values are given in srgb space, shader expects
 	// them in linear space. The shader does all computation in linear
@@ -1234,17 +1224,14 @@ static void vulkan_render_quad_with_matrix(struct wlr_renderer *wlr_renderer,
 	// does the conversion for out SRGB render targets).
 	// But in other parts of wlroots we just always assume
 	// srgb so that's why we have to convert here.
-	float linear_color[4];
-	linear_color[0] = color_to_linear(color[0]);
-	linear_color[1] = color_to_linear(color[1]);
-	linear_color[2] = color_to_linear(color[2]);
-	linear_color[3] = color[3]; // no conversion for alpha
+	push_constants.color[0] = color_to_linear(color[0]);
+	push_constants.color[1] = color_to_linear(color[1]);
+	push_constants.color[2] = color_to_linear(color[2]);
+	push_constants.color[3] = color[3]; // no conversion for alpha
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vert_pcr_data), &vert_pcr_data);
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(vert_pcr_data), sizeof(float) * 4,
-		linear_color);
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0, sizeof(push_constants), &push_constants);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 }
 
@@ -1586,19 +1573,15 @@ static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
 	}
 
 	// pipeline layout
-	VkPushConstantRange pc_ranges[2] = {0};
-	pc_ranges[0].size = sizeof(struct vert_pcr_data);
-	pc_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-	pc_ranges[1].offset = pc_ranges[0].size;
-	pc_ranges[1].size = sizeof(float) * 4; // alpha or color
-	pc_ranges[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkPushConstantRange pc_ranges[1] = {0};
+	pc_ranges[0].size = sizeof(struct PushConstants);
+	pc_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	VkPipelineLayoutCreateInfo pl_info = {0};
 	pl_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pl_info.setLayoutCount = 1;
 	pl_info.pSetLayouts = out_ds_layout;
-	pl_info.pushConstantRangeCount = 2;
+	pl_info.pushConstantRangeCount = sizeof(pc_ranges) / sizeof(pc_ranges[0]);
 	pl_info.pPushConstantRanges = pc_ranges;
 
 	res = vkCreatePipelineLayout(dev, &pl_info, NULL, out_pipe_layout);

@@ -12,6 +12,20 @@
 
 #define WLR_VK_RENDER_MODE_COUNT 3
 
+// Used for all shaders
+struct PushConstants {
+	float mat4[4][4];
+	float uv_off[2];
+	float uv_size[2];
+        // This is only used when rendering quads
+        float color[4];
+        // This is only used when rendering textures. First component is
+        // surface ID, second component is alpha (should be 0 or 1). Alpha will
+        // be 1 except for textures we want to draw without them absorbing
+        // clicks, like Firefox's weird subsurface setup.
+        float surface_id[2];
+};
+
 struct wlr_vk_descriptor_pool;
 
 // Central vulkan state that should only be needed once per compositor.

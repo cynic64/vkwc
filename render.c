@@ -46,12 +46,6 @@
 
 #define	M_PI 3.14159265358979323846
 
-struct VertPcrData {
-	float mat4[4][4];
-	float uv_off[2];
-	float uv_size[2];
-};
-
 struct RenderData {
 	struct wlr_output *output;
 	pixman_region32_t *damage;
@@ -67,8 +61,17 @@ void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int
 	wlr_render_rect(renderer, &box,	color, identity_matrix);
 }
 
-static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, struct wlr_texture	*wlr_texture,
-		mat4 matrix, float surface_id) {
+// This is separate from vulkan_render_subtexture_with_matrix in
+// vulkan/renderer.c - that has the signature needed to fill wlr_renderer_impl.
+// I think it only gets used for the cursor, because I do everything else "by
+// hand". Anyway, this one has whatever signature I want, so we can support
+// stuff like setting the surface ID or not drawing UV at all.
+//
+// Set render_uv to false to, well, not render to the UV texture. That will
+// make it so mouse events go "through" the surface and to whatever's below
+// instead.
+static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
+                struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
 	VkCommandBuffer	cb = renderer->cb;
 
@@ -97,46 +100,51 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer, str
 		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
 	// Draw
-	// Unfortunately the rest of wlroots is row-major, otherwise I would set column-major in the shader
-	// and avoid this
-	struct VertPcrData VertPcrData;
+        // Unfortunately the rest of wlroots is row-major, otherwise I would
+        // set column-major in the shader and avoid this
+	struct PushConstants push_constants;
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
-			VertPcrData.mat4[i][j] = matrix[j][i];
+			push_constants.mat4[i][j] = matrix[j][i];
 		}
 	};
 
 	// This used to be more complicated. Go back to TinyWL's way if something breaks.
-	VertPcrData.uv_off[0] =	0;
-	VertPcrData.uv_off[1] =	0;
-	VertPcrData.uv_size[0] = 1;
-	VertPcrData.uv_size[1] = 1;
+	push_constants.uv_off[0] = 0;
+	push_constants.uv_off[1] = 0;
+	push_constants.uv_size[0] = 1;
+	push_constants.uv_size[1] = 1;
+        push_constants.surface_id[0] = surface_id;
+        push_constants.surface_id[1] = render_uv ? 1 : 0;
 
 	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertPcrData), &VertPcrData);
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VertPcrData), sizeof(float), &surface_id);
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0, sizeof(push_constants), &push_constants);
 	vkCmdDraw(cb, 4, 1, 0, 0);
 
 	return true;
 }
 
-static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix, float surface_id) {
+static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix,
+                float surface_id, bool render_uv) {
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
 	wlr_renderer_scissor(renderer, NULL);
-	render_subtexture_with_matrix(renderer, texture, matrix, surface_id);
+	render_subtexture_with_matrix(renderer, texture, matrix, surface_id, render_uv);
 }
 
 static void render_surface(struct wlr_output *output, struct Surface *surface) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
 	if (texture == NULL) {
-                printf("Could not render surface (dims %d %d)\n", surface->width, surface->height);
+                //printf("Could not render surface (dims %d %d)\n", surface->width, surface->height);
                 return;
         }
 
-	render_texture(output, texture, surface->matrix, surface->id);
+        // Only make the surface clickable if it's an XDG surface.
+        bool render_uv = surface->xdg_surface != NULL;
+
+	render_texture(output, texture, surface->matrix, surface->id, render_uv);
 }
 
 // surfaces should be a list of struct Surface, defined in vkwc.c
