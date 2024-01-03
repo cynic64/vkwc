@@ -78,7 +78,8 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
 	mat4[3][3] = 1.f;
 }
 
-struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *renderer, VkDescriptorSet *ds) {
+struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *renderer,
+                VkDescriptorSet *ds) {
 	VkResult res;
 	VkDescriptorSetAllocateInfo ds_info = {0};
 	ds_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
