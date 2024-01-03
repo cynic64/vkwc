@@ -134,7 +134,9 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			vec4 dst;
 			glm_mat4_mulv(surface->matrix, top_left, dst);
 		} else {
-			// First we translate ourselves relative to toplevel, then apply toplevel transform
+			// First we translate ourselves relative to toplevel, then apply
+                        // toplevel transform
+                        //
 			// This allows for child transforms to be relative to parent transform
 			struct Surface *toplevel = surface->toplevel;
 
@@ -146,7 +148,8 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_translate(surface->matrix, (vec3) {
 				(float) surface->x / toplevel->width,
 				(float) surface->y / toplevel->height,
-				0,
+                                // It's too fast if we don't divide, not sure why.
+				surface->z / 1000.0,
 			});
 
 			// Move it back
@@ -233,7 +236,8 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	struct Surface *surface = NULL;
 	wl_list_for_each(surface, &server->surfaces, link) {
 		if (surface->id - error_margin < pixel_surface_id && surface->id + error_margin > pixel_surface_id) {
-			//printf("Surface with id %f matches\n", surface->id);
+			//printf("Surface with id %f matches (dims %d %d)\n",
+                                //surface->id, surface->width, surface->height);
 			found_surface = true;
 			break;
 		}
@@ -293,7 +297,9 @@ static void handle_cursor_button(struct wl_listener *listener, void *data) {
 	struct Surface *surface;
 	check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
 	// Nothing under cursor
-	if (surface == NULL) return;
+	if (surface == NULL) {
+                return;
+        }
 
 	focus_surface(server->seat, surface->toplevel);
 }
@@ -383,13 +389,18 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 		xkb_keysym_t key = TRANSFORM_MODES[i].key;
 
 		if (sym == key) {
+                        printf("User pressed key for transform mode %d\n", i);
 			if (server->cursor_mode == mode) {
+                                printf("Ungrab\n");
 				server->grabbed_surface = NULL;
 				server->cursor_mode = VKWC_CURSOR_PASSTHROUGH;
 			} else {
 				check_uv(server, server->cursor->x, server->cursor->y,
 					&server->grabbed_surface, NULL, NULL);
+
 				if (server->grabbed_surface != NULL) {
+                                        printf("Surface under cursor has id %f\n",
+                                                server->grabbed_surface->id);
 					server->cursor_mode = mode;
 				} else {
 					printf("No surface under cursor\n");
@@ -544,6 +555,7 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 	check_uv(server, server->cursor->x, server->cursor->y, &surface, &surface_x, &surface_y);
 
 	if (surface == NULL) {
+                //printf("Nothing under cursor\n");
 		// If there's no view under the	cursor,	set the	cursor image to	a
 		// default. This is what makes the cursor image	appear when you	move it
 		// around the screen, not over any views.
@@ -560,6 +572,7 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 		// the surface has already has pointer focus or	if the client is already
 		// aware of the	coordinates passed.
 		wlr_seat_pointer_notify_enter(seat, surface->wlr_surface, surface_x, surface_y);
+                //printf("Send %d %d\n", surface_x, surface_y);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
 		wlr_seat_pointer_notify_frame(server->seat);
 	}
@@ -740,10 +753,11 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 
 	focus_surface(server->seat, surface);
 
-	printf("Surface mapped, set dims to %d %d\n", surface->width, surface->height);
+	printf("Surface mapped (id %f), set dims to %d %d\n",
+                surface->id, surface->width, surface->height);
 }
 
-// Adds a subsurface to the given list of surfaces. surfaces should be a list of type struct Surface.
+// Adds a subsurface to the server's list of surfaces.
 // 
 // I had to make this a helper function instead of merging it with handle_new_subsurface because otherwise
 // it couldn't call itself recursively.
@@ -756,9 +770,9 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 
 	// Create a new Surface
 	struct Surface *surface = create_surface(server, &server->surfaces, wlr_surface);
-	printf("Adding sneaky subsurface with geo %d %d %d %d\n",
+	printf("Adding sneaky subsurface with geo %d %d %d %d (new id %f)\n",
                 subsurface->current.x, subsurface->current.y,
-		wlr_surface->current.width, wlr_surface->current.height);
+		wlr_surface->current.width, wlr_surface->current.height, surface->id);
 	surface->width = wlr_surface->current.width;
 	surface->height = wlr_surface->current.height;
 	surface->x = subsurface->current.x;
@@ -783,7 +797,7 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 	// Listen for subsurfaces of the subsurface
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
 
-	// Pretty sure this never gets called, but better safe than sorry
+	// This only sometimes gets called
 	wl_signal_add(&subsurface->events.map, &server->handle_subsurface_map);
 
 	// Listen for surface destruction
@@ -810,10 +824,10 @@ static void handle_new_subsurface(struct wl_listener *listener, void *data) {
 
 static void handle_subsurface_map(struct wl_listener *listener, void *data) {
         // This only gets called by some windows - Firefox is an example.
-
+        //
         // Most of the time it seems that surfaces are already mapped by the
         // time handle_new_subsurface gets called and this doesn't get called.
-
+        //
         // But if this does it called, we need to fill in the right dimensions.
 
         struct wlr_subsurface *subsurface = data;
@@ -826,9 +840,9 @@ static void handle_subsurface_map(struct wl_listener *listener, void *data) {
         surface->width = wlr_surface->current.width;
         surface->height = wlr_surface->current.height;
 
-        printf("[handle_subsurface_map] dims: %d %d, surf: %p, cur: %d %d\n",
+        printf("[handle_subsurface_map] dims: %d %d, ID: %f, cur: %d %d\n",
                 wlr_surface->current.width, wlr_surface->current.height,
-                surface, surface->width, surface->height);
+                surface->id, surface->width, surface->height);
 }
 
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
@@ -838,10 +852,11 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	struct wlr_xdg_surface *xdg_surface = data;
 	struct wlr_surface *wlr_surface = xdg_surface->surface;
 
-	printf("New XDG surface with role %d!\n", xdg_surface->role);
-
 	// The width and height will be filled in by handle_xdg_map once it is known
 	struct Surface *surface = create_surface(server, &server->surfaces, wlr_surface);
+
+	printf("New XDG surface with role %d! No dims but id is %f\n",
+                xdg_surface->role, surface->id);
 
 	surface->xdg_surface = xdg_surface;
 	surface->width = 0;
@@ -873,6 +888,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
 
 	// Check for subsurfaces above and below
+        printf("Adding subsurfaces above and below...\n");
 	struct wlr_subsurface *subsurface;
 	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_below, current.link) {
 		add_subsurface(server, subsurface);
@@ -881,6 +897,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	wl_list_for_each(subsurface, &wlr_surface->current.subsurfaces_above, current.link) {
 		add_subsurface(server, subsurface);
 	}
+        printf("Done adding subsurfaces above and below...\n");
 }
 
 int main(int argc, char	*argv[]) {
