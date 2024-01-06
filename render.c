@@ -239,34 +239,57 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 	renderer->render_height = height;
 	renderer->bound_pipe = VK_NULL_HANDLE;
 
+        // Clear the second intermediate image, otherwise we have leftover junk
+        // from the previous frame.
+        //
+        // We clear the second image because the first surface will render into
+        // the first image *and first copy the second image into itself*. So it
+        // seems a bit weird but it's correct.
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+        VkCommandBuffer cbuf = renderer->cb;
+        cbuf_begin_onetime(cbuf);
+
+        // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediates[1], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
+
+        VkImageSubresourceRange clear_range = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+        };
+
+        VkClearColorValue clear_color = {
+                .float32 = {0.1, 0.1, 0.1, 1.0},
+        };
+
+        vkCmdClearColorImage(cbuf,
+                render_buf->intermediates[1], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                &clear_color, 1, &clear_range);
+
         // Transition all intermediates to TRANSFER_SRC, because when we start
         // rendering surfaces, it is assumed that the previous intermediate is
         // already in TRANSFER_SRC.
-        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
-
-        VkCommandBuffer cbuf;
-        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &cbuf);
-        cbuf_begin_onetime(cbuf);
 
         for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+                // We just transitioned src to TRANSFER_DST, so take that into account
+                if (i == 1) src_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
                 vulkan_image_transition_cbuf(cbuf,
                         render_buf->intermediates[i], VK_IMAGE_ASPECT_COLOR_BIT,
-                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        // We don't really have to wait for anything but I
-                        // can't put STAGE_NONE. So we do
-                        // COLOR_ATTACHMENT_OUTPUT instead.
-                        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        src_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                         1);
         }
-
-        cbuf_submit_wait(renderer->dev->queue, cbuf);
-
-        // Begin command buffer. TODO: Actually use it instead of submitting a
-        // bajillion different ones.
-        VkCommandBufferBeginInfo cbuf_begin_info = {0};
-        cbuf_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        vkBeginCommandBuffer(renderer->cb, &cbuf_begin_info);
 }
 
 static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
