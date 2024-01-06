@@ -22,7 +22,7 @@ layout(location = 1) out vec4 out_uv;
 void main() {
 	vec4 tex_color = textureLod(tex, uv, 0);
 
-	out_color = tex_color;
+	out_color = vec4(tex_color.rgb, 0.8);
         // First component of surface_id is the actual surface ID, second
         // component is alpha. Alpha should be 1 unless we want to make the
         // texture we're rendering not absorb clicks.

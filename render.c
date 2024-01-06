@@ -396,35 +396,53 @@ static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
 
 }
 
+// Comparison function so we can qsort surfaces by Z.
+int surface_comp(const void *a, const void *b) {
+        // That's a lot of parentheses!
+        float a_z = (*((struct Surface **) a))->z;
+        float b_z = (*((struct Surface **) b))->z;
+
+        return (a_z > b_z) - (a_z < b_z);
+}
+
 // `surfaces` should be a list of struct Surface, defined in vkwc.c
 bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
 	// Get the renderer, i.e. Vulkan or GLES2
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer	!= NULL);
 
-	// TinyWL used to try to do direct scanout here. But I think there's no point because
-	// we want fancy effects that aren't possible with that.
-
 	int buffer_age = -1;
 	wlr_output_attach_render(output, &buffer_age);
 
-	// Begin rendering
 	render_begin(renderer, output->width, output->height);
 
-	// Actually draw stuff
-	struct Surface *surface;
-	int surface_count = 0;
-        int framebuffer_idx = 0;
+        // Sort the surfaces by distance from the camera
+        int surface_count = 0;
+        struct Surface *surface;
 	wl_list_for_each(surface, surfaces, link) {
+                surface_count++;
+	};
+
+        struct Surface **surfaces_sorted = malloc(sizeof(surfaces_sorted[0]) * surface_count);
+        int surface_idx = 0;
+	wl_list_for_each(surface, surfaces, link) {
+                surfaces_sorted[surface_idx++] = surface;
+	};
+        assert(surface_idx == surface_count);
+
+        qsort(surfaces_sorted, surface_count, sizeof(surfaces_sorted[0]), surface_comp);
+
+	// Draw each surface
+        int framebuffer_idx = 0;
+        for (int i = 0; i < surface_count; i++) {
+                struct Surface *surface = surfaces_sorted[i];
                 if (surface->width == 0 && surface->height == 0) {
                         continue;
                 }
 
 		render_surface(output, surface, framebuffer_idx);
-		surface_count++;
                 framebuffer_idx = (framebuffer_idx + 1) % INTERMEDIATE_IMAGE_COUNT;
 	};
-        printf("Drew %d surfaces\n", surface_count);
 
 	// Draw frame counter
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
