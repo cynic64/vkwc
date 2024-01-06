@@ -130,6 +130,45 @@ void vulkan_image_transition_cbuf(VkCommandBuffer cbuf,
 	vkCmdPipelineBarrier(cbuf, src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, &barrier);
 }
 
+// Assumes src is in TRANSFER_SRC and dst is in TRANSFER_DST
+void vulkan_copy_image(VkCommandBuffer cbuf, VkImage src, VkImage dst,
+                VkImageAspectFlagBits aspect,
+                int src_x, int src_y, int dst_x, int dst_y,
+                int width, int height) {
+        VkImageCopy region = {
+                .srcSubresource = {
+                        .aspectMask = aspect,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                },
+                .dstSubresource = {
+                        .aspectMask = aspect,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                },
+                .srcOffset = {
+                        .x = src_x,
+                        .y = src_y,
+                        .z = 0,
+                },
+                .dstOffset = {
+                        .x = dst_x,
+                        .y = dst_y,
+                        .z = 0,
+                },
+                .extent = {
+                        .width = width,
+                        .height = height,
+                        .depth = 1,
+                },
+        };
+
+        vkCmdCopyImage(cbuf, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+}
+
 bool vulkan_has_extension(size_t count, const char **exts, const char *find) {
 	for (unsigned i = 0; i < count; ++i) {
 		if (strcmp(exts[i], find) == 0u) {

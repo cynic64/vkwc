@@ -542,7 +542,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         dmabuf.width, dmabuf.height,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                 | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                         &buffer->intermediates[i]);
 
                 VkMemoryRequirements intermediate_mem_reqs;
@@ -907,8 +908,6 @@ static void vulkan_render_quad_with_matrix(struct wlr_renderer *wlr_renderer,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(push_constants), &push_constants);
 	vkCmdDraw(cbuf, 4, 1, 0, 0);
-
-        end_render_operation(cbuf);
 }
 
 static const struct wlr_drm_format_set *vulkan_get_dmabuf_texture_formats(
@@ -1600,7 +1599,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	VkAttachmentDescription intermediate_attach = {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

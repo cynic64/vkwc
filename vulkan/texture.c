@@ -463,7 +463,8 @@ VkImage vulkan_import_dmabuf(struct wlr_vk_renderer *renderer,
 		| VK_IMAGE_USAGE_TRANSFER_DST_BIT
 		| VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
 		:
-		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		VK_IMAGE_USAGE_SAMPLED_BIT
+                | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	if (disjoint) {
 		img_info.flags = VK_IMAGE_CREATE_DISJOINT_BIT;
 	}

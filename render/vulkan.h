@@ -365,6 +365,12 @@ void vulkan_image_transition_cbuf(VkCommandBuffer cbuf,
                 VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
                 uint32_t mip_levels);
 
+
+void vulkan_copy_image(VkCommandBuffer cbuf, VkImage src, VkImage dst,
+                VkImageAspectFlagBits aspect,
+                int src_x, int src_y, int dst_x, int dst_y,
+                int width, int height);
+
 void cbuf_alloc(VkDevice device, VkCommandPool cpool, VkCommandBuffer *cbuf);
 void cbuf_submit_wait(VkQueue queue, VkCommandBuffer cbuf);
 void cbuf_begin_onetime(VkCommandBuffer cbuf);
