@@ -43,6 +43,7 @@
 #include "render.h"
 #include "util.h"
 #include "render/vulkan.h"
+#include "vulkan/intermediate.h"
 
 #define	M_PI 3.14159265358979323846
 
@@ -56,6 +57,8 @@ struct RenderData {
 };
 
 void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int x, int	y, int width, int height) {
+        fprintf(stderr, "Ignoring render_rect_simple\n");
+        return;
 	struct wlr_box box = { .x = x, .y = y, .width =	width, .height = height	};
 	float identity_matrix[9] = { 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,	0.0, 1.0 };
 	wlr_render_rect(renderer, &box,	color, identity_matrix);
@@ -71,9 +74,10 @@ void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
 static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
-                struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv) {
+                struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv,
+                int screen_width, int screen_height,
+                int framebuffer_idx) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
-	VkCommandBuffer	cb = renderer->cb;
 
 	struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
 	assert(texture->renderer == renderer);
@@ -90,13 +94,28 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
 	}
 
+        // I could scissor to only the region being drawn to. I'm not sure it's
+        // worth it though, especially because it gets complicated with
+        // spinning surfaces and such.
+	VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
+	renderer->scissor = rect;
+
+        // Starts the command buffer and enters the render pass
+        VkCommandBuffer cbuf = renderer->cb;
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+        assert(render_buf != NULL);
+        assert(cbuf != NULL);
+        begin_render_operation(cbuf, render_buf->framebuffers[framebuffer_idx],
+                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
+
+        // Bind pipeline and descriptor sets
 	VkPipeline pipe	= renderer->current_render_buffer->render_setup->tex_pipe;
 	if (pipe != renderer->bound_pipe) {
-		vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
 		renderer->bound_pipe = pipe;
 	}
 
-	vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
+	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
 
 	// Draw
@@ -117,24 +136,32 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         push_constants.surface_id[0] = surface_id;
         push_constants.surface_id[1] = render_uv ? 1 : 0;
 
-	vkCmdPushConstants(cb, renderer->pipe_layout,
+	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(push_constants), &push_constants);
-	vkCmdDraw(cb, 4, 1, 0, 0);
+	vkCmdDraw(cbuf, 4, 1, 0, 0);
+
+        // Finish
+	end_render_operation(cbuf);
+
+        // I don't really know what this does, vulkan_texture_destroy usees it
+        texture->last_used = renderer->frame;
 
 	return true;
 }
 
 static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix,
-                float surface_id, bool render_uv) {
+                float surface_id, bool render_uv,
+                int framebuffer_idx) {
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
-	wlr_renderer_scissor(renderer, NULL);
-	render_subtexture_with_matrix(renderer, texture, matrix, surface_id, render_uv);
+	render_subtexture_with_matrix(renderer, texture, matrix, surface_id, render_uv,
+                output->width, output->height, framebuffer_idx);
 }
 
-static void render_surface(struct wlr_output *output, struct Surface *surface) {
+static void render_surface(struct wlr_output *output, struct Surface *surface,
+                int framebuffer_idx) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
 	if (texture == NULL) {
                 //printf("Could not render surface (dims %d %d)\n", surface->width, surface->height);
@@ -144,11 +171,172 @@ static void render_surface(struct wlr_output *output, struct Surface *surface) {
         // Only make the surface clickable if it's an XDG surface.
         bool render_uv = surface->xdg_surface != NULL;
 
-	render_texture(output, texture, surface->matrix, surface->id, render_uv);
+	render_texture(output, texture, surface->matrix, surface->id, render_uv, framebuffer_idx);
+}
+
+static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
+	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
+	assert(renderer->current_render_buffer);
+
+	// Refresh projection matrix.
+        //
+        // We need a matrix that turns pixels into -1..1 for vulkan.
+        memset(renderer->projection, 0, sizeof(renderer->projection[0]) * 9);
+        // Scale X down by width
+        renderer->projection[0] = 2.0f / width;
+        // Scale Y down by height
+        renderer->projection[4] = 2.0f / height;
+        // Leave Z alone
+        renderer->projection[8] = 1;
+        // Move X down by -1
+        renderer->projection[2] = -1;
+        // Move Y down by -1
+        renderer->projection[5] = -1;
+
+        // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
+        vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
+                renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                // Want to wait for whoever was reading from it before we write to it
+                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                1);
+
+	renderer->render_width = width;
+	renderer->render_height = height;
+	renderer->bound_pipe = VK_NULL_HANDLE;
+
+        // Begin command buffer
+        VkCommandBufferBeginInfo cbuf_begin_info = {0};
+        cbuf_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        vkBeginCommandBuffer(renderer->cb, &cbuf_begin_info);
+}
+
+static void render_end(struct wlr_renderer *wlr_renderer) {
+	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
+	assert(renderer->current_render_buffer);
+
+        // Submit
+        cbuf_submit_wait(renderer->dev->queue, renderer->cb);
+
+	renderer->render_width = 0u;
+	renderer->render_height = 0u;
+	renderer->bound_pipe = VK_NULL_HANDLE;
+
+	// Copy UV to host-visible memory, but only the pixel under the cursor
+        // Transition UV to TRANSFER_SRC_OPTIMAL
+        VkCommandBuffer copy_cbuf;
+        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
+        cbuf_begin_onetime(copy_cbuf);
+
+        vulkan_image_transition_cbuf(copy_cbuf,
+                renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
+
+        // vulkan_end also gets used to draw the cursor and such, in
+        // which case it doesn't make sense
+        // TODO: Maybe make my own, separate vulkan_end?
+        //
+        // to copy the UV texture. So only copy if explicitly told so.
+        assert(renderer->cursor_x < renderer->current_render_buffer->wlr_buffer->width);
+        assert(renderer->cursor_y < renderer->current_render_buffer->wlr_buffer->height);
+        VkBufferImageCopy uv_copy_region = {
+                .bufferOffset = 0,
+                .bufferRowLength = renderer->current_render_buffer->wlr_buffer->width,
+                .bufferImageHeight = renderer->current_render_buffer->wlr_buffer->height,
+                .imageSubresource = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                },
+                .imageOffset = { .x = renderer->cursor_x, .y = renderer->cursor_y, .z = 0 },
+                .imageExtent = {
+                        .width = 1,
+                        .height = 1,
+                        .depth = 1,
+                },
+        };
+
+        vkCmdCopyImageToBuffer(copy_cbuf,
+                renderer->current_render_buffer->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                renderer->current_render_buffer->host_uv,
+                1, &uv_copy_region);
+
+        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
+
+        // Copy intermediate image to final output
+        // Transition final to IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
+        cbuf_begin_onetime(copy_cbuf);
+
+        vulkan_image_transition_cbuf(copy_cbuf,
+                renderer->current_render_buffer->image, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+                // I'm not really sure what to put here. I think the "proper"
+                // way to do it would be to wait for the image to finish being
+                // presented by using a fence or something.
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
+
+        // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+        vulkan_image_transition_cbuf(copy_cbuf,
+                renderer->current_render_buffer->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
+
+        // Now do the actual copy
+        VkImageCopy copy_region = {
+                .srcSubresource = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                },
+                .dstSubresource = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                },
+                .extent = {
+                        .width = renderer->current_render_buffer->wlr_buffer->width,
+                        .height = renderer->current_render_buffer->wlr_buffer->height,
+                        .depth = 1,
+                },
+        };
+
+        vkCmdCopyImage(copy_cbuf,
+                renderer->current_render_buffer->intermediates[0], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                renderer->current_render_buffer->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &copy_region);
+
+        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
+
+        // Destroy pending textures
+        struct wlr_vk_texture *texture, *tmp_tex;
+        wl_list_for_each_safe(texture, tmp_tex, &renderer->destroy_textures, destroy_link) {
+                printf("Destroy texture %p\n", texture);
+                wlr_texture_destroy(&texture->wlr_texture);
+        }
+
+        // This marks it as the most recent I think
+        renderer->frame++;
+        renderer->current_render_buffer->frame = renderer->frame;
+
+        // "release stage allocations", not sure what it really does
+	struct wlr_vk_shared_buffer *buf;
+	wl_list_for_each(buf, &renderer->stage.buffers, link) {
+		buf->allocs_size = 0u;
+	}
+
 }
 
 // surfaces should be a list of struct Surface, defined in vkwc.c
-// physics_width and physics_height are needed to transform coordinates from the physics engine to screenspace.
 bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
 	// Get the renderer, i.e. Vulkan or GLES2
 	struct wlr_renderer *renderer =	output->renderer;
@@ -161,17 +349,18 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	wlr_output_attach_render(output, &buffer_age);
 
 	// Begin rendering
-	wlr_renderer_begin(renderer, output->width, output->height);
-
-	wlr_renderer_scissor(renderer, NULL);
+	render_begin(renderer, output->width, output->height);
 
 	// Actually draw stuff
 	struct Surface *surface;
 	int surface_count = 0;
+        int framebuffer_idx = 0;
 	wl_list_for_each(surface, surfaces, link) {
-		render_surface(output, surface);
+		render_surface(output, surface, framebuffer_idx);
 		surface_count++;
+                framebuffer_idx++;
 	};
+        printf("Drew %d surfaces\n", surface_count);
 
 	// Draw frame counter
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
@@ -181,15 +370,10 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
 	vk_renderer->cursor_x = cursor_x;
 	vk_renderer->cursor_y = cursor_y;
-	vk_renderer->should_copy_uv = true;
-	wlr_renderer_end(renderer);
-	vk_renderer->should_copy_uv = false;
+	render_end(renderer);
 
 	int tr_width, tr_height;
 	wlr_output_transformed_resolution(output, &tr_width, &tr_height);
 
 	return wlr_output_commit(output);
 }
-
-// End my stuff
-

@@ -11,6 +11,8 @@
 #include <wlr/render/interface.h>
 
 #define WLR_VK_RENDER_MODE_COUNT 3
+// Need two intermediate images so we can sample one while rendering the next.
+#define INTERMEDIATE_IMAGE_COUNT 2
 
 // Used for all shaders
 struct PushConstants {
@@ -149,7 +151,6 @@ struct wlr_vk_render_format_setup {
 
 	VkPipeline tex_pipe;
 	VkPipeline quad_pipe;
-	VkPipeline postprocess_pipe;
 };
 
 // Renderer-internal represenation of an wlr_buffer imported for rendering.
@@ -159,15 +160,16 @@ struct wlr_vk_render_buffer {
 	struct wlr_vk_render_format_setup *render_setup;
 	struct wl_list link; // wlr_vk_renderer.buffers
 
-	VkFramebuffer framebuffer;
+	// Need two so we can sample one while drawing next
+	VkFramebuffer framebuffers[INTERMEDIATE_IMAGE_COUNT];
 	uint32_t mem_count;
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
 	bool transitioned;
 
-	// Intermediate target
-	VkImage intermediate;
-	VkImageView intermediate_view;
-	VkDeviceMemory intermediate_mem;
+	// Intermediate targets - again, we need multiple
+	VkImage intermediates[INTERMEDIATE_IMAGE_COUNT];
+	VkImageView intermediate_views[INTERMEDIATE_IMAGE_COUNT];
+	VkDeviceMemory intermediate_mems[INTERMEDIATE_IMAGE_COUNT];
 
 	// Depth buffer
 	VkImage depth;
@@ -179,22 +181,20 @@ struct wlr_vk_render_buffer {
 	VkImageView uv_view;
 	VkDeviceMemory uv_mem;
 
-	// UV buffer on host
+        // UV buffer on host. Needed for checking what pixel of a window the
+        // mouse is over.
 	VkBuffer host_uv;
 	VkDeviceMemory host_uv_mem;
 
-	// Presentation target
+        // Presentation target, which is what actually gets shown to the user.
+        // We don't render directly to it because we want to be able to choose
+        // what we display - either the windows, the depth buffer or the UV
+        // buffer.
 	VkImage image;
 	VkImageView image_view;
 
-	// Descriptor pool from which the input attachment descriptor for the postprocess subpass will be allocated.
-	// We have to allocate descriptors per render buffer because the attachment is different for each render
-	// buffer, which is why this is here.
-	// Having one pool per render buffer also avoids having to worry about what to set descriptorCount to.
-	VkDescriptorPool input_attach_dpool;
-	VkDescriptorSet postprocess_set;
-
-	// Lets us know which render buffer was in use last (corresponds to frame in wlr_vk_renderer)
+        // Lets us know which render buffer was in use last (corresponds to
+        // frame in wlr_vk_renderer)
 	uint32_t frame;
 
 	struct wl_listener buffer_destroy;
@@ -211,18 +211,10 @@ struct wlr_vk_renderer {
 	VkShaderModule vert_module;
 	VkShaderModule tex_frag_module;
 	VkShaderModule quad_frag_module;
-	VkShaderModule postprocess_vert_module;
-	VkShaderModule postprocess_frag_module;
 
 	VkDescriptorSetLayout ds_layout;
 	VkPipelineLayout pipe_layout;
 	VkSampler sampler;
-
-	VkDescriptorSetLayout postprocess_ds_layout;
-	VkPipelineLayout postprocess_pipe_layout;
-
-	// 0 = color, 1 = depth, 2 = uv, anything else = pink screen
-	int render_mode;
 
 	VkFence fence;
 
@@ -355,16 +347,27 @@ struct wlr_vk_buffer_span {
 	struct wlr_vk_allocation alloc;
 };
 
-// util
+// util TODO: move this to util.h
 bool vulkan_has_extension(size_t count, const char **exts, const char *find);
 const char *vulkan_strerror(VkResult err);
-void vulkan_change_layout(VkCommandBuffer cb, VkImage img,
-	VkImageLayout ol, VkPipelineStageFlags srcs, VkAccessFlags srca,
-	VkImageLayout nl, VkPipelineStageFlags dsts, VkAccessFlags dsta);
-void vulkan_change_layout_queue(VkCommandBuffer cb, VkImage img,
-	VkImageLayout ol, VkPipelineStageFlags srcs, VkAccessFlags srca,
-	VkImageLayout nl, VkPipelineStageFlags dsts, VkAccessFlags dsta,
-	uint32_t src_family, uint32_t dst_family);
+
+void vulkan_image_transition(VkDevice device, VkQueue queue, VkCommandPool cpool,
+                VkImage image, VkImageAspectFlags aspect,
+                VkImageLayout old_lt, VkImageLayout new_lt,
+                VkAccessFlags src_access, VkAccessFlags dst_access,
+                VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
+                uint32_t mip_levels);
+
+void vulkan_image_transition_cbuf(VkCommandBuffer cbuf,
+                VkImage image, VkImageAspectFlags aspect,
+                VkImageLayout old_lt, VkImageLayout new_lt,
+                VkAccessFlags src_access, VkAccessFlags dst_access,
+                VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
+                uint32_t mip_levels);
+
+void cbuf_alloc(VkDevice device, VkCommandPool cpool, VkCommandBuffer *cbuf);
+void cbuf_submit_wait(VkQueue queue, VkCommandBuffer cbuf);
+void cbuf_begin_onetime(VkCommandBuffer cbuf);
 
 #define wlr_vk_error(fmt, res, ...) wlr_log(WLR_ERROR, fmt ": %s (%d)", \
 	vulkan_strerror(res), res, ##__VA_ARGS__)

@@ -21,22 +21,11 @@
 
 #include "render/pixel_format.h"
 #include "render/vulkan.h"
+#include "vulkan/intermediate.h"
 #include "vulkan/shaders/common.vert.h"
 #include "vulkan/shaders/texture.frag.h"
 #include "vulkan/shaders/quad.frag.h"
-#include "vulkan/shaders/postprocess.vert.h"
-#include "vulkan/shaders/postprocess.frag.h"
 #include <wlr/types/wlr_buffer.h>
-
-// TODO:
-// - simplify stage allocation, don't track allocations but use ringbuffer-like
-// - use a pipeline cache (not sure when to save though, after every pipeline
-//   creation?)
-// - create pipelines as derivatives of each other
-// - evaluate if creating VkDeviceMemory pools is a good idea.
-//   We can expect wayland client images to be fairly large (and shouldn't
-//   have more than 4k of those I guess) but pooling memory allocations
-//   might still be a good idea.
 
 static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
 static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
@@ -80,6 +69,8 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
 
 struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *renderer,
                 VkDescriptorSet *ds) {
+        printf("Allocate texture descriptor set\n");
+
 	VkResult res;
 	VkDescriptorSetAllocateInfo ds_info = {0};
 	ds_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -180,13 +171,6 @@ static void shared_buffer_destroy(struct wlr_vk_renderer *r,
 
 	wl_list_remove(&buffer->link);
 	free(buffer);
-}
-
-static void release_stage_allocations(struct wlr_vk_renderer *renderer) {
-	struct wlr_vk_shared_buffer *buf;
-	wl_list_for_each(buf, &renderer->stage.buffers, link) {
-		buf->allocs_size = 0u;
-	}
 }
 
 struct wlr_vk_buffer_span vulkan_get_stage_span(struct wlr_vk_renderer *r,
@@ -384,13 +368,16 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 
 	VkDevice dev = buffer->renderer->dev->dev;
 
-	vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
 	vkDestroyImageView(dev, buffer->image_view, NULL);
 	vkDestroyImage(dev, buffer->image, NULL);
 
-	vkDestroyImage(dev, buffer->intermediate, NULL);
-	vkDestroyImageView(dev, buffer->intermediate_view, NULL);
-	vkFreeMemory(dev, buffer->intermediate_mem, NULL);
+        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                vkDestroyImage(dev, buffer->intermediates[i], NULL);
+                vkDestroyImageView(dev, buffer->intermediate_views[i], NULL);
+                vkFreeMemory(dev, buffer->intermediate_mems[i], NULL);
+
+                vkDestroyFramebuffer(dev, buffer->framebuffers[i], NULL);
+        }
 
 	vkDestroyImage(dev, buffer->depth, NULL);
 	vkDestroyImageView(dev, buffer->depth_view, NULL);
@@ -402,8 +389,6 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 
 	vkDestroyBuffer(dev, buffer->host_uv, NULL);
 	vkFreeMemory(dev, buffer->host_uv_mem, NULL);
-
-	vkDestroyDescriptorPool(dev, buffer->input_attach_dpool, NULL);
 
 	for (size_t i = 0u; i < buffer->mem_count; ++i) {
 		vkFreeMemory(dev, buffer->memories[i], NULL);
@@ -548,35 +533,46 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		goto error_view;
 	}
 
-	// Create intermediate image
-	create_image(renderer, fmt->format.vk_format,
-	             VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
-	             dmabuf.width, dmabuf.height,
-	             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
-	             &buffer->intermediate);
+        // Create two intermediate images - we need two for things like blurred
+        // transparency. Whatever window is being drawn on top must be able to
+        // sample the pixels behind it.
+        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                create_image(renderer, fmt->format.vk_format,
+                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+                        dmabuf.width, dmabuf.height,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                                | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                        &buffer->intermediates[i]);
 
-	VkMemoryRequirements intermediate_mem_reqs;
-	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->intermediate, &intermediate_mem_reqs);
-	alloc_memory(renderer, intermediate_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->intermediate_mem);
+                VkMemoryRequirements intermediate_mem_reqs;
+                vkGetImageMemoryRequirements(renderer->dev->dev, buffer->intermediates[i],
+                        &intermediate_mem_reqs);
 
-	res = vkBindImageMemory(renderer->dev->dev, buffer->intermediate, buffer->intermediate_mem, 0);
-	assert(res == VK_SUCCESS);
+	        alloc_memory(renderer, intermediate_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        &buffer->intermediate_mems[i]);
 
-	VkImageViewCreateInfo intermediate_view_info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = buffer->intermediate,
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
-		.format = fmt->format.vk_format,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		}
-	};
-	res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL, &buffer->intermediate_view);
-	assert(res == VK_SUCCESS);
+                res = vkBindImageMemory(renderer->dev->dev, buffer->intermediates[i],
+                        buffer->intermediate_mems[i], 0);
+                assert(res == VK_SUCCESS);
+
+                VkImageViewCreateInfo intermediate_view_info = {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                        .image = buffer->intermediates[i],
+                        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                        .format = fmt->format.vk_format,
+                        .subresourceRange = {
+                                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                .baseMipLevel = 0,
+                                .levelCount = 1,
+                                .baseArrayLayer = 0,
+                                .layerCount = 1,
+                        }
+                };
+                res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL,
+                        &buffer->intermediate_views[i]);
+                assert(res == VK_SUCCESS);
+        }
 
 	// Create depth buffer
 	create_image(renderer, DEPTH_FORMAT,
@@ -660,106 +656,33 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkBindBufferMemory(renderer->dev->dev, buffer->host_uv, buffer->host_uv_mem, 0);
 	assert(res == VK_SUCCESS);
 
-	// Create framebuffer
-	VkImageView attachments[] = {
-		buffer->intermediate_view,
-		buffer->depth_view,
-		buffer->uv_view,
-		buffer->image_view,
-	};
-	VkFramebufferCreateInfo fb_info = {0};
-	fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	fb_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
-	fb_info.pAttachments = attachments;
-	fb_info.flags = 0u;
-	fb_info.width = dmabuf.width;
-	fb_info.height = dmabuf.height;
-	fb_info.layers = 1u;
-	fb_info.renderPass = buffer->render_setup->render_pass;
+	// Create framebuffers
+        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                VkImageView attachments[] = {
+                        buffer->intermediate_views[i],
+                        buffer->depth_view,
+                        buffer->uv_view,
+                };
+                VkFramebufferCreateInfo fb_info = {0};
+                fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+                fb_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
+                fb_info.pAttachments = attachments;
+                fb_info.flags = 0u;
+                fb_info.width = dmabuf.width;
+                fb_info.height = dmabuf.height;
+                fb_info.layers = 1u;
+                fb_info.renderPass = buffer->render_setup->render_pass;
 
-	res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffer);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreateFramebuffer", res);
-		goto error_depth_view;
-	}
+                res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffers[i]);
+                if (res != VK_SUCCESS) {
+                        wlr_vk_error("vkCreateFramebuffer", res);
+                        goto error_depth_view;
+                }
+        }
 
 	buffer->buffer_destroy.notify = handle_render_buffer_destroy;
 	wl_signal_add(&wlr_buffer->events.destroy, &buffer->buffer_destroy);
 	wl_list_insert(&renderer->render_buffers, &buffer->link);
-
-	// Descriptor pool for passing intermediate image as input attachment to second subpass
-	VkDescriptorPoolSize dpool_size = {
-		.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.descriptorCount = 3,
-	};
-
-	VkDescriptorPoolCreateInfo dpool_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.poolSizeCount = 1,
-		.pPoolSizes = &dpool_size,
-		.maxSets = 1,
-	};
-
-	res = vkCreateDescriptorPool(dev, &dpool_info, NULL, &buffer->input_attach_dpool);
-	assert(res == VK_SUCCESS);
-
-	// Create descriptors for input attachment
-	VkDescriptorSetAllocateInfo descriptor_alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = buffer->input_attach_dpool,
-		.descriptorSetCount = 1,
-		.pSetLayouts = &renderer->postprocess_ds_layout,
-	};
-	res = vkAllocateDescriptorSets(dev, &descriptor_alloc_info, &buffer->postprocess_set);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkAllocateDescriptorSets", res);
-		exit(1);
-	}
-
-	// Write image views to subpass descriptors
-	VkDescriptorImageInfo descriptor_color_info = {
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		.imageView = buffer->intermediate_view,
-		.sampler = VK_NULL_HANDLE,
-	};
-	VkDescriptorImageInfo descriptor_depth_info = {
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		.imageView = buffer->depth_view,
-		.sampler = VK_NULL_HANDLE,
-	};
-	VkDescriptorImageInfo descriptor_uv_info = {
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		.imageView = buffer->uv_view,
-		.sampler = VK_NULL_HANDLE,
-	};
-
-	VkWriteDescriptorSet write_color_set = {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = buffer->postprocess_set,
-		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.descriptorCount = 1,
-		.pImageInfo = &descriptor_color_info,
-		.dstBinding = 0,
-	};
-	VkWriteDescriptorSet write_depth_set = {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = buffer->postprocess_set,
-		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.descriptorCount = 1,
-		.pImageInfo = &descriptor_depth_info,
-		.dstBinding = 1,
-	};
-	VkWriteDescriptorSet write_uv_set = {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = buffer->postprocess_set,
-		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.descriptorCount = 1,
-		.pImageInfo = &descriptor_uv_info,
-		.dstBinding = 2,
-	};
-	VkWriteDescriptorSet write_sets[] = {write_color_set, write_depth_set, write_uv_set};
-
-	vkUpdateDescriptorSets(dev, sizeof(write_sets) / sizeof(write_sets[0]), write_sets, 0, NULL);
 
 	return buffer;
 
@@ -768,7 +691,9 @@ error_depth_view:
 	vkFreeMemory(renderer->dev->dev, buffer->depth_mem, NULL);
 	vkDestroyImage(renderer->dev->dev, buffer->depth, NULL);
 error_view:
-	vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
+        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                vkDestroyFramebuffer(dev, buffer->framebuffers[i], NULL);
+        }
 	vkDestroyImageView(dev, buffer->image_view, NULL);
 	vkDestroyImage(dev, buffer->image, NULL);
 	for (size_t i = 0u; i < buffer->mem_count; ++i) {
@@ -807,299 +732,22 @@ static bool vulkan_bind_buffer(struct wlr_renderer *wlr_renderer,
 	return true;
 }
 
-static void vulkan_begin(struct wlr_renderer *wlr_renderer,
-		uint32_t width, uint32_t height) {
-	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-	assert(renderer->current_render_buffer);
-
-	VkCommandBuffer cb = renderer->cb;
-	VkCommandBufferBeginInfo begin_info = {0};
-	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	vkBeginCommandBuffer(cb, &begin_info);
-
-	// begin render pass
-	VkFramebuffer fb = renderer->current_render_buffer->framebuffer;
-
-	VkRect2D rect = {{0, 0}, {width, height}};
-	renderer->scissor = rect;
-
-	VkClearValue clear_values[4];
-	// intermediate color
-	clear_values[0].color.float32[0] = 0.5;
-	clear_values[0].color.float32[1] = 0.5;
-	clear_values[0].color.float32[2] = 0.5;
-	clear_values[0].color.float32[3] = 1.0;
-	// depth
-	clear_values[1].depthStencil.depth = 1.0;
-	clear_values[1].depthStencil.stencil = 0;
-	// uv
-	clear_values[2].color.float32[0] = 0.0;
-	clear_values[2].color.float32[1] = 0.0;
-	clear_values[2].color.float32[2] = 0.0;
-	// postprocess out
-	clear_values[3].color.float32[0] = 0.0;
-	clear_values[3].color.float32[1] = 0.0;
-	clear_values[3].color.float32[2] = 0.0;
-
-	VkRenderPassBeginInfo rp_info = {0};
-	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	rp_info.renderArea = rect;
-	rp_info.renderPass = renderer->current_render_buffer->render_setup->render_pass;
-	rp_info.framebuffer = fb;
-	rp_info.clearValueCount = sizeof(clear_values) / sizeof(clear_values[0]);
-	rp_info.pClearValues = clear_values;
-	vkCmdBeginRenderPass(cb, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport vp = {0.f, 0.f, (float) width, (float) height, 0.f, 1.f};
-	vkCmdSetViewport(cb, 0, 1, &vp);
-	vkCmdSetScissor(cb, 0, 1, &rect);
-
-	// Refresh projection matrix.
-        //
-        // We need a matrix that turns pixels into -1..1 for vulkan.
-        memset(renderer->projection, 0, sizeof(renderer->projection[0]) * 9);
-        // Scale X down by width
-        renderer->projection[0] = 2.0f / width;
-        // Scale Y down by height
-        renderer->projection[4] = 2.0f / height;
-        // Leave Z alone
-        renderer->projection[8] = 1;
-        // Move X down by -1
-        renderer->projection[2] = -1;
-        // Move Y down by -1
-        renderer->projection[5] = -1;
-
-	renderer->render_width = width;
-	renderer->render_height = height;
-	renderer->bound_pipe = VK_NULL_HANDLE;
+static void vulkan_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
+        fprintf(stderr, "Ignore vulkan_begin\n");
 }
 
 static void vulkan_end(struct wlr_renderer *wlr_renderer) {
-	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-	assert(renderer->current_render_buffer);
-	struct wlr_vk_render_format_setup *setup = renderer->current_render_buffer->render_setup;
-
-	VkCommandBuffer render_cb = renderer->cb;
-	VkCommandBuffer pre_cb = vulkan_record_stage_cb(renderer);
-
-	renderer->render_width = 0u;
-	renderer->render_height = 0u;
-	renderer->bound_pipe = VK_NULL_HANDLE;
-
-	// Move to next subpass
-	vkCmdNextSubpass(render_cb, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(render_cb, VK_PIPELINE_BIND_POINT_GRAPHICS, setup->postprocess_pipe);
-	vkCmdBindDescriptorSets(render_cb, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->postprocess_pipe_layout,
-		0, 1, &renderer->current_render_buffer->postprocess_set, 0, NULL);
-	vkCmdPushConstants(render_cb, renderer->postprocess_pipe_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-		sizeof(renderer->render_mode), &renderer->render_mode);
-	vkCmdDraw(render_cb, 4, 1, 0, 0);
-
-	vkCmdEndRenderPass(render_cb);
-
-	// insert acquire and release barriers for dmabuf-images
-	unsigned barrier_count = wl_list_length(&renderer->foreign_textures) + 1;
-	VkImageMemoryBarrier* acquire_barriers = calloc(barrier_count, sizeof(VkImageMemoryBarrier));
-	VkImageMemoryBarrier* release_barriers = calloc(barrier_count, sizeof(VkImageMemoryBarrier));
-
-	struct wlr_vk_texture *texture, *tmp_tex;
-	unsigned idx = 0;
-
-	wl_list_for_each_safe(texture, tmp_tex, &renderer->foreign_textures, foreign_link) {
-		VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
-		if (!texture->transitioned) {
-			src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-			texture->transitioned = true;
-		}
-
-		// acquire
-		acquire_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		acquire_barriers[idx].srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-		acquire_barriers[idx].dstQueueFamilyIndex = renderer->dev->queue_family;
-		acquire_barriers[idx].image = texture->image;
-		acquire_barriers[idx].oldLayout = src_layout;
-		acquire_barriers[idx].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		acquire_barriers[idx].srcAccessMask = 0u; // ignored anyways
-		acquire_barriers[idx].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		acquire_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		acquire_barriers[idx].subresourceRange.layerCount = 1;
-		acquire_barriers[idx].subresourceRange.levelCount = 1;
-
-		// release
-		release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
-		release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-		release_barriers[idx].image = texture->image;
-		release_barriers[idx].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		release_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		release_barriers[idx].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		release_barriers[idx].dstAccessMask = 0u; // ignored anyways
-		release_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		release_barriers[idx].subresourceRange.layerCount = 1;
-		release_barriers[idx].subresourceRange.levelCount = 1;
-		++idx;
-
-		wl_list_remove(&texture->foreign_link);
-		texture->owned = false;
-	}
-
-	// also add acquire/release barriers for the current render buffer
-	VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
-	if (!renderer->current_render_buffer->transitioned) {
-		src_layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-		renderer->current_render_buffer->transitioned = true;
-	}
-
-	// acquire render buffer before rendering
-	acquire_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	acquire_barriers[idx].srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-	acquire_barriers[idx].dstQueueFamilyIndex = renderer->dev->queue_family;
-	acquire_barriers[idx].image = renderer->current_render_buffer->image;
-	acquire_barriers[idx].oldLayout = src_layout;
-	acquire_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-	acquire_barriers[idx].srcAccessMask = 0u; // ignored anyways
-	acquire_barriers[idx].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	acquire_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	acquire_barriers[idx].subresourceRange.layerCount = 1;
-	acquire_barriers[idx].subresourceRange.levelCount = 1;
-
-	// release render buffer after rendering
-	release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
-	release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-	release_barriers[idx].image = renderer->current_render_buffer->image;
-	release_barriers[idx].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-	release_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-	release_barriers[idx].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	release_barriers[idx].dstAccessMask = 0u; // ignored anyways
-	release_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	release_barriers[idx].subresourceRange.layerCount = 1;
-	release_barriers[idx].subresourceRange.levelCount = 1;
-	++idx;
-
-	vkCmdPipelineBarrier(pre_cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		0, 0, NULL, 0, NULL, barrier_count, acquire_barriers);
-
-	vkCmdPipelineBarrier(render_cb, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL, 0, NULL,
-		barrier_count, release_barriers);
-
-	free(acquire_barriers);
-	free(release_barriers);
-
-	// Transition UV to TRANSFER_SRC_OPTIMAL
-	VkImageMemoryBarrier uv_barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		.newLayout= VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		.image = renderer->current_render_buffer->uv,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.layerCount = 1,
-			.levelCount = 1
-		},
-		.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT
-	};
-	vkCmdPipelineBarrier(renderer->cb, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &uv_barrier);
-
-	// Copy UV to host-visible memory, but only the pixel under the cursor
-	if (renderer->should_copy_uv) {
-		// vulkan_end also gets used to draw the cursor and such, in which case it doesn't make sense
-		// to copy the UV texture. So only copy if explicitly told so.
-		assert(renderer->cursor_x < renderer->current_render_buffer->wlr_buffer->width);
-		assert(renderer->cursor_y < renderer->current_render_buffer->wlr_buffer->height);
-		VkBufferImageCopy uv_copy_region = {
-			.bufferOffset = 0,
-			.bufferRowLength = renderer->current_render_buffer->wlr_buffer->width,
-			.bufferImageHeight = renderer->current_render_buffer->wlr_buffer->height,
-			.imageSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = 0,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			},
-			.imageOffset = { .x = renderer->cursor_x, .y = renderer->cursor_y, .z = 0 },
-			.imageExtent = {
-				.width = 1,
-				.height = 1,
-				.depth = 1,
-			},
-		};
-
-		vkCmdCopyImageToBuffer(renderer->cb,
-			renderer->current_render_buffer->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		        renderer->current_render_buffer->host_uv,
-		        1, &uv_copy_region);
-	}
-
-	vkEndCommandBuffer(renderer->cb);
-
-	unsigned submit_count = 0u;
-	VkSubmitInfo submit_infos[2] = {0};
-
-	// No semaphores needed here.
-	// We don't need a semaphore from the stage/transfer submission
-	// to the render submissions since they are on the same queue
-	// and we have a renderpass dependency for that.
-	if (renderer->stage.recording) {
-		vkEndCommandBuffer(renderer->stage.cb);
-		renderer->stage.recording = false;
-
-		VkSubmitInfo *stage_sub = &submit_infos[submit_count];
-		stage_sub->sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		stage_sub->commandBufferCount = 1u;
-		stage_sub->pCommandBuffers = &pre_cb;
-		++submit_count;
-	}
-
-	VkSubmitInfo *render_sub = &submit_infos[submit_count];
-	render_sub->sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	render_sub->pCommandBuffers = &render_cb;
-	render_sub->commandBufferCount = 1u;
-	++submit_count;
-
-	VkResult res = vkQueueSubmit(renderer->dev->queue, submit_count,
-		submit_infos, renderer->fence);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkQueueSubmit", res);
-		return;
-	}
-
-	// sadly this is required due to the current api/rendering model of wlr
-	// ideally we could use gpu and cpu in parallel (_without_ the
-	// implicit synchronization overhead and mess of opengl drivers)
-	res = vkWaitForFences(renderer->dev->dev, 1, &renderer->fence, true,
-		UINT64_MAX);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkWaitForFences", res);
-		return;
-	}
-
-	++renderer->frame;
-	renderer->current_render_buffer->frame = renderer->frame;
-	release_stage_allocations(renderer);
-
-	// destroy pending textures
-	wl_list_for_each_safe(texture, tmp_tex, &renderer->destroy_textures, destroy_link) {
-		wlr_texture_destroy(&texture->wlr_texture);
-	}
-
-	wl_list_init(&renderer->destroy_textures); // reset the list
-	res = vkResetFences(renderer->dev->dev, 1, &renderer->fence);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkResetFences", res);
-		return;
-	}
+        fprintf(stderr, "Ignore vulkan_end\n");
 }
 
+// This only gets used by the cursor I think? Not sure. I use the function with
+// the same name in ../render.c for drawing window textures. I know, I know...
 static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
 		const float matrix[static 9], float alpha) {
+        fprintf(stderr, "render_subtexture_with_matrix not implemented\n");
+        return true;
+
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	VkCommandBuffer cb = renderer->cb;
 
@@ -1149,6 +797,10 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 
 static void vulkan_clear(struct wlr_renderer *wlr_renderer,
 		const float color[static 4]) {
+        // For some ungodly reason the hardware cursor calls this? Whatever.
+        fprintf(stderr, "Ignoring vulkan_clear\n");
+        return;
+
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	VkCommandBuffer cb = renderer->cb;
 
@@ -1175,6 +827,9 @@ static void vulkan_clear(struct wlr_renderer *wlr_renderer,
 
 static void vulkan_scissor(struct wlr_renderer *wlr_renderer,
 		struct wlr_box *box) {
+        fprintf(stderr, "Ignore vulkan_scissor\n");
+        return;
+
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	VkCommandBuffer cb = renderer->cb;
 
@@ -1199,12 +854,30 @@ static const uint32_t *vulkan_get_shm_texture_formats(
 
 static void vulkan_render_quad_with_matrix(struct wlr_renderer *wlr_renderer,
 		const float color[static 4], const float matrix[static 9]) {
-	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-	VkCommandBuffer cb = renderer->cb;
+        fprintf(stderr, "Ignoring render_quad...\n");
+        return;
 
+	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
+	VkCommandBuffer cbuf = renderer->cb;
+
+        // TODO: just set the scissor to the whole screen in vulkan_begin and
+        // forget about it afterwards. Fuck scissors.
+	VkRect2D rect = {{0, 0}, {renderer->render_width, renderer->render_height}};
+	renderer->scissor = rect;
+
+        // Start the command buffer and enter the render pass
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+        assert(render_buf != NULL);
+        // FIXME: Fuck man, what do I put for index here? I guess I'll have to
+        // store it in vk_renderer
+        begin_render_operation(cbuf, render_buf->framebuffers[0],
+                render_buf->render_setup->render_pass, renderer->scissor,
+                renderer->render_width, renderer->render_height);
+
+        // Bind pipe
 	VkPipeline pipe = renderer->current_render_buffer->render_setup->quad_pipe;
 	if (pipe != renderer->bound_pipe) {
-		vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
 		renderer->bound_pipe = pipe;
 	}
 
@@ -1230,10 +903,12 @@ static void vulkan_render_quad_with_matrix(struct wlr_renderer *wlr_renderer,
 	push_constants.color[2] = color_to_linear(color[2]);
 	push_constants.color[3] = color[3]; // no conversion for alpha
 
-	vkCmdPushConstants(cb, renderer->pipe_layout,
+	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(push_constants), &push_constants);
-	vkCmdDraw(cb, 4, 1, 0, 0);
+	vkCmdDraw(cbuf, 4, 1, 0, 0);
+
+        end_render_operation(cbuf);
 }
 
 static const struct wlr_drm_format_set *vulkan_get_dmabuf_texture_formats(
@@ -1301,12 +976,10 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 
 	vkDestroyShaderModule(dev->dev, renderer->vert_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->tex_frag_module, NULL);
-	vkDestroyShaderModule(dev->dev, renderer->quad_frag_module, NULL);
 
 	vkDestroyFence(dev->dev, renderer->fence, NULL);
 	vkDestroyPipelineLayout(dev->dev, renderer->pipe_layout, NULL);
 	vkDestroyDescriptorSetLayout(dev->dev, renderer->ds_layout, NULL);
-	vkDestroyDescriptorSetLayout(dev->dev, renderer->postprocess_ds_layout, NULL);
 	vkDestroySampler(dev->dev, renderer->sampler, NULL);
 	vkDestroyCommandPool(dev->dev, renderer->command_pool, NULL);
 
@@ -1406,20 +1079,21 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 
 	VkCommandBuffer cb = vulkan_record_stage_cb(vk_renderer);
 
-	vulkan_change_layout(cb, dst_image,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			0,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT);
-	vulkan_change_layout(cb, src_image,
-			VK_IMAGE_LAYOUT_GENERAL,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_MEMORY_READ_BIT,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_READ_BIT);
+        vulkan_image_transition(vk_renderer->dev->dev, vk_renderer->dev->queue,
+                vk_renderer->command_pool,
+                dst_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
+
+        vulkan_image_transition(vk_renderer->dev->dev, vk_renderer->dev->queue,
+                vk_renderer->command_pool,
+                src_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
 
 	if (blit_supported) {
 		VkOffset3D blit_size = {
@@ -1463,20 +1137,20 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 				dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_region);
 	}
 
-	vulkan_change_layout(cb, dst_image,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_IMAGE_LAYOUT_GENERAL,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			0);
-	vulkan_change_layout(cb, src_image,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_READ_BIT,
-			VK_IMAGE_LAYOUT_GENERAL,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_MEMORY_READ_BIT);
+        vulkan_image_transition(vk_renderer->dev->dev, vk_renderer->dev->queue,
+                vk_renderer->command_pool,
+                dst_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_NONE,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
+        vulkan_image_transition(vk_renderer->dev->dev, vk_renderer->dev->queue,
+                vk_renderer->command_pool,
+                src_image, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
 
 	if (!vulkan_submit_stage_wait(vk_renderer)) {
 		goto free_memory;
@@ -1555,16 +1229,24 @@ static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
 	VkResult res;
 	VkDevice dev = renderer->dev->dev;
 
-	// layouts
-	// descriptor set
-	VkDescriptorSetLayoutBinding ds_bindings[1] = {{
-		0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
-		VK_SHADER_STAGE_FRAGMENT_BIT, &tex_sampler,
-	}};
+	// Descriptor set layout
+	VkDescriptorSetLayoutBinding ds_bindings[2] = {0};
+        // This is for the window texture
+        ds_bindings[0].binding = 0;
+        ds_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        ds_bindings[0].descriptorCount = 1;
+        ds_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        ds_bindings[0].pImmutableSamplers = &tex_sampler;
+        // This is for sampling the windows that have already been drawn
+        ds_bindings[1].binding = 1;
+        ds_bindings[1].descriptorCount = 1;
+        ds_bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+        ds_bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        ds_bindings[1].pImmutableSamplers = &tex_sampler;
 
 	VkDescriptorSetLayoutCreateInfo ds_info = {0};
 	ds_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	ds_info.bindingCount = 1;
+	ds_info.bindingCount = sizeof(ds_bindings) / sizeof(ds_bindings[0]);
 	ds_info.pBindings = ds_bindings;
 
 	res = vkCreateDescriptorSetLayout(dev, &ds_info, NULL, out_ds_layout);
@@ -1573,7 +1255,7 @@ static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
 		return false;
 	}
 
-	// pipeline layout
+	// Pipeline layout
 	VkPushConstantRange pc_ranges[1] = {0};
 	pc_ranges[0].size = sizeof(struct PushConstants);
 	pc_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -1594,67 +1276,6 @@ static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
 	return true;
 }
 
-// Creates the descriptor set layouts and pipeline layout for the postprocess subpass
-static bool init_postprocess_layout(struct wlr_vk_renderer *renderer,
-		VkDescriptorSetLayout *out_ds_layout, VkPipelineLayout *out_pipe_layout) {
-	VkResult res;
-	VkDevice dev = renderer->dev->dev;
-
-	// layouts
-	VkDescriptorSetLayoutBinding color_binding = {
-		.binding = 0,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-	};
-	VkDescriptorSetLayoutBinding depth_binding = {
-		.binding = 1,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-	};
-	VkDescriptorSetLayoutBinding uv_binding = {
-		.binding = 2,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-	};
-	VkDescriptorSetLayoutBinding bindings[] = {color_binding, depth_binding, uv_binding};
-
-	VkDescriptorSetLayoutCreateInfo ds_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = sizeof(bindings) / sizeof(bindings[0]),
-		.pBindings = bindings,
-	};
-
-	res = vkCreateDescriptorSetLayout(dev, &ds_info, NULL, out_ds_layout);
-	assert(res == VK_SUCCESS);
-
-	// push constants
-	VkPushConstantRange pc_range = {
-		.size = 4,		// Single int
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-	};
-
-	// pipeline layout
-	VkPipelineLayoutCreateInfo pl_info = {0};
-	pl_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pl_info.setLayoutCount = 1;
-	pl_info.pSetLayouts = out_ds_layout;
-	pl_info.pushConstantRangeCount = 1;
-	pl_info.pPushConstantRanges = &pc_range;
-
-	res = vkCreatePipelineLayout(dev, &pl_info, NULL, out_pipe_layout);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreatePipelineLayout", res);
-		return false;
-	}
-
-	// The descriptors will be created in create_render_buffer, since they are unique for each framebuffer
-
-	return true;
-}
-
 // Initializes the pipeline for rendering textures and using the given
 // VkRenderPass and VkPipelineLayout.
 static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
@@ -1662,24 +1283,28 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	VkResult res;
 	VkDevice dev = renderer->dev->dev;
 
-	// shaders
+	// Shaders
 	VkPipelineShaderStageCreateInfo vert_stage = {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_VERTEX_BIT, renderer->vert_module,
-		"main", NULL
+		.sType= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .module = renderer->vert_module,
+		.pName = "main",
+	};
+	VkPipelineShaderStageCreateInfo frag_stage = {
+		.sType= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = renderer->tex_frag_module,
+		.pName = "main",
 	};
 
-	VkPipelineShaderStageCreateInfo tex_stages[2] = {vert_stage, {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_FRAGMENT_BIT, renderer->tex_frag_module,
-		"main", NULL
-	}};
+	VkPipelineShaderStageCreateInfo tex_stages[] = {vert_stage, frag_stage};
 
-	// info
+	// Info
 	VkPipelineInputAssemblyStateCreateInfo assembly = {0};
 	assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
 
+        // Rasterizer
 	VkPipelineRasterizationStateCreateInfo rasterization = {0};
 	rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterization.polygonMode = VK_POLYGON_MODE_FILL;
@@ -1687,9 +1312,10 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterization.lineWidth = 1.f;
 
+        // Blending
 	VkPipelineColorBlendAttachmentState blend_attachment = {0};
 	blend_attachment.blendEnable = VK_TRUE;
-	// we generally work with pre-multiplied alpha
+	// We generally work with pre-multiplied alpha
 	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
@@ -1702,22 +1328,26 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 
-	VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment, blend_attachment};
+        VkPipelineColorBlendAttachmentState blend_attachments[] =
+                {blend_attachment, blend_attachment};
 
 	VkPipelineColorBlendStateCreateInfo blend = {0};
 	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
 	blend.pAttachments = blend_attachments;
 
+        // Multisamping
 	VkPipelineMultisampleStateCreateInfo multisample = {0};
 	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+        // Viewport
 	VkPipelineViewportStateCreateInfo viewport = {0};
 	viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	viewport.viewportCount = 1;
 	viewport.scissorCount = 1;
 
+        // Dynamic state
 	VkDynamicState dynStates[2] = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR,
@@ -1727,9 +1357,11 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 	dynamic.pDynamicStates = dynStates;
 	dynamic.dynamicStateCount = 2;
 
+        // Vertex
 	VkPipelineVertexInputStateCreateInfo vertex = {0};
 	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
+        // Depth
 	VkPipelineDepthStencilStateCreateInfo depth_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
@@ -1739,6 +1371,7 @@ static bool init_tex_pipeline(struct wlr_vk_renderer *renderer,
 		.stencilTestEnable = VK_FALSE,
 	};
 
+        // Final info
 	VkGraphicsPipelineCreateInfo pinfo = {0};
 	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pinfo.layout = pipe_layout;
@@ -1775,16 +1408,19 @@ static void init_quad_pipeline(struct wlr_vk_renderer *renderer,
 
 	// shaders
 	VkPipelineShaderStageCreateInfo vert_stage = {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_VERTEX_BIT, renderer->vert_module,
-		"main", NULL
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .module = renderer->vert_module,
+		.pName = "main",
+	};
+	VkPipelineShaderStageCreateInfo frag_stage = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = renderer->quad_frag_module,
+		.pName = "main",
 	};
 
-	VkPipelineShaderStageCreateInfo quad_stages[2] = {vert_stage, {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_FRAGMENT_BIT,
-		renderer->quad_frag_module, "main", NULL
-	}};
+	VkPipelineShaderStageCreateInfo quad_stages[2] = {vert_stage, frag_stage};
 
 	// info
 	VkPipelineInputAssemblyStateCreateInfo assembly = {0};
@@ -1874,100 +1510,6 @@ static void init_quad_pipeline(struct wlr_vk_renderer *renderer,
 	assert(res == VK_SUCCESS);
 }
 
-static void init_postprocess_pipeline(struct wlr_vk_renderer *renderer,
-		VkRenderPass render_pass, VkPipelineLayout pipe_layout, VkPipeline *pipe) {
-	VkDevice dev = renderer->dev->dev;
-
-	// shaders
-	VkPipelineShaderStageCreateInfo vert_stage = {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_VERTEX_BIT, renderer->postprocess_vert_module,
-		"main", NULL
-	};
-
-	VkPipelineShaderStageCreateInfo frag_stage = {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		NULL, 0, VK_SHADER_STAGE_FRAGMENT_BIT, renderer->postprocess_frag_module,
-		"main", NULL
-	};
-
-	VkPipelineShaderStageCreateInfo postprocess_stages[] = {vert_stage, frag_stage};
-
-	// info
-	VkPipelineInputAssemblyStateCreateInfo assembly = {0};
-	assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-
-	VkPipelineRasterizationStateCreateInfo rasterization = {0};
-	rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterization.polygonMode = VK_POLYGON_MODE_FILL;
-	rasterization.cullMode = VK_CULL_MODE_NONE;
-	rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-	rasterization.lineWidth = 1.f;
-
-	VkPipelineColorBlendAttachmentState blend_attachment = {0};
-	blend_attachment.blendEnable = VK_TRUE;
-	// we generally work with pre-multiplied alpha
-	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-	blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
-	blend_attachment.colorWriteMask =
-		VK_COLOR_COMPONENT_R_BIT |
-		VK_COLOR_COMPONENT_G_BIT |
-		VK_COLOR_COMPONENT_B_BIT |
-		VK_COLOR_COMPONENT_A_BIT;
-
-	VkPipelineColorBlendStateCreateInfo blend = {0};
-	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	blend.attachmentCount = 1;
-	blend.pAttachments = &blend_attachment;
-
-	VkPipelineMultisampleStateCreateInfo multisample = {0};
-	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-	VkPipelineViewportStateCreateInfo viewport = {0};
-	viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewport.viewportCount = 1;
-	viewport.scissorCount = 1;
-
-	VkDynamicState dynStates[2] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR,
-	};
-	VkPipelineDynamicStateCreateInfo dynamic = {0};
-	dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamic.pDynamicStates = dynStates;
-	dynamic.dynamicStateCount = 2;
-
-	VkPipelineVertexInputStateCreateInfo vertex = {0};
-	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-	VkGraphicsPipelineCreateInfo pinfo = {0};
-	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pinfo.layout = pipe_layout;
-	pinfo.renderPass = render_pass;
-	pinfo.subpass = 1;
-	pinfo.stageCount = 2;
-	pinfo.pStages = postprocess_stages;
-
-	pinfo.pInputAssemblyState = &assembly;
-	pinfo.pRasterizationState = &rasterization;
-	pinfo.pColorBlendState = &blend;
-	pinfo.pMultisampleState = &multisample;
-	pinfo.pViewportState = &viewport;
-	pinfo.pDynamicState = &dynamic;
-	pinfo.pVertexInputState = &vertex;
-
-	VkPipelineCache cache = VK_NULL_HANDLE;
-	VkResult res = vkCreateGraphicsPipelines(dev, cache, 1, &pinfo, NULL, pipe);
-
-	assert(res == VK_SUCCESS);
-}
-
 // Creates static render data, such as sampler, layouts and shader modules
 // for the given rednerer.
 // Cleanup is done by destroying the renderer.
@@ -2000,11 +1542,6 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 		return false;
 	}
 
-	if (!init_postprocess_layout(renderer, &renderer->postprocess_ds_layout,
-			&renderer->postprocess_pipe_layout)) {
-		return false;
-	}
-
 	// load vert module and tex frag module since they are needed to
 	// initialize the tex pipeline
 	VkShaderModuleCreateInfo sinfo = {0};
@@ -2032,24 +1569,6 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->quad_frag_module);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("Failed to create quad fragment shader module", res);
-		return false;
-	}
-
-	// postprocess vert
-	sinfo.codeSize = sizeof(postprocess_vert_data);
-	sinfo.pCode = postprocess_vert_data;
-	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_vert_module);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create postprocess vertex shader module", res);
-		return false;
-	}
-
-	// postprocess frag
-	sinfo.codeSize = sizeof(postprocess_frag_data);
-	sinfo.pCode = postprocess_frag_data;
-	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_frag_module);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create postprocess fragment shader module", res);
 		return false;
 	}
 
@@ -2110,6 +1629,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	};
 
 	// Desktop out
+        /*
 	VkAttachmentDescription output_attach = {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
@@ -2120,6 +1640,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.initialLayout = VK_IMAGE_LAYOUT_GENERAL,
 		.finalLayout = VK_IMAGE_LAYOUT_GENERAL,
 	};
+        */
 
 	// First subpass outputs
 	VkAttachmentReference intermediate_out_ref = {
@@ -2135,26 +1656,6 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
-	// Postprocess inputs - note the different layouts
-	VkAttachmentReference intermediate_in_ref = {
-		.attachment = 0,
-		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	};
-	VkAttachmentReference depth_in_ref = {
-		.attachment = 1,
-		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	};
-	VkAttachmentReference uv_in_ref = {
-		.attachment = 2,
-		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	};
-
-	// Postprocess output
-	VkAttachmentReference output_ref = {
-		.attachment = 3,
-		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
 	VkAttachmentReference render_attachments[] = {intermediate_out_ref, uv_attach_ref};
 
 	VkSubpassDescription render_subpass = {
@@ -2164,19 +1665,9 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.pDepthStencilAttachment = &depth_ref,
 	};
 
-	VkAttachmentReference postprocess_inputs[] = {intermediate_in_ref, depth_in_ref, uv_in_ref};
+        VkSubpassDescription subpasses[] = {render_subpass};
 
-	VkSubpassDescription postprocess_subpass = {
-		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-		.inputAttachmentCount = sizeof(postprocess_inputs) / sizeof(postprocess_inputs[0]),
-		.pInputAttachments = postprocess_inputs,
-		.colorAttachmentCount = 1,
-		.pColorAttachments = &output_ref,
-	};
-
-	VkSubpassDescription subpasses[] = {render_subpass, postprocess_subpass};
-
-	VkSubpassDependency deps[3] = {0};
+	VkSubpassDependency deps[2] = {0};
 	// I think there's multiple things rolled into one here. Among other things, vertex buffer reads
 	// wait on transfer writes and texture reads wait on color attachment output
 	deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -2204,27 +1695,22 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	deps[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT |
 		VK_ACCESS_MEMORY_READ_BIT;
 
-	// Reads in the postprocess subpass must wait on writes in the first
-	deps[2].srcSubpass = 0;
-	deps[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-		| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-	deps[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	deps[2].dstSubpass = 1;
-	deps[2].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-	deps[2].dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+	VkAttachmentDescription attachments[] = {
+                intermediate_attach,
+                depth_attach,
+                uv_attach,
+        };
 
-	VkAttachmentDescription attachments[] = {intermediate_attach, depth_attach, uv_attach, output_attach};
+	VkRenderPassCreateInfo rpass_info = {0};
+	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	rpass_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
+	rpass_info.pAttachments = attachments;
+	rpass_info.subpassCount = sizeof(subpasses) / sizeof(subpasses[0]);
+	rpass_info.pSubpasses = subpasses;
+	rpass_info.dependencyCount = sizeof(deps) / sizeof(deps[0]);
+	rpass_info.pDependencies = deps;
 
-	VkRenderPassCreateInfo rp_info = {0};
-	rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	rp_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
-	rp_info.pAttachments = attachments;
-	rp_info.subpassCount = sizeof(subpasses) / sizeof(subpasses[0]);
-	rp_info.pSubpasses = subpasses;
-	rp_info.dependencyCount = sizeof(deps) / sizeof(deps[0]);
-	rp_info.pDependencies = deps;
-
-	res = vkCreateRenderPass(dev, &rp_info, NULL, &setup->render_pass);
+	res = vkCreateRenderPass(dev, &rpass_info, NULL, &setup->render_pass);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("Failed to create render pass", res);
 		free(setup);
@@ -2237,8 +1723,6 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
 	// No error checking because these just die on error
 	init_quad_pipeline(renderer, setup->render_pass, renderer->pipe_layout, &setup->quad_pipe);
-	init_postprocess_pipeline(renderer, setup->render_pass, renderer->postprocess_pipe_layout,
-		&setup->postprocess_pipe);
 
 	wl_list_insert(&renderer->render_format_setups, &setup->link);
 	return setup;
@@ -2282,12 +1766,12 @@ struct wlr_renderer *vulkan_renderer_create_for_device(struct wlr_vk_device *dev
 		goto error;
 	}
 
-	VkCommandBufferAllocateInfo cbai = {0};
-	cbai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	cbai.commandBufferCount = 1u;
-	cbai.commandPool = renderer->command_pool;
-	cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	res = vkAllocateCommandBuffers(dev->dev, &cbai, &renderer->cb);
+	VkCommandBufferAllocateInfo cbuf_alloc_info = {0};
+	cbuf_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cbuf_alloc_info.commandBufferCount = 1u;
+	cbuf_alloc_info.commandPool = renderer->command_pool;
+	cbuf_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	res = vkAllocateCommandBuffers(dev->dev, &cbuf_alloc_info, &renderer->cb);
 	if (res != VK_SUCCESS) {
 		wlr_vk_error("vkAllocateCommandBuffers", res);
 		goto error;

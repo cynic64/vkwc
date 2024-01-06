@@ -77,11 +77,12 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 
 	// record staging cb
 	// will be executed before next frame
-	VkCommandBuffer cb = vulkan_record_stage_cb(renderer);
-	vulkan_change_layout(cb, texture->image,
-		old_layout, src_stage, src_access,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT);
+	vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
+                texture->image, VK_IMAGE_ASPECT_COLOR_BIT,
+		old_layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                src_access, VK_ACCESS_TRANSFER_WRITE_BIT,
+                src_stage, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
 
 	// upload data
 	const char *pdata = vdata; // data iterator
@@ -123,13 +124,22 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 	assert((uint32_t)(map - (char *)vmap) == bsize);
 	vkUnmapMemory(dev, span.buffer->memory);
 
-	vkCmdCopyBufferToImage(cb, span.buffer->buffer, texture->image,
+        VkCommandBuffer cbuf;
+        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &cbuf);
+        cbuf_begin_onetime(cbuf);
+
+	vkCmdCopyBufferToImage(cbuf, span.buffer->buffer, texture->image,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-	vulkan_change_layout(cb, texture->image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_ACCESS_SHADER_READ_BIT);
+
+	vulkan_image_transition_cbuf(cbuf,
+                texture->image, VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                1);
+
+        cbuf_submit_wait(renderer->dev->queue, cbuf);
+
 	texture->last_used = renderer->frame;
 
 	return true;
@@ -172,17 +182,6 @@ static bool vulkan_texture_update_from_buffer(struct wlr_texture *wlr_texture,
 void vulkan_texture_destroy(struct wlr_vk_texture *texture) {
 	if (!texture->renderer) {
 		free(texture);
-		return;
-	}
-
-	// When we recorded a command to fill this image _this_ frame,
-	// it has to be executed before the texture can be destroyed.
-	// Add it to the renderer->destroy_textures list, destroying
-	// _after_ the stage command buffer has exectued
-	if (texture->last_used == texture->renderer->frame) {
-		assert(texture->destroy_link.next == NULL); // not already inserted
-		wl_list_insert(&texture->renderer->destroy_textures,
-			&texture->destroy_link);
 		return;
 	}
 
@@ -461,6 +460,7 @@ VkImage vulkan_import_dmabuf(struct wlr_vk_renderer *renderer,
 	img_info.usage = for_render ?
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
 		| VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+		| VK_IMAGE_USAGE_TRANSFER_DST_BIT
 		| VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
 		:
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;

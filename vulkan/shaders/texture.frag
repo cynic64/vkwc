@@ -1,6 +1,10 @@
 #version 450
 
+// This is the window texture
 layout(set = 0, binding = 0) uniform sampler2D tex;
+// This is what's already been drawn already, so all windows below us.
+layout(set = 0, binding = 1) uniform sampler2D current_frame;
+
 
 layout(std140, push_constant, row_major) uniform UBO {
 	mat4 proj;

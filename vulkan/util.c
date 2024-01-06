@@ -1,6 +1,7 @@
 #include <vulkan/vulkan.h>
 #include <wlr/util/log.h>
 #include "render/vulkan.h"
+#include <assert.h>
 
 int vulkan_find_mem_type(struct wlr_vk_device *dev,
 		VkMemoryPropertyFlags flags, uint32_t req_bits) {
@@ -55,31 +56,78 @@ const char *vulkan_strerror(VkResult err) {
 	#undef ERR_STR
 }
 
-void vulkan_change_layout_queue(VkCommandBuffer cb, VkImage img,
-		VkImageLayout ol, VkPipelineStageFlags srcs, VkAccessFlags srca,
-		VkImageLayout nl, VkPipelineStageFlags dsts, VkAccessFlags dsta,
-		uint32_t src_family, uint32_t dst_family) {
-	VkImageMemoryBarrier barrier = {0};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = ol;
-	barrier.newLayout = nl;
-	barrier.image = img;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.layerCount = 1;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.srcAccessMask = srca;
-	barrier.dstAccessMask = dsta;
-	barrier.srcQueueFamilyIndex = src_family;
-	barrier.dstQueueFamilyIndex = dst_family;
+void cbuf_alloc(VkDevice device, VkCommandPool cpool, VkCommandBuffer *cbuf) {
+        VkCommandBufferAllocateInfo info = {0};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        info.commandPool = cpool;
+        info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        info.commandBufferCount = 1;
 
-	vkCmdPipelineBarrier(cb, srcs, dsts, 0, 0, NULL, 0, NULL, 1, &barrier);
+        VkResult res = vkAllocateCommandBuffers(device, &info, cbuf);
+        assert(res == VK_SUCCESS);
 }
 
-void vulkan_change_layout(VkCommandBuffer cb, VkImage img,
-		VkImageLayout ol, VkPipelineStageFlags srcs, VkAccessFlags srca,
-		VkImageLayout nl, VkPipelineStageFlags dsts, VkAccessFlags dsta) {
-	vulkan_change_layout_queue(cb, img, ol, srcs, srca, nl, dsts, dsta,
-		VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED);
+void cbuf_submit_wait(VkQueue queue, VkCommandBuffer cbuf) {
+        vkEndCommandBuffer(cbuf);
+
+        VkSubmitInfo info = {0};
+        info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        info.commandBufferCount = 1;
+        info.pCommandBuffers = &cbuf;
+
+        vkQueueSubmit(queue, 1, &info, VK_NULL_HANDLE);
+        vkQueueWaitIdle(queue);
+}
+
+void cbuf_begin_onetime(VkCommandBuffer cbuf) {
+        VkCommandBufferBeginInfo info = {0};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(cbuf, &info);
+}
+
+void vulkan_image_transition(VkDevice device, VkQueue queue, VkCommandPool cpool,
+                VkImage image, VkImageAspectFlags aspect,
+                VkImageLayout old_lt, VkImageLayout new_lt,
+                VkAccessFlags src_access, VkAccessFlags dst_access,
+                VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
+                uint32_t mip_levels) {
+
+	VkCommandBuffer cbuf;
+	cbuf_alloc(device, cpool, &cbuf);
+	cbuf_begin_onetime(cbuf);
+
+        vulkan_image_transition_cbuf(cbuf, image, aspect, old_lt, new_lt,
+                src_access, dst_access,
+                src_stage, dst_stage,
+                mip_levels);
+
+	cbuf_submit_wait(queue, cbuf);
+	vkFreeCommandBuffers(device, cpool, 1, &cbuf);
+}
+
+void vulkan_image_transition_cbuf(VkCommandBuffer cbuf,
+                VkImage image, VkImageAspectFlags aspect,
+                VkImageLayout old_lt, VkImageLayout new_lt,
+                VkAccessFlags src_access, VkAccessFlags dst_access,
+                VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
+                uint32_t mip_levels) {
+	VkImageMemoryBarrier barrier = {0};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = old_lt;
+	barrier.newLayout = new_lt;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange.aspectMask = aspect;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = mip_levels;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.srcAccessMask = src_access;
+	barrier.dstAccessMask = dst_access;
+
+	vkCmdPipelineBarrier(cbuf, src_stage, dst_stage, 0, 0, NULL, 0, NULL, 1, &barrier);
 }
 
 bool vulkan_has_extension(size_t count, const char **exts, const char *find) {
