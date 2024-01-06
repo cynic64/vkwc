@@ -109,13 +109,8 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 0, 0, 0, 0, screen_width, screen_height);
 
-        // Transition current image to COLOR_ATTACHMENT_OPTIMAL so we can render to it
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
+        // We don't have to transition back to COLOR_ATTACHMENT_OPTIMAL - the
+        // render pass does that for us.
 
         // Setup stuff for the texture we're about to render
 	struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
@@ -182,7 +177,7 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-        // I don't really know what this does, vulkan_texture_destroy usees it
+        // I don't really know what this does, vulkan_texture_destroy uses it
         texture->last_used = renderer->frame;
 
 	return true;
@@ -274,7 +269,7 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         vkBeginCommandBuffer(renderer->cb, &cbuf_begin_info);
 }
 
-static void render_end(struct wlr_renderer *wlr_renderer) {
+static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
 
@@ -301,11 +296,6 @@ static void render_end(struct wlr_renderer *wlr_renderer) {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
-        // vulkan_end also gets used to draw the cursor and such, in
-        // which case it doesn't make sense
-        // TODO: Maybe make my own, separate vulkan_end?
-        //
-        // to copy the UV texture. So only copy if explicitly told so.
         assert(renderer->cursor_x < width);
         assert(renderer->cursor_y < height);
         VkBufferImageCopy uv_copy_region = {
@@ -349,13 +339,14 @@ static void render_end(struct wlr_renderer *wlr_renderer) {
 
         // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
         vulkan_image_transition_cbuf(copy_cbuf,
-                renderer->current_render_buffer->intermediates[1], VK_IMAGE_ASPECT_COLOR_BIT,
+                renderer->current_render_buffer->intermediates[framebuffer_idx],
+                VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Now do the actual copy
-        vulkan_copy_image(copy_cbuf, renderer->current_render_buffer->intermediates[1],
+        vulkan_copy_image(copy_cbuf, renderer->current_render_buffer->intermediates[framebuffer_idx],
                 renderer->current_render_buffer->image,
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
                 width, height
@@ -382,7 +373,7 @@ static void render_end(struct wlr_renderer *wlr_renderer) {
 
 }
 
-// surfaces should be a list of struct Surface, defined in vkwc.c
+// `surfaces` should be a list of struct Surface, defined in vkwc.c
 bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
 	// Get the renderer, i.e. Vulkan or GLES2
 	struct wlr_renderer *renderer =	output->renderer;
@@ -420,7 +411,12 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
 	vk_renderer->cursor_x = cursor_x;
 	vk_renderer->cursor_y = cursor_y;
-	render_end(renderer);
+
+        // Since we switch back and forth between framebuffers, we have to
+        // figure out which one to rpesent.
+        int last_framebuffer = framebuffer_idx - 1;
+        if (last_framebuffer < 0) last_framebuffer += INTERMEDIATE_IMAGE_COUNT;
+	render_end(renderer, last_framebuffer);
 
 	int tr_width, tr_height;
 	wlr_output_transformed_resolution(output, &tr_width, &tr_height);

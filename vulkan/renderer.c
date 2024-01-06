@@ -1601,7 +1601,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
@@ -1626,20 +1626,6 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
-
-	// Desktop out
-        /*
-	VkAttachmentDescription output_attach = {
-		.format = format,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_GENERAL,
-		.finalLayout = VK_IMAGE_LAYOUT_GENERAL,
-	};
-        */
 
 	// First subpass outputs
 	VkAttachmentReference intermediate_out_ref = {
@@ -1667,8 +1653,9 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
         VkSubpassDescription subpasses[] = {render_subpass};
 
 	VkSubpassDependency deps[2] = {0};
-	// I think there's multiple things rolled into one here. Among other things, vertex buffer reads
-	// wait on transfer writes and texture reads wait on color attachment output
+        // I think there's multiple things rolled into one here. Among other
+        // things, vertex buffer reads wait on transfer writes and texture
+        // reads wait on color attachment output
 	deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	deps[0].srcStageMask = VK_PIPELINE_STAGE_HOST_BIT |
 		VK_PIPELINE_STAGE_TRANSFER_BIT |
