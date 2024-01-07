@@ -69,8 +69,6 @@ static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
 
 struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *renderer,
                 VkDescriptorSet *ds) {
-        printf("Allocate texture descriptor set\n");
-
 	VkResult res;
 	VkDescriptorSetAllocateInfo ds_info = {0};
 	ds_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -1557,8 +1555,8 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 	// default sampler (non ycbcr)
 	VkSamplerCreateInfo sampler_info = {0};
 	sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	sampler_info.magFilter = VK_FILTER_NEAREST;
-	sampler_info.minFilter = VK_FILTER_NEAREST;
+	sampler_info.magFilter = VK_FILTER_LINEAR;
+	sampler_info.minFilter = VK_FILTER_LINEAR;
 	sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 	sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;

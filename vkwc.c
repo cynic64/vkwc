@@ -126,9 +126,11 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
 			glm_rotate_z(surface->matrix, surface->z_rot, surface->matrix);
 			// Move it so its 0, 0 is at the center
-			glm_translate(surface->matrix, (vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
+			glm_translate(surface->matrix,
+				(vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
 			// Scale from 0..1, 0..1 to surface->width, surface->height
-			glm_scale(surface->matrix, (vec3) {surface->width, surface->height, surface->width});
+			glm_scale(surface->matrix,
+				(vec3) {surface->width, surface->height, surface->width});
 
 			vec4 top_left = {-1, 1, 0, 1};
 			vec4 dst;
@@ -553,10 +555,6 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 
 	if (surface == NULL) {
                 //printf("Nothing under cursor\n");
-		// If there's no view under the	cursor,	set the	cursor image to	a
-		// default. This is what makes the cursor image	appear when you	move it
-		// around the screen, not over any views.
-		wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
 	} else {
 		//
 		// Send	pointer	enter and motion events.
@@ -720,6 +718,9 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 
 	/* Sets	up a listener for the frame notify event. */
 	wl_signal_add(&server->output->events.frame, &server->output_frame);
+
+        // Disable hardware cursor
+        wlr_output_lock_software_cursors(server->output, true);
 }
 
 // Allocates a new Surface, zeroing the struct and setting server, wlr_surface, id, and destroy.
@@ -780,11 +781,12 @@ static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurf
 	surface->toplevel = find_surface(subsurface->parent, &server->surfaces);
         printf("subsurface's toplevel has id %f\n", surface->toplevel->id);
 
-	// The x and y we just filled in are relative to our parent. However, it's possible that surface->toplevel is
-	// itself a subsurface, in which case we need to offset x and y by its position.
+	// The x and y we just filled in are relative to our parent. However,
+	// it's possible that surface->toplevel is itself a subsurface, in
+	// which case we need to offset x and y by its position.
 	// 
-	// It's not necessary to adjust our position relative to the real toplevel, because calc_matrices already
-	// takes this into account.
+	// It's not necessary to adjust our position relative to the real
+	// toplevel, because calc_matrices already takes this into account.
 	assert(surface->toplevel != NULL);
 	while (surface->toplevel != surface->toplevel->toplevel) {
 		surface->x += surface->toplevel->x;

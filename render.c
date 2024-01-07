@@ -457,8 +457,10 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	};
 
 	// Draw frame counter
+        /*
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
 	render_rect_simple(renderer, color, 10,	10, 10, 10);
+        */
 
 	// Finish
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
