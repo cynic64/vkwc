@@ -108,9 +108,8 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_perspective_rh_zo(1, (float) output_width / (float) output_height,
                                 1, 10000, projection);
 
-                        // height * 0.914 makes the pixels 1:1 - don't ask me why...
-			//vec3 eye = {0, 0, (float) output_height * 0.914};
-			vec3 eye = {0, 0, (float) output_height * 0.914};
+                        // height * 0.915... makes the pixels 1:1 - don't ask me why...
+			vec3 eye = {0, 0, (float) output_height * 0.915243971};
 			vec3 center = {0, 0, 0};
 			vec3 up = {0, 1, 0};
 			glm_lookat_rh_zo(eye, center, up, view);
@@ -120,7 +119,8 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 			// These are in backwards order
 			// Move it
-			glm_translate(surface->matrix, (vec3) {surface->x, surface->y, surface->z});
+			glm_translate(surface->matrix,
+                                (vec3) {(int) surface->x, (int) surface->y, (int) surface->z});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
@@ -132,12 +132,21 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_scale(surface->matrix,
 				(vec3) {surface->width, surface->height, surface->width});
 
+                        /*
 			vec4 top_left = {0, 0, 0, 1};
-			vec4 dst;
-			glm_mat4_mulv(surface->matrix, top_left, dst);
+			vec4 bottom_right = {1, 1, 0, 1};
+			vec4 dst1, dst2;
+			glm_mat4_mulv(surface->matrix, top_left, dst1);
+			glm_mat4_mulv(surface->matrix, bottom_right, dst2);
                         printf("Top left corner ends up at %f %f\n",
-                                (dst[0] / dst[3] * 0.5 + 0.5) * output_width,
-                                (dst[1] / dst[3] * 0.5 + 0.5) * output_height);
+                                (dst1[0] / dst1[3] * 0.5 + 0.5) * output_width,
+                                (dst1[1] / dst1[3] * 0.5 + 0.5) * output_height);
+                        printf("Bottom right corner ends up at %f %f\n",
+                                (dst2[0] / dst2[3] * 0.5 + 0.5) * output_width,
+                                (dst2[1] / dst2[3] * 0.5 + 0.5) * output_height);
+                        printf("Width on screen: %f\n",
+                                ((dst2[0] / dst2[3]) - (dst1[0] / dst1[3])) * 0.5 * output_width);
+                        */
 		} else {
 			// First we translate ourselves relative to toplevel, then apply
                         // toplevel transform

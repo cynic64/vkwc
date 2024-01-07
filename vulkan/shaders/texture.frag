@@ -53,7 +53,7 @@ vec3 get_blurred_background() {
 }
 
 void main() {
-	vec3 window_color = texture(tex, uv - vec2(0.524 / 700, 0.65 / 500)).rgb;
+	vec3 window_color = texture(tex, uv).rgb;
 
         vec3 prev_color = get_blurred_background();
 
