@@ -543,7 +543,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                 | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
                                 | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                | VK_IMAGE_USAGE_SAMPLED_BIT,
                         &buffer->intermediates[i]);
 
                 VkMemoryRequirements intermediate_mem_reqs;
@@ -573,6 +574,26 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL,
                         &buffer->intermediate_views[i]);
                 assert(res == VK_SUCCESS);
+
+                // Create a descriptor set to be able to sample the image in
+                // the fragment shader
+                // TODO: Make sure this dpool gets destroyed
+                struct wlr_vk_descriptor_pool *dpool = vulkan_alloc_texture_ds(renderer,
+                        &buffer->intermediate_sets[i]);
+                assert(dpool != NULL);
+
+                VkDescriptorImageInfo ds_img_info = {0};
+                ds_img_info.imageView = buffer->intermediate_views[i];
+                ds_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                VkWriteDescriptorSet ds_write = {0};
+                ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                ds_write.descriptorCount = 1;
+                ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                ds_write.dstSet = buffer->intermediate_sets[i];
+                ds_write.pImageInfo = &ds_img_info;
+
+                vkUpdateDescriptorSets(dev, 1, &ds_write, 0, NULL);
         }
 
 	// Create depth buffer
@@ -1223,36 +1244,53 @@ static const struct wlr_renderer_impl renderer_impl = {
 // Initializes the VkDescriptorSetLayout and VkPipelineLayout needed
 // for the texture rendering pipeline using the given VkSampler.
 static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
-		VkSampler tex_sampler, VkDescriptorSetLayout *out_ds_layout,
+		VkSampler tex_sampler,
+                VkDescriptorSetLayout *out_window_layout,
 		VkPipelineLayout *out_pipe_layout) {
 	VkResult res;
 	VkDevice dev = renderer->dev->dev;
 
-	// Descriptor set layout
-	VkDescriptorSetLayoutBinding ds_bindings[2] = {0};
-        // This is for the window texture
-        ds_bindings[0].binding = 0;
-        ds_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        ds_bindings[0].descriptorCount = 1;
-        ds_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        ds_bindings[0].pImmutableSamplers = &tex_sampler;
+	// Descriptor set layouts - one for each set
         // This is for sampling the windows that have already been drawn
-        ds_bindings[1].binding = 1;
-        ds_bindings[1].descriptorCount = 1;
-        ds_bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-        ds_bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        ds_bindings[1].pImmutableSamplers = &tex_sampler;
+	VkDescriptorSetLayoutBinding background_binding = {
+                .binding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = &tex_sampler,
+        };
 
-	VkDescriptorSetLayoutCreateInfo ds_info = {0};
-	ds_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	ds_info.bindingCount = sizeof(ds_bindings) / sizeof(ds_bindings[0]);
-	ds_info.pBindings = ds_bindings;
+        // This is for the window texture
+	VkDescriptorSetLayoutBinding window_binding = {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = &tex_sampler,
+        };
 
-	res = vkCreateDescriptorSetLayout(dev, &ds_info, NULL, out_ds_layout);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreateDescriptorSetLayout", res);
-		return false;
-	}
+        // Layout for the background
+        VkDescriptorSetLayout background_layout;
+	VkDescriptorSetLayoutCreateInfo background_layout_info = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = 1,
+                .pBindings = &background_binding,
+        };
+
+	res = vkCreateDescriptorSetLayout(dev, &background_layout_info, NULL, &background_layout);
+	assert(res == VK_SUCCESS);
+
+        // Aaaaaand for the window texture
+	VkDescriptorSetLayoutCreateInfo window_layout_info = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = 1,
+                .pBindings = &window_binding,
+        };
+
+	res = vkCreateDescriptorSetLayout(dev, &window_layout_info, NULL, out_window_layout);
+	assert(res == VK_SUCCESS);
+
+        VkDescriptorSetLayout layouts[] = {background_layout, *out_window_layout};
 
 	// Pipeline layout
 	VkPushConstantRange pc_ranges[1] = {0};
@@ -1261,8 +1299,8 @@ static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
 
 	VkPipelineLayoutCreateInfo pl_info = {0};
 	pl_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pl_info.setLayoutCount = 1;
-	pl_info.pSetLayouts = out_ds_layout;
+	pl_info.setLayoutCount = sizeof(layouts) / sizeof(layouts[0]);
+	pl_info.pSetLayouts = layouts;
 	pl_info.pushConstantRangeCount = sizeof(pc_ranges) / sizeof(pc_ranges[0]);
 	pl_info.pPushConstantRanges = pc_ranges;
 

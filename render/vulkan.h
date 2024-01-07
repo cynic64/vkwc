@@ -170,6 +170,7 @@ struct wlr_vk_render_buffer {
 	VkImage intermediates[INTERMEDIATE_IMAGE_COUNT];
 	VkImageView intermediate_views[INTERMEDIATE_IMAGE_COUNT];
 	VkDeviceMemory intermediate_mems[INTERMEDIATE_IMAGE_COUNT];
+        VkDescriptorSet intermediate_sets[INTERMEDIATE_IMAGE_COUNT];
 
 	// Depth buffer
 	VkImage depth;

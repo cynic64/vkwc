@@ -112,6 +112,14 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         // We don't have to transition back to COLOR_ATTACHMENT_OPTIMAL - the
         // render pass does that for us.
 
+        // But we do have to transition the previous image to SHADER_READ_ONLY_OPTIMAL.
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediates[prev_idx], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                1);
+
         // Setup stuff for the texture we're about to render
 	struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
 	assert(texture->renderer == renderer);
@@ -140,8 +148,12 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		renderer->bound_pipe = pipe;
 	}
 
+        VkDescriptorSet desc_sets[] =
+                {render_buf->intermediate_sets[prev_idx], texture->ds};
+
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
+		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),
+                desc_sets, 0, NULL);
 
 	// Draw
         // Unfortunately the rest of wlroots is row-major, otherwise I would

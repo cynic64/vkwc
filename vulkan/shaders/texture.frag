@@ -1,9 +1,9 @@
 #version 450
 
-// This is the window texture
-layout(set = 0, binding = 0) uniform sampler2D tex;
 // This is what's already been drawn already, so all windows below us.
-layout(set = 0, binding = 1) uniform sampler2D current_frame;
+layout(set = 0, binding = 0) uniform sampler2D current_frame;
+// This is the window texture
+layout(set = 1, binding = 0) uniform sampler2D tex;
 
 
 layout(std140, push_constant, row_major) uniform UBO {
@@ -15,14 +15,17 @@ layout(std140, push_constant, row_major) uniform UBO {
 } data;
 
 layout(location = 0) in vec2 uv;
+layout(location = 1) in vec2 global_uv;
 
 layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec4 out_uv;
 
 void main() {
-	vec4 tex_color = textureLod(tex, uv, 0);
+	vec3 window_color = textureLod(tex, uv, 0).rgb;
+        vec3 prev_color = texture(current_frame, global_uv).rgb;
 
-	out_color = vec4(tex_color.rgb, 0.8);
+        vec3 final_color = window_color * 0.8 + prev_color * 0.2;
+	out_color = vec4(final_color, 1.0);
         // First component of surface_id is the actual surface ID, second
         // component is alpha. Alpha should be 1 unless we want to make the
         // texture we're rendering not absorb clicks.
