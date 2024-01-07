@@ -150,6 +150,7 @@ struct wlr_vk_render_format_setup {
 	VkFormat render_format; // used in renderpass
 	VkRenderPass render_pass;
 
+	VkPipeline simple_tex_pipe;
 	VkPipeline tex_pipe;
 	VkPipeline quad_pipe;
 };
@@ -213,6 +214,7 @@ struct wlr_vk_renderer {
 	VkCommandPool command_pool;
 
 	VkShaderModule vert_module;
+	VkShaderModule simple_tex_frag_module;
 	VkShaderModule tex_frag_module;
 	VkShaderModule quad_frag_module;
 
@@ -369,7 +371,6 @@ void vulkan_image_transition_cbuf(VkCommandBuffer cbuf,
                 VkAccessFlags src_access, VkAccessFlags dst_access,
                 VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
                 uint32_t mip_levels);
-
 
 void vulkan_copy_image(VkCommandBuffer cbuf, VkImage src, VkImage dst,
                 VkImageAspectFlagBits aspect,

@@ -13,5 +13,5 @@ layout(std140, push_constant, row_major) uniform UBO {
 
 void main() {
 	out_color = data.color;
-	out_uv = vec4(0, 0, 0, 0);
+	out_uv = vec4(0);
 }

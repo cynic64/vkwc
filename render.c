@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <getopt.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -11,6 +10,7 @@
 #include <vulkan/vulkan.h>
 #include <math.h>
 #include <drm_fourcc.h>
+#include <assert.h>
 
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
@@ -82,18 +82,6 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         // have to copy one image to the other, just transition it to
         // TRANSFER_DST (which the render pass expects) and draw.
  
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                // Might seem strange to have src as COLOR_ATTACHMENT_OUTPUT
-                // when we're coming from TRANSFER_SRC, but I think it's
-                // correct - the last thing that happened with this image was a
-                // draw.
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
-
         struct PushConstants push_constants;
         memcpy(push_constants.color, color, 4 * sizeof(color[0]));
 
@@ -189,10 +177,19 @@ void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 0, 0, 0, 0, screen_width, screen_height);
 
-        // We don't have to transition back to COLOR_ATTACHMENT_OPTIMAL - the
-        // render pass does that for us.
+        // Transition back to TRANSFER_SRC_OPTIMAL because that's what the
+        // render pass expects. It's a bit of a weird setup, but it's easier
+        // because render_rect_simple and the other render_subtexture bind the
+        // render pass without copying first so TRANSFER_SRC is better for
+        // them.
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                1);
 
-        // But we do have to transition the previous image to SHADER_READ_ONLY_OPTIMAL.
+        // Transition the previous image to SHADER_READ_ONLY_OPTIMAL
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[prev_idx], VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -298,181 +295,6 @@ static void render_surface(struct wlr_output *output, struct Surface *surface) {
 	render_texture(output, texture, surface->matrix, surface->id, render_uv);
 }
 
-static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
-	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-	assert(renderer->current_render_buffer);
-        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
-        assert(render_buf != NULL);
-
-        render_buf->framebuffer_idx = 0;
-
-        // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
-        vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
-                renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                // Want to wait for whoever was reading from it before we write to it
-                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
-
-	renderer->render_width = width;
-	renderer->render_height = height;
-	renderer->bound_pipe = VK_NULL_HANDLE;
-
-        // Clear the first intermediate image, otherwise we have leftover junk
-        // from the previous frame.
-        VkCommandBuffer cbuf = renderer->cb;
-        cbuf_begin_onetime(cbuf);
-
-        // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                1);
-
-        VkImageSubresourceRange clear_range = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-        };
-
-        VkClearColorValue clear_color = {
-                .float32 = {0.1, 0.1, 0.1, 1.0},
-        };
-
-        vkCmdClearColorImage(cbuf,
-                render_buf->intermediates[0], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                &clear_color, 1, &clear_range);
-
-        // Transition all intermediates to TRANSFER_SRC, because when we start
-        // rendering surfaces, it is assumed that the previous intermediate is
-        // already in TRANSFER_SRC.
-
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-                // We just transitioned src to TRANSFER_DST, so take that into account
-                if (i == 0) src_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-                vulkan_image_transition_cbuf(cbuf,
-                        render_buf->intermediates[i], VK_IMAGE_ASPECT_COLOR_BIT,
-                        src_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        1);
-        }
-}
-
-static void render_end(struct wlr_renderer *wlr_renderer) {
-	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-	assert(renderer->current_render_buffer);
-        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
-
-        // Submit
-        cbuf_submit_wait(renderer->dev->queue, renderer->cb);
-
-	renderer->render_width = 0u;
-	renderer->render_height = 0u;
-	renderer->bound_pipe = VK_NULL_HANDLE;
-
-        int width = render_buf->wlr_buffer->width;
-        int height = render_buf->wlr_buffer->height;
-
-	// Copy UV to host-visible memory, but only the pixel under the cursor
-        // Transition UV to TRANSFER_SRC_OPTIMAL
-        VkCommandBuffer copy_cbuf;
-        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
-        cbuf_begin_onetime(copy_cbuf);
-
-        vulkan_image_transition_cbuf(copy_cbuf,
-                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
-
-        assert(renderer->cursor_x < width);
-        assert(renderer->cursor_y < height);
-        VkBufferImageCopy uv_copy_region = {
-                .bufferOffset = 0,
-                .bufferRowLength = width,
-                .bufferImageHeight = height,
-                .imageSubresource = {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .mipLevel = 0,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1,
-                },
-                .imageOffset = { .x = renderer->cursor_x, .y = renderer->cursor_y, .z = 0 },
-                .imageExtent = {
-                        .width = 1,
-                        .height = 1,
-                        .depth = 1,
-                },
-        };
-
-        vkCmdCopyImageToBuffer(copy_cbuf,
-                render_buf->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                render_buf->host_uv,
-                1, &uv_copy_region);
-
-        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
-
-        // Copy intermediate image to final output
-        // Transition final to IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
-        cbuf_begin_onetime(copy_cbuf);
-
-        vulkan_image_transition_cbuf(copy_cbuf,
-                render_buf->image, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-                // I'm not really sure what to put here. I think the "proper"
-                // way to do it would be to wait for the image to finish being
-                // presented by using a fence or something.
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
-
-        // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-        int framebuffer_idx = render_buf->framebuffer_idx;
-        vulkan_image_transition_cbuf(copy_cbuf,
-                render_buf->intermediates[framebuffer_idx],
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
-
-        // Now do the actual copy
-        vulkan_copy_image(copy_cbuf, render_buf->intermediates[framebuffer_idx],
-                render_buf->image,
-                VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
-                width, height
-        );
-
-        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
-
-        // Destroy pending textures
-        struct wlr_vk_texture *texture, *tmp_tex;
-        wl_list_for_each_safe(texture, tmp_tex, &renderer->destroy_textures, destroy_link) {
-                printf("Destroy texture %p\n", texture);
-                wlr_texture_destroy(&texture->wlr_texture);
-        }
-
-        // This marks it as the most recent I think
-        renderer->frame++;
-        render_buf->frame = renderer->frame;
-
-        // "release stage allocations", not sure what it really does
-	struct wlr_vk_shared_buffer *buf;
-	wl_list_for_each(buf, &renderer->stage.buffers, link) {
-		buf->allocs_size = 0u;
-	}
-
-}
-
 // Comparison function so we can qsort surfaces by Z.
 int surface_comp(const void *a, const void *b) {
         // That's a lot of parentheses!
@@ -491,7 +313,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	int buffer_age = -1;
 	wlr_output_attach_render(output, &buffer_age);
 
-	render_begin(renderer, output->width, output->height);
+	wlr_renderer_begin(renderer, output->width, output->height);
 
         // Sort the surfaces by distance from the camera
         int surface_count = 0;
@@ -525,7 +347,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	};
 
 	// Finish
-	render_end(renderer);
+	wlr_renderer_end(renderer);
 
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
 	vk_renderer->cursor_x = cursor_x;
@@ -536,3 +358,13 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 
 	return wlr_output_commit(output);
 }
+
+// How the layouts work:
+// vulkan_begin sets everything to TRANSFER_SRC
+//
+// render_subexture in vulkan/renderer.c expects [framebuffer_idx] to be
+// TRANSFER_SRC, and sets it to TRANSFER_SRC when it's done.
+//
+// render_rect_simple is the same
+//
+// render_subtexture here expects [prev_idx] to be 
