@@ -229,9 +229,10 @@ struct wlr_vk_renderer {
 	VkCommandBuffer cb;
 	VkPipeline bound_pipe;
 
+        // TODO: Maybe get rid of these and use
+        // current_render_buffer->wlr_buffer->{width,height} instead?
 	uint32_t render_width;
 	uint32_t render_height;
-	float projection[9];
 
 	size_t last_pool_size;
 	struct wl_list descriptor_pools; // type wlr_vk_descriptor_pool

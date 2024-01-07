@@ -132,9 +132,12 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_scale(surface->matrix,
 				(vec3) {surface->width, surface->height, surface->width});
 
-			vec4 top_left = {-1, 1, 0, 1};
+			vec4 top_left = {0, 0, 0, 1};
 			vec4 dst;
 			glm_mat4_mulv(surface->matrix, top_left, dst);
+                        printf("Top left corner ends up at %f %f\n",
+                                (dst[0] / dst[3] * 0.5 + 0.5) * output_width,
+                                (dst[1] / dst[3] * 0.5 + 0.5) * output_height);
 		} else {
 			// First we translate ourselves relative to toplevel, then apply
                         // toplevel transform

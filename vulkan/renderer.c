@@ -53,19 +53,6 @@ static float color_to_linear(float non_linear) {
 
 // renderer
 // util
-static void mat3_to_mat4(const float mat3[9], float mat4[4][4]) {
-	memset(mat4, 0, sizeof(float) * 16);
-	mat4[0][0] = mat3[0];
-	mat4[0][1] = mat3[1];
-	mat4[0][3] = mat3[2];
-
-	mat4[1][0] = mat3[3];
-	mat4[1][1] = mat3[4];
-	mat4[1][3] = mat3[5];
-
-	mat4[2][2] = 1.f;
-	mat4[3][3] = 1.f;
-}
 
 struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *renderer,
                 VkDescriptorSet *ds) {
@@ -767,52 +754,6 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 		const float matrix[static 9], float alpha) {
         fprintf(stderr, "render_subtexture_with_matrix not implemented\n");
         return true;
-
-	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-	VkCommandBuffer cb = renderer->cb;
-
-	struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
-	assert(texture->renderer == renderer);
-	if (texture->dmabuf_imported && !texture->owned) {
-		// Store this texture in the list of textures that need to be
-		// acquired before rendering and released after rendering.
-		// We don't do it here immediately since barriers inside
-		// a renderpass are suboptimal (would require additional renderpass
-		// dependency and potentially multiple barriers) and it's
-		// better to issue one barrier for all used textures anyways.
-		texture->owned = true;
-		assert(texture->foreign_link.prev == NULL);
-		assert(texture->foreign_link.next == NULL);
-		wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
-	}
-
-	VkPipeline pipe = renderer->current_render_buffer->render_setup->tex_pipe;
-	if (pipe != renderer->bound_pipe) {
-		vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		renderer->bound_pipe = pipe;
-	}
-
-	vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		renderer->pipe_layout, 0, 1, &texture->ds, 0, NULL);
-
-	float final_matrix[9];
-	wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
-
-	struct PushConstants vert_pcr_data;
-	mat3_to_mat4(final_matrix, vert_pcr_data.mat4);
-
-	vert_pcr_data.uv_off[0] = box->x / wlr_texture->width;
-	vert_pcr_data.uv_off[1] = box->y / wlr_texture->height;
-	vert_pcr_data.uv_size[0] = box->width / wlr_texture->width;
-	vert_pcr_data.uv_size[1] = box->height / wlr_texture->height;
-
-	vkCmdPushConstants(cb, renderer->pipe_layout,
-		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                0, sizeof(vert_pcr_data), &vert_pcr_data);
-	vkCmdDraw(cb, 4, 1, 0, 0);
-	texture->last_used = renderer->frame;
-
-	return true;
 }
 
 static void vulkan_clear(struct wlr_renderer *wlr_renderer,
@@ -876,57 +817,6 @@ static void vulkan_render_quad_with_matrix(struct wlr_renderer *wlr_renderer,
 		const float color[static 4], const float matrix[static 9]) {
         fprintf(stderr, "Ignoring render_quad...\n");
         return;
-
-	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
-	VkCommandBuffer cbuf = renderer->cb;
-
-        // TODO: just set the scissor to the whole screen in vulkan_begin and
-        // forget about it afterwards. Fuck scissors.
-	VkRect2D rect = {{0, 0}, {renderer->render_width, renderer->render_height}};
-	renderer->scissor = rect;
-
-        // Start the command buffer and enter the render pass
-        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
-        assert(render_buf != NULL);
-        // FIXME: Fuck man, what do I put for index here? I guess I'll have to
-        // store it in vk_renderer
-        begin_render_operation(cbuf, render_buf->framebuffers[0],
-                render_buf->render_setup->render_pass, renderer->scissor,
-                renderer->render_width, renderer->render_height);
-
-        // Bind pipe
-	VkPipeline pipe = renderer->current_render_buffer->render_setup->quad_pipe;
-	if (pipe != renderer->bound_pipe) {
-		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		renderer->bound_pipe = pipe;
-	}
-
-	float final_matrix[9];
-	wlr_matrix_multiply(final_matrix, renderer->projection, matrix);
-
-	struct PushConstants push_constants;
-	mat3_to_mat4(final_matrix, push_constants.mat4);
-	push_constants.uv_off[0] = 0.f;
-	push_constants.uv_off[1] = 0.f;
-	push_constants.uv_size[0] = 1.f;
-	push_constants.uv_size[1] = 1.f;
-
-	// Input color values are given in srgb space, shader expects
-	// them in linear space. The shader does all computation in linear
-	// space and expects in inputs in linear space since it outputs
-	// colors in linear space as well (and vulkan then automatically
-	// does the conversion for out SRGB render targets).
-	// But in other parts of wlroots we just always assume
-	// srgb so that's why we have to convert here.
-	push_constants.color[0] = color_to_linear(color[0]);
-	push_constants.color[1] = color_to_linear(color[1]);
-	push_constants.color[2] = color_to_linear(color[2]);
-	push_constants.color[3] = color[3]; // no conversion for alpha
-
-	vkCmdPushConstants(cbuf, renderer->pipe_layout,
-		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                0, sizeof(push_constants), &push_constants);
-	vkCmdDraw(cbuf, 4, 1, 0, 0);
 }
 
 static const struct wlr_drm_format_set *vulkan_get_dmabuf_texture_formats(

@@ -158,6 +158,8 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	// Draw
         // Unfortunately the rest of wlroots is row-major, otherwise I would
         // set column-major in the shader and avoid this
+        // TODO: since I've replaced all the wlroots stuff I could switch to
+        // column-major
 	struct PushConstants push_constants;
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
@@ -222,21 +224,6 @@ static void render_surface(struct wlr_output *output, struct Surface *surface,
 static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
-
-	// Refresh projection matrix.
-        //
-        // We need a matrix that turns pixels into -1..1 for vulkan.
-        memset(renderer->projection, 0, sizeof(renderer->projection[0]) * 9);
-        // Scale X down by width
-        renderer->projection[0] = 2.0f / width;
-        // Scale Y down by height
-        renderer->projection[4] = 2.0f / height;
-        // Leave Z alone
-        renderer->projection[8] = 1;
-        // Move X down by -1
-        renderer->projection[2] = -1;
-        // Move Y down by -1
-        renderer->projection[5] = -1;
 
         // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
         vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
