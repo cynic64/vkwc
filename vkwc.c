@@ -570,6 +570,7 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 
 	if (surface == NULL) {
                 //printf("Nothing under cursor\n");
+                wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
 	} else {
 		//
 		// Send	pointer	enter and motion events.
@@ -682,8 +683,6 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct timespec	now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 
-	//wlr_scene_output_send_frame_done(scene_output, &now);
-
 	uint32_t time = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 
 	// Tell all the surfaces we finished a frame
@@ -733,9 +732,6 @@ static void handle_new_output(struct wl_listener *listener, void *data)	{
 
 	/* Sets	up a listener for the frame notify event. */
 	wl_signal_add(&server->output->events.frame, &server->output_frame);
-
-        // Disable hardware cursor
-        wlr_output_lock_software_cursors(server->output, true);
 }
 
 // Allocates a new Surface, zeroing the struct and setting server, wlr_surface, id, and destroy.

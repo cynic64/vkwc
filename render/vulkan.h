@@ -26,6 +26,7 @@ struct PushConstants {
         // be 1 except for textures we want to draw without them absorbing
         // clicks, like Firefox's weird subsurface setup.
         float surface_id[2];
+        float screen_dims[2];
 };
 
 struct wlr_vk_descriptor_pool;
@@ -165,6 +166,8 @@ struct wlr_vk_render_buffer {
 	uint32_t mem_count;
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
 	bool transitioned;
+        // Whichever framebuffer used last
+        int framebuffer_idx;
 
 	// Intermediate targets - again, we need multiple
 	VkImage intermediates[INTERMEDIATE_IMAGE_COUNT];

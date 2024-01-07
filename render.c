@@ -55,10 +55,14 @@ struct RenderData {
 };
 
 void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
-                int screen_width, int screen_height,
-                int x, int y, int width, int height, int framebuffer_idx) {
+                int x, int y, int width, int height) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+
+        int framebuffer_idx = render_buf->framebuffer_idx;
+
+        int screen_width = render_buf->wlr_buffer->width;
+        int screen_height = render_buf->wlr_buffer->height;
 
         VkCommandBuffer cbuf = renderer->cb;
         assert(render_buf != NULL);
@@ -148,11 +152,12 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
 void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
-                struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv,
-                int screen_width, int screen_height,
-                int framebuffer_idx) {
+                struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+
+        int screen_width = render_buf->wlr_buffer->width;
+        int screen_height = render_buf->wlr_buffer->height;
 
         VkCommandBuffer cbuf = renderer->cb;
         assert(render_buf != NULL);
@@ -166,8 +171,9 @@ void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 
         // Copy the pixels from the previous buffer into this one
         // Previous image is already in IMAGE_LAYOUT_TRANSFER_SRC
-        int prev_idx = framebuffer_idx - 1;
-        if (prev_idx < 0) prev_idx += INTERMEDIATE_IMAGE_COUNT;
+        int prev_idx = render_buf->framebuffer_idx;
+        int framebuffer_idx = (prev_idx + 1) % INTERMEDIATE_IMAGE_COUNT;
+        render_buf->framebuffer_idx = framebuffer_idx;
 
         // Transition current image to TRANSFER_DST
         vulkan_image_transition_cbuf(cbuf,
@@ -248,6 +254,8 @@ void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	push_constants.uv_size[1] = 1;
         push_constants.surface_id[0] = surface_id;
         push_constants.surface_id[1] = render_uv ? 1 : 0;
+        push_constants.screen_dims[0] = screen_width;
+        push_constants.screen_dims[1] = screen_height;
 
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -270,16 +278,14 @@ void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 }
 
 static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix,
-                float surface_id, bool render_uv, int framebuffer_idx) {
+                float surface_id, bool render_uv) {
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
-	render_subtexture_with_matrix(renderer, texture, matrix, surface_id, render_uv,
-                output->width, output->height, framebuffer_idx);
+	render_subtexture_with_matrix(renderer, texture, matrix, surface_id, render_uv);
 }
 
-static void render_surface(struct wlr_output *output, struct Surface *surface,
-                int framebuffer_idx) {
+static void render_surface(struct wlr_output *output, struct Surface *surface) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
 	if (texture == NULL) {
                 //printf("Could not render surface (dims %d %d)\n", surface->width, surface->height);
@@ -289,12 +295,16 @@ static void render_surface(struct wlr_output *output, struct Surface *surface,
         // Only make the surface clickable if it's an XDG surface.
         bool render_uv = surface->xdg_surface != NULL;
 
-	render_texture(output, texture, surface->matrix, surface->id, render_uv, framebuffer_idx);
+	render_texture(output, texture, surface->matrix, surface->id, render_uv);
 }
 
 static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+        assert(render_buf != NULL);
+
+        render_buf->framebuffer_idx = 0;
 
         // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
         vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
@@ -311,7 +321,6 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 
         // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
-        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         VkCommandBuffer cbuf = renderer->cb;
         cbuf_begin_onetime(cbuf);
 
@@ -358,9 +367,10 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         }
 }
 
-static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
+static void render_end(struct wlr_renderer *wlr_renderer) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
         // Submit
         cbuf_submit_wait(renderer->dev->queue, renderer->cb);
@@ -369,8 +379,8 @@ static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
 	renderer->render_height = 0u;
 	renderer->bound_pipe = VK_NULL_HANDLE;
 
-        int width = renderer->current_render_buffer->wlr_buffer->width;
-        int height = renderer->current_render_buffer->wlr_buffer->height;
+        int width = render_buf->wlr_buffer->width;
+        int height = render_buf->wlr_buffer->height;
 
 	// Copy UV to host-visible memory, but only the pixel under the cursor
         // Transition UV to TRANSFER_SRC_OPTIMAL
@@ -379,7 +389,7 @@ static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
         cbuf_begin_onetime(copy_cbuf);
 
         vulkan_image_transition_cbuf(copy_cbuf,
-                renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -406,8 +416,8 @@ static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
         };
 
         vkCmdCopyImageToBuffer(copy_cbuf,
-                renderer->current_render_buffer->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                renderer->current_render_buffer->host_uv,
+                render_buf->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                render_buf->host_uv,
                 1, &uv_copy_region);
 
         cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
@@ -418,7 +428,7 @@ static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
         cbuf_begin_onetime(copy_cbuf);
 
         vulkan_image_transition_cbuf(copy_cbuf,
-                renderer->current_render_buffer->image, VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->image, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
                 // I'm not really sure what to put here. I think the "proper"
@@ -427,16 +437,17 @@ static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+        int framebuffer_idx = render_buf->framebuffer_idx;
         vulkan_image_transition_cbuf(copy_cbuf,
-                renderer->current_render_buffer->intermediates[framebuffer_idx],
+                render_buf->intermediates[framebuffer_idx],
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Now do the actual copy
-        vulkan_copy_image(copy_cbuf, renderer->current_render_buffer->intermediates[framebuffer_idx],
-                renderer->current_render_buffer->image,
+        vulkan_copy_image(copy_cbuf, render_buf->intermediates[framebuffer_idx],
+                render_buf->image,
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
                 width, height
         );
@@ -452,7 +463,7 @@ static void render_end(struct wlr_renderer *wlr_renderer, int framebuffer_idx) {
 
         // This marks it as the most recent I think
         renderer->frame++;
-        renderer->current_render_buffer->frame = renderer->frame;
+        render_buf->frame = renderer->frame;
 
         // "release stage allocations", not sure what it really does
 	struct wlr_vk_shared_buffer *buf;
@@ -498,15 +509,10 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 
         qsort(surfaces_sorted, surface_count, sizeof(surfaces_sorted[0]), surface_comp);
 
-        int framebuffer_idx = 0;
-
         // Draw frame counter. render_rect_simple doesn't draw from one
         // framebuffer into the other, we don't have to increment framebuffer_idx
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	render_rect_simple(renderer, color, output->width, output->height, 10, 10, 10, 10,
-                framebuffer_idx);
-
-        framebuffer_idx++;
+	render_rect_simple(renderer, color, 10, 10, 10, 10);
 
 	// Draw each surface
         for (int i = 0; i < surface_count; i++) {
@@ -515,17 +521,11 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
                         continue;
                 }
 
-		render_surface(output, surface, framebuffer_idx);
-                framebuffer_idx = (framebuffer_idx + 1) % INTERMEDIATE_IMAGE_COUNT;
+		render_surface(output, surface);
 	};
 
-        // Since we switch back and forth between framebuffers, we have to
-        // figure out which one to present.
-        int last_framebuffer = framebuffer_idx - 1;
-        if (last_framebuffer < 0) last_framebuffer += INTERMEDIATE_IMAGE_COUNT;
-
 	// Finish
-	render_end(renderer, last_framebuffer);
+	render_end(renderer);
 
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
 	vk_renderer->cursor_x = cursor_x;
