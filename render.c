@@ -420,6 +420,82 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         renderer->render_height = 0;
 }
 
+static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
+	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
+	assert(renderer->current_render_buffer);
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+        assert(render_buf != NULL);
+
+        render_buf->framebuffer_idx = 0;
+
+        // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
+        vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
+                renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                // Want to wait for whoever was reading from it before we write to it
+                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                1);
+
+	renderer->render_width = width;
+	renderer->render_height = height;
+	renderer->bound_pipe = VK_NULL_HANDLE;
+
+        // Clear the first intermediate image, otherwise we have leftover junk
+        // from the previous frame.
+        VkCommandBuffer cbuf = renderer->cb;
+        if (!renderer->stage.recording) {
+                cbuf_begin_onetime(cbuf);
+                renderer->stage.recording = true;
+        }
+
+        // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
+
+        VkImageSubresourceRange clear_range = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+        };
+
+        VkClearColorValue clear_color = {
+                .float32 = {0.1, 0.1, 0.1, 1.0},
+        };
+
+        vkCmdClearColorImage(cbuf,
+                render_buf->intermediates[0], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                &clear_color, 1, &clear_range);
+
+        // Transition all intermediates to TRANSFER_SRC, because when we start
+        // rendering surfaces, it is assumed that the previous intermediate is
+        // already in TRANSFER_SRC.
+
+        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+                // We just transitioned one to TRANSFER_DST, so take that into account
+                if (i == 0) src_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+                vulkan_image_transition_cbuf(cbuf,
+                        render_buf->intermediates[i], VK_IMAGE_ASPECT_COLOR_BIT,
+                        src_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                        VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT
+                                | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        1);
+        }
+}
+
+
 // `surfaces` should be a list of struct Surface, defined in vkwc.c
 bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
 	// Get the renderer, i.e. Vulkan or GLES2
@@ -429,7 +505,8 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	int buffer_age = -1;
 	wlr_output_attach_render(output, &buffer_age);
 
-	wlr_renderer_begin(renderer, output->width, output->height);
+	struct wlr_vk_renderer *vk_renderer = (struct wlr_vk_renderer *) renderer;
+	render_begin(renderer, output->width, output->height);
 
         // Sort the surfaces by distance from the camera
         int surface_count = 0;
@@ -466,7 +543,6 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 	render_end(renderer);
         renderer->rendering = false;
 
-	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
 	vk_renderer->cursor_x = cursor_x;
 	vk_renderer->cursor_y = cursor_y;
 
