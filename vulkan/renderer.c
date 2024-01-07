@@ -834,70 +834,12 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
-        // Submit
-        cbuf_submit_wait(renderer->dev->queue, renderer->cb);
-        renderer->stage.recording = false;
-
-	renderer->render_width = 0u;
-	renderer->render_height = 0u;
-	renderer->bound_pipe = VK_NULL_HANDLE;
-
         int width = render_buf->wlr_buffer->width;
         int height = render_buf->wlr_buffer->height;
 
-	// Copy UV to host-visible memory, but only the pixel under the cursor
-        // Transition UV to TRANSFER_SRC_OPTIMAL
-        VkCommandBuffer copy_cbuf;
-        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
-        cbuf_begin_onetime(copy_cbuf);
-
-        vulkan_image_transition_cbuf(copy_cbuf,
-                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
-
-        if (renderer->cursor_x >= width) {
-                fprintf(stderr, "Cursor past width! %d vs %d\n", renderer->cursor_x, width);
-                renderer->cursor_x = width - 1;
-        }
-        if (renderer->cursor_y >= height) {
-                fprintf(stderr, "Cursor past height! %d vs %d\n", renderer->cursor_y, height);
-                renderer->cursor_y = height - 1;
-        }
-
-        VkBufferImageCopy uv_copy_region = {
-                .bufferOffset = 0,
-                .bufferRowLength = width,
-                .bufferImageHeight = height,
-                .imageSubresource = {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .mipLevel = 0,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1,
-                },
-                .imageOffset = { .x = renderer->cursor_x, .y = renderer->cursor_y, .z = 0 },
-                .imageExtent = {
-                        .width = 1,
-                        .height = 1,
-                        .depth = 1,
-                },
-        };
-
-        vkCmdCopyImageToBuffer(copy_cbuf,
-                render_buf->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                render_buf->host_uv,
-                1, &uv_copy_region);
-
-        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
-
         // Copy intermediate image to final output
         // Transition final to IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
-        cbuf_begin_onetime(copy_cbuf);
-
-        vulkan_image_transition_cbuf(copy_cbuf,
+        vulkan_image_transition_cbuf(renderer->cb,
                 render_buf->image, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -908,7 +850,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 
         // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
         int framebuffer_idx = render_buf->framebuffer_idx;
-        vulkan_image_transition_cbuf(copy_cbuf,
+        vulkan_image_transition_cbuf(renderer->cb,
                 render_buf->intermediates[framebuffer_idx],
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -916,13 +858,20 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Now do the actual copy
-        vulkan_copy_image(copy_cbuf, render_buf->intermediates[framebuffer_idx],
+        vulkan_copy_image(renderer->cb, render_buf->intermediates[framebuffer_idx],
                 render_buf->image,
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
                 width, height
         );
 
-        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
+        // Submit
+        cbuf_submit_wait(renderer->dev->queue, renderer->cb);
+        renderer->stage.recording = false;
+
+	renderer->bound_pipe = VK_NULL_HANDLE;
+        renderer->render_width = 0u;
+        renderer->render_height = 0u;
+
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;
@@ -940,7 +889,6 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	wl_list_for_each(buf, &renderer->stage.buffers, link) {
 		buf->allocs_size = 0u;
 	}
-
 }
 
 // This only gets used by the cursor I think. I use the function with the same
@@ -948,6 +896,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
 		const float matrix[static 9], float alpha) {
+        struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         VkCommandBuffer cbuf = renderer->cb;
 
         if (!renderer->stage.recording) {
@@ -1971,9 +1920,9 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 	VkAttachmentDescription uv_attach = {
 		.format = UV_FORMAT,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
