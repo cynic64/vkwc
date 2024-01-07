@@ -45,8 +45,6 @@
 #include "render/vulkan.h"
 #include "vulkan/intermediate.h"
 
-#define	M_PI 3.14159265358979323846
-
 struct RenderData {
 	struct wlr_output *output;
 	pixman_region32_t *damage;
@@ -56,12 +54,88 @@ struct RenderData {
 	mat4 projection;
 };
 
-void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int x, int	y, int width, int height) {
-        fprintf(stderr, "Ignoring render_rect_simple\n");
-        return;
-	struct wlr_box box = { .x = x, .y = y, .width =	width, .height = height	};
-	float identity_matrix[9] = { 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,	0.0, 1.0 };
-	wlr_render_rect(renderer, &box,	color, identity_matrix);
+void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
+                int screen_width, int screen_height,
+                int x, int y, int width, int height, int framebuffer_idx) {
+	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+
+        VkCommandBuffer cbuf = renderer->cb;
+        assert(render_buf != NULL);
+        assert(cbuf != NULL);
+
+	VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
+	renderer->scissor = rect;
+
+        VkPipeline pipe = render_buf->render_setup->quad_pipe;
+        if (pipe != renderer->bound_pipe) {
+                vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+                renderer->bound_pipe = pipe;
+        };
+
+        // We don't bother rendering from one surface to the other because we
+        // don't support fancy blurred transparency stuff here. So we don't
+        // have to copy one image to the other, just transition it to
+        // TRANSFER_DST (which the render pass expects) and draw.
+ 
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                // Might seem strange to have src as COLOR_ATTACHMENT_OUTPUT
+                // when we're coming from TRANSFER_SRC, but I think it's
+                // correct - the last thing that happened with this image was a
+                // draw.
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                1);
+
+        struct PushConstants push_constants;
+        memcpy(push_constants.color, color, 4 * sizeof(color[0]));
+
+        mat4 matrix;
+        glm_mat4_identity(matrix);
+
+        // These are in backwards order
+        // Move 0..2, 0..2 to -1..1, -1..1
+        glm_translate(matrix, (vec3) {-1, -1, 0});
+        // Scale it down from 0..width, 0..height to 0..2, 0..2
+        glm_scale(matrix, (vec3) {2.0 / screen_width, 2.0 / screen_height, 1});
+        // Move it over by x, y
+        glm_translate(matrix, (vec3) {x, y, 0});
+        // Scale 0..1, 0..1 up to 0..width, 0..height
+        glm_scale(matrix, (vec3) {width, height, 1});
+
+        // Unfortunately the rest of wlroots is row-major, otherwise I would
+        // set column-major in the shader and avoid this
+	for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			push_constants.mat4[i][j] = matrix[j][i];
+		}
+	};
+
+        // Begin render pass
+        begin_render_operation(cbuf, render_buf->framebuffers[framebuffer_idx],
+                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
+
+	vkCmdPushConstants(cbuf, renderer->pipe_layout,
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0, sizeof(push_constants), &push_constants);
+        vkCmdDraw(cbuf, 4, 1, 0, 0);
+
+        vkCmdEndRenderPass(cbuf);
+
+        // Transition back to TRANSFER_SRC_OPTIMAL
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                // If someone else draws another quad, we want them to wait. So
+                // we have both here.
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT, 
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
 }
 
 // This is separate from vulkan_render_subtexture_with_matrix in
@@ -73,7 +147,7 @@ void render_rect_simple(struct wlr_renderer *renderer, const float color[4], int
 // Set render_uv to false to, well, not render to the UV texture. That will
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
-static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
+void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv,
                 int screen_width, int screen_height,
                 int framebuffer_idx) {
@@ -193,13 +267,10 @@ static bool render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 
         // I don't really know what this does, vulkan_texture_destroy uses it
         texture->last_used = renderer->frame;
-
-	return true;
 }
 
 static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix,
-                float surface_id, bool render_uv,
-                int framebuffer_idx) {
+                float surface_id, bool render_uv, int framebuffer_idx) {
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer);
 
@@ -238,19 +309,15 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 	renderer->render_height = height;
 	renderer->bound_pipe = VK_NULL_HANDLE;
 
-        // Clear the second intermediate image, otherwise we have leftover junk
+        // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
-        //
-        // We clear the second image because the first surface will render into
-        // the first image *and first copy the second image into itself*. So it
-        // seems a bit weird but it's correct.
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         VkCommandBuffer cbuf = renderer->cb;
         cbuf_begin_onetime(cbuf);
 
         // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[1], VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -269,7 +336,7 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         };
 
         vkCmdClearColorImage(cbuf,
-                render_buf->intermediates[1], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                render_buf->intermediates[0], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 &clear_color, 1, &clear_range);
 
         // Transition all intermediates to TRANSFER_SRC, because when we start
@@ -280,7 +347,7 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
                 VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
                 // We just transitioned src to TRANSFER_DST, so take that into account
-                if (i == 1) src_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                if (i == 0) src_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
                 vulkan_image_transition_cbuf(cbuf,
                         render_buf->intermediates[i], VK_IMAGE_ASPECT_COLOR_BIT,
@@ -431,8 +498,17 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 
         qsort(surfaces_sorted, surface_count, sizeof(surfaces_sorted[0]), surface_comp);
 
-	// Draw each surface
         int framebuffer_idx = 0;
+
+        // Draw frame counter. render_rect_simple doesn't draw from one
+        // framebuffer into the other, we don't have to increment framebuffer_idx
+	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
+	render_rect_simple(renderer, color, output->width, output->height, 10, 10, 10, 10,
+                framebuffer_idx);
+
+        framebuffer_idx++;
+
+	// Draw each surface
         for (int i = 0; i < surface_count; i++) {
                 struct Surface *surface = surfaces_sorted[i];
                 if (surface->width == 0 && surface->height == 0) {
@@ -443,22 +519,17 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
                 framebuffer_idx = (framebuffer_idx + 1) % INTERMEDIATE_IMAGE_COUNT;
 	};
 
-	// Draw frame counter
-        /*
-	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	render_rect_simple(renderer, color, 10,	10, 10, 10);
-        */
+        // Since we switch back and forth between framebuffers, we have to
+        // figure out which one to present.
+        int last_framebuffer = framebuffer_idx - 1;
+        if (last_framebuffer < 0) last_framebuffer += INTERMEDIATE_IMAGE_COUNT;
 
 	// Finish
+	render_end(renderer, last_framebuffer);
+
 	struct wlr_vk_renderer * vk_renderer = (struct wlr_vk_renderer *) renderer;
 	vk_renderer->cursor_x = cursor_x;
 	vk_renderer->cursor_y = cursor_y;
-
-        // Since we switch back and forth between framebuffers, we have to
-        // figure out which one to rpesent.
-        int last_framebuffer = framebuffer_idx - 1;
-        if (last_framebuffer < 0) last_framebuffer += INTERMEDIATE_IMAGE_COUNT;
-	render_end(renderer, last_framebuffer);
 
 	int tr_width, tr_height;
 	wlr_output_transformed_resolution(output, &tr_width, &tr_height);

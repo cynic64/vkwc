@@ -120,7 +120,10 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			// These are in backwards order
 			// Move it
 			glm_translate(surface->matrix,
-                                (vec3) {(int) surface->x, (int) surface->y, (int) surface->z});
+                                // Round X and Y so we don't end up with a
+                                // half-pixel offset, which makes everything
+                                // blurry >:(
+                                (vec3) {(int) surface->x, (int) surface->y, surface->z});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
