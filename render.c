@@ -347,12 +347,6 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
         int framebuffer_idx = render_buf->framebuffer_idx;
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[framebuffer_idx],
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Now do the actual copy
         vulkan_copy_image(cbuf, render_buf->intermediates[framebuffer_idx],
@@ -369,7 +363,6 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
 	renderer->render_width = 0;
 	renderer->render_height = 0;
-
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;
