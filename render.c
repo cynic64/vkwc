@@ -129,16 +129,10 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
                 1);
 }
 
-// This is separate from vulkan_render_subtexture_with_matrix in
-// vulkan/renderer.c - that has the signature needed to fill wlr_renderer_impl.
-// I think it only gets used for the cursor, because I do everything else "by
-// hand". Anyway, this one has whatever signature I want, so we can support
-// stuff like setting the surface ID or not drawing UV at all.
-//
 // Set render_uv to false to, well, not render to the UV texture. That will
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
-void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
+void render_texture(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
@@ -272,14 +266,6 @@ void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
         texture->last_used = renderer->frame;
 }
 
-static void render_texture(struct wlr_output *output, struct wlr_texture *texture, mat4 matrix,
-                float surface_id, bool render_uv) {
-	struct wlr_renderer *renderer =	output->renderer;
-	assert(renderer);
-
-	render_subtexture_with_matrix(renderer, texture, matrix, surface_id, render_uv);
-}
-
 static void render_surface(struct wlr_output *output, struct Surface *surface) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
 	if (texture == NULL) {
@@ -290,7 +276,7 @@ static void render_surface(struct wlr_output *output, struct Surface *surface) {
         // Only make the surface clickable if it's an XDG surface.
         bool render_uv = surface->xdg_surface != NULL;
 
-	render_texture(output, texture, surface->matrix, surface->id, render_uv);
+	render_texture(output->renderer, texture, surface->matrix, surface->id, render_uv);
 }
 
 // Comparison function so we can qsort surfaces by Z.
