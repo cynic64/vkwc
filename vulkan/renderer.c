@@ -75,7 +75,7 @@ struct wlr_vk_descriptor_pool *vulkan_alloc_texture_ds(struct wlr_vk_renderer *r
 	VkDescriptorSetAllocateInfo ds_info = {0};
 	ds_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	ds_info.descriptorSetCount = 1;
-	ds_info.pSetLayouts = &renderer->ds_layout;
+	ds_info.pSetLayouts = &renderer->tex_desc_layout;
 
 	bool found = false;
 	struct wlr_vk_descriptor_pool *pool;
@@ -1093,7 +1093,8 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 
 	vkDestroyFence(dev->dev, renderer->fence, NULL);
 	vkDestroyPipelineLayout(dev->dev, renderer->pipe_layout, NULL);
-	vkDestroyDescriptorSetLayout(dev->dev, renderer->ds_layout, NULL);
+	vkDestroyDescriptorSetLayout(dev->dev, renderer->tex_desc_layout, NULL);
+	vkDestroyDescriptorSetLayout(dev->dev, renderer->background_desc_layout, NULL);
 	vkDestroySampler(dev->dev, renderer->sampler, NULL);
 	vkDestroyCommandPool(dev->dev, renderer->command_pool, NULL);
 
@@ -1335,76 +1336,27 @@ static const struct wlr_renderer_impl renderer_impl = {
 	.texture_from_buffer = vulkan_texture_from_buffer,
 };
 
-// Initializes the VkDescriptorSetLayout and VkPipelineLayout needed
-// for the texture rendering pipeline using the given VkSampler.
-static bool init_tex_layouts(struct wlr_vk_renderer *renderer,
-		VkSampler tex_sampler,
-                VkDescriptorSetLayout *out_window_layout,
-		VkPipelineLayout *out_pipe_layout) {
-	VkResult res;
-	VkDevice dev = renderer->dev->dev;
-
-	// Descriptor set layouts - one for each set
-        // This is for sampling the windows that have already been drawn
-	VkDescriptorSetLayoutBinding background_binding = {
-                .binding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = &tex_sampler,
-        };
-
-        // This is for the window texture
-	VkDescriptorSetLayoutBinding window_binding = {
+// Create the descriptor layout for textures, so either a window texture or the
+// cursor or the frame so far.
+void create_tex_desc_layout(VkDevice device, VkSampler tex_sampler,
+                VkDescriptorSetLayout *layout) {
+	VkDescriptorSetLayoutBinding binding = {
                 .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = &tex_sampler,
         };
-
-        // Layout for the background
-        VkDescriptorSetLayout background_layout;
-	VkDescriptorSetLayoutCreateInfo background_layout_info = {
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                .bindingCount = 1,
-                .pBindings = &background_binding,
-        };
-
-	res = vkCreateDescriptorSetLayout(dev, &background_layout_info, NULL, &background_layout);
-	assert(res == VK_SUCCESS);
 
         // Aaaaaand for the window texture
-	VkDescriptorSetLayoutCreateInfo window_layout_info = {
+	VkDescriptorSetLayoutCreateInfo layout_info = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .bindingCount = 1,
-                .pBindings = &window_binding,
+                .pBindings = &binding,
         };
 
-	res = vkCreateDescriptorSetLayout(dev, &window_layout_info, NULL, out_window_layout);
+	VkResult res = vkCreateDescriptorSetLayout(device, &layout_info, NULL, layout);
 	assert(res == VK_SUCCESS);
-
-        VkDescriptorSetLayout layouts[] = {background_layout, *out_window_layout};
-
-	// Pipeline layout
-	VkPushConstantRange pc_ranges[1] = {0};
-	pc_ranges[0].size = sizeof(struct PushConstants);
-	pc_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkPipelineLayoutCreateInfo pl_info = {0};
-	pl_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pl_info.setLayoutCount = sizeof(layouts) / sizeof(layouts[0]);
-	pl_info.pSetLayouts = layouts;
-	pl_info.pushConstantRangeCount = sizeof(pc_ranges) / sizeof(pc_ranges[0]);
-	pl_info.pPushConstantRanges = pc_ranges;
-
-	res = vkCreatePipelineLayout(dev, &pl_info, NULL, out_pipe_layout);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreatePipelineLayout", res);
-		return false;
-	}
-
-	return true;
 }
 
 // Creates static render data, such as sampler, layouts and shader modules
@@ -1434,10 +1386,18 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 		return false;
 	}
 
-	if (!init_tex_layouts(renderer, renderer->sampler,
-			&renderer->ds_layout, &renderer->pipe_layout)) {
-		return false;
-	}
+        // Descriptor layout for textures and frame so far (background)
+        create_tex_desc_layout(renderer->dev->dev, renderer->sampler,
+                &renderer->background_desc_layout);
+        create_tex_desc_layout(renderer->dev->dev, renderer->sampler, &renderer->tex_desc_layout);
+
+        // Pipeline layout, gets used for everything since we use the same
+        // uniforms and stuff in every shader.
+        VkDescriptorSetLayout desc_layouts[] =
+                {renderer->background_desc_layout, renderer->tex_desc_layout};
+	create_pipeline_layout(renderer->dev->dev, renderer->sampler,
+                sizeof(desc_layouts) / sizeof(desc_layouts[0]), desc_layouts,
+                &renderer->pipe_layout);
 
 	// Load shaders
 	VkShaderModuleCreateInfo sinfo = {0};

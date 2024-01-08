@@ -220,7 +220,8 @@ struct wlr_vk_renderer {
 	VkShaderModule tex_frag_module;
 	VkShaderModule quad_frag_module;
 
-	VkDescriptorSetLayout ds_layout;
+	VkDescriptorSetLayout tex_desc_layout;
+	VkDescriptorSetLayout background_desc_layout;
 	VkPipelineLayout pipe_layout;
 	VkSampler sampler;
 

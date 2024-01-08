@@ -118,3 +118,34 @@ void create_pipeline_with_depth(VkDevice device,
 	VkResult res = vkCreateGraphicsPipelines(device, NULL, 1, &pinfo, NULL, pipe);
 	assert(res == VK_SUCCESS);
 }
+
+// Create a pipeline layout with PushConstants. You have to make the descriptor layouts first.
+void create_pipeline_layout(VkDevice device, VkSampler tex_sampler,
+                int layout_count, VkDescriptorSetLayout *layouts,
+		VkPipelineLayout *pipe_layout) {
+	// Descriptor set layouts - one for each set
+        // This is for sampling the windows that have already been drawn
+	VkDescriptorSetLayoutBinding background_binding = {
+                .binding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = &tex_sampler,
+        };
+
+	// Pipeline layout
+	VkPushConstantRange pc_ranges[1] = {0};
+	pc_ranges[0].size = sizeof(struct PushConstants);
+	pc_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	VkPipelineLayoutCreateInfo pl_info = {0};
+	pl_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pl_info.setLayoutCount = layout_count;
+	pl_info.pSetLayouts = layouts;
+	pl_info.pushConstantRangeCount = sizeof(pc_ranges) / sizeof(pc_ranges[0]);
+	pl_info.pPushConstantRanges = pc_ranges;
+
+	VkResult res = vkCreatePipelineLayout(device, &pl_info, NULL, pipe_layout);
+        assert(res == VK_SUCCESS);
+}
+
