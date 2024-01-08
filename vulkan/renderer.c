@@ -680,27 +680,42 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	// Create framebuffers
         for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                VkImageView attachments[] = {
+                // This is for the intermediate pass - it doesn't include the
+                // final image
+                VkImageView intermediate_attachs[] = {
                         buffer->intermediate_views[i],
                         buffer->depth_view,
                         buffer->uv_view,
-                        buffer->image_view,
                 };
                 VkFramebufferCreateInfo fb_info = {0};
                 fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-                fb_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
-                fb_info.pAttachments = attachments;
-                fb_info.flags = 0u;
+                fb_info.attachmentCount =
+                        sizeof(intermediate_attachs) / sizeof(intermediate_attachs[0]);
+                fb_info.pAttachments = intermediate_attachs;
                 fb_info.width = dmabuf.width;
                 fb_info.height = dmabuf.height;
                 fb_info.layers = 1u;
                 fb_info.renderPass = buffer->render_setup->rpass;
 
                 res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffers[i]);
-                if (res != VK_SUCCESS) {
-                        wlr_vk_error("vkCreateFramebuffer", res);
-                        goto error_depth_view;
-                }
+                assert(res == VK_SUCCESS);
+
+                // This is for the postprocess pass - does include the final
+                // image and is created with a different render pass.
+                VkImageView postprocess_attachs[] = {
+                        buffer->intermediate_views[i],
+                        buffer->depth_view,
+                        buffer->uv_view,
+                        buffer->image_view,
+                };
+
+                fb_info.attachmentCount =
+                        sizeof(postprocess_attachs) / sizeof(postprocess_attachs[0]);
+                fb_info.pAttachments = postprocess_attachs;
+                fb_info.renderPass = buffer->render_setup->postprocess_rpass;
+
+                res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->postprocess_framebuffers[i]);
+                assert(res == VK_SUCCESS);
         }
 
 	buffer->buffer_destroy.notify = handle_render_buffer_destroy;
@@ -709,13 +724,13 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	return buffer;
 
-error_depth_view:
 	vkDestroyImageView(renderer->dev->dev, buffer->depth_view, NULL);
 	vkFreeMemory(renderer->dev->dev, buffer->depth_mem, NULL);
 	vkDestroyImage(renderer->dev->dev, buffer->depth, NULL);
 error_view:
         for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
                 vkDestroyFramebuffer(dev, buffer->framebuffers[i], NULL);
+                vkDestroyFramebuffer(dev, buffer->postprocess_framebuffers[i], NULL);
         }
 	vkDestroyImageView(dev, buffer->image_view, NULL);
 	vkDestroyImage(dev, buffer->image, NULL);

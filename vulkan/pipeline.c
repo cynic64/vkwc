@@ -154,7 +154,19 @@ void create_postprocess_pipe(VkDevice device,
 
         // Blending
 	VkPipelineColorBlendAttachmentState blend_attachment = {0};
-	blend_attachment.blendEnable = VK_FALSE;
+	blend_attachment.blendEnable = VK_TRUE;
+	// We generally work with pre-multiplied alpha
+	blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+	blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+	blend_attachment.colorWriteMask =
+		VK_COLOR_COMPONENT_R_BIT |
+		VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT;
 
         // Only one blend attachment since only output to one image, unlike the
         // window pass which outputs to the intermediate buffer and the UV

@@ -167,8 +167,11 @@ struct wlr_vk_render_buffer {
 	struct wlr_vk_render_format_setup *render_setup;
 	struct wl_list link; // wlr_vk_renderer.buffers
 
-	// Need two so we can sample one while drawing next
+	// Need multiple so we can sample one while drawing next
 	VkFramebuffer framebuffers[INTERMEDIATE_IMAGE_COUNT];
+        // We still two because we have to read from whichever one we drew to
+        // last, which could be either one.
+	VkFramebuffer postprocess_framebuffers[INTERMEDIATE_IMAGE_COUNT];
 	uint32_t mem_count;
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
 	bool transitioned;

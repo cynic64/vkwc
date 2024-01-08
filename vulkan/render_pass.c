@@ -38,19 +38,6 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
-        // Screen output - we don't actually use it but it's in the framebuffer
-        // so it has to be included in pAttachments.
-	VkAttachmentDescription screen_attach = {
-		.format = format,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-                // We don't care what happens because the postprocess pass is
-                // going to copy everything over after this anyway.
-		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
 	// Attachment references
 	VkAttachmentReference intermediate_out_ref = {
 		.attachment = 0,
@@ -110,7 +97,6 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
                 intermediate_attach,
                 depth_attach,
                 uv_attach,
-                screen_attach,
         };
 
 	VkRenderPassCreateInfo rpass_info = {0};
@@ -135,7 +121,9 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
                 // We do need to load it because we might sample it.
 		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                // The intermediate draw functions always transition to
+                // TRANSFER_SRC after they finish.
+		.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
@@ -157,7 +145,9 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                // We transfer the pixel under the cursor before doing the
+                // postprocess pass, so it is in fact in TRANSFER_SRC_OPTIMAL.
+		.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
@@ -227,18 +217,32 @@ void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
 	// depth
 	clear_values[1].depthStencil.depth = 1.0;
 	clear_values[1].depthStencil.stencil = 0;
-	// postprocess out
-	clear_values[3].color.float32[0] = 0.0;
-	clear_values[3].color.float32[1] = 0.0;
-	clear_values[3].color.float32[2] = 0.0;
 
 	VkRenderPassBeginInfo rpass_info = {0};
 	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	rpass_info.renderArea = render_area;
 	rpass_info.renderPass = rpass;
 	rpass_info.framebuffer = framebuffer;
-	rpass_info.clearValueCount = 4;
+	rpass_info.clearValueCount = sizeof(clear_values) / sizeof(clear_values[0]);
 	rpass_info.pClearValues = clear_values;
+	vkCmdBeginRenderPass(cbuf, &rpass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+	VkViewport vp = {0.f, 0.f, (float) screen_width, (float) screen_height, 0.f, 1.f};
+	vkCmdSetViewport(cbuf, 0, 1, &vp);
+	vkCmdSetScissor(cbuf, 0, 1, &render_area);
+}
+
+void begin_postprocess_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
+                VkRenderPass rpass, VkRect2D render_area,
+                int screen_width, int screen_height) {
+	VkRenderPassBeginInfo rpass_info = {0};
+	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	rpass_info.renderArea = render_area;
+	rpass_info.renderPass = rpass;
+	rpass_info.framebuffer = framebuffer;
+        // None of the attachments actually gets cleared.
+	rpass_info.clearValueCount = 0;
+	rpass_info.pClearValues = NULL;
 	vkCmdBeginRenderPass(cbuf, &rpass_info, VK_SUBPASS_CONTENTS_INLINE);
 
 	VkViewport vp = {0.f, 0.f, (float) screen_width, (float) screen_height, 0.f, 1.f};
