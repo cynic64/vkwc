@@ -19,7 +19,9 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 	VkAttachmentDescription depth_attach = {
 		.format = DEPTH_FORMAT,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-                // FIXME: this should be LOAD, and we clear it once in render_begin
+                // FIXME: Figure out whether I actually need a depth buffer or
+                // not. I think it's good to keep it in but then what's the
+                // deal with transparency? argh.
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,

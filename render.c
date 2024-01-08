@@ -298,8 +298,14 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 
         render_buf->framebuffer_idx = 0;
 
+        VkCommandBuffer cbuf = renderer->cb;
+        if (!renderer->stage.recording) {
+                cbuf_begin_onetime(cbuf);
+                renderer->stage.recording = true;
+        }
+
         // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
-        vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
+        vulkan_image_transition_cbuf(renderer->cb,
                 renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 // Want to wait for whoever was reading from it before we write to it
@@ -313,12 +319,6 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 
         // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
-        VkCommandBuffer cbuf = renderer->cb;
-        if (!renderer->stage.recording) {
-                cbuf_begin_onetime(cbuf);
-                renderer->stage.recording = true;
-        }
-
         // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
@@ -327,21 +327,31 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-        VkImageSubresourceRange clear_range = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-        };
+        vulkan_clear_image(cbuf, render_buf->intermediates[0], (float [4]) {0.1, 0.1, 0.1, 1});
 
-        VkClearColorValue clear_color = {
-                .float32 = {0.1, 0.1, 0.1, 1.0},
-        };
+        // Clear the UV buffer too
+        // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
 
-        vkCmdClearColorImage(cbuf,
-                render_buf->intermediates[0], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                &clear_color, 1, &clear_range);
+        vulkan_clear_image(cbuf, render_buf->uv, (float [4]){0, 0, 0, 1});
+
+        // Transition UV back to COLOR_ATTACHMENT_OPTIMAL
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_ACCESS_TRANSFER_WRITE_BIT,
+                // Make fragment shader reads wait on it as well as color
+                // attachment output
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                1);
+
 
         // Transition all intermediates to TRANSFER_SRC, because when we start
         // rendering surfaces, it is assumed that the previous intermediate is

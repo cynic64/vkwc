@@ -26,7 +26,11 @@ void vulkan_copy_image(VkCommandBuffer cbuf, VkImage src, VkImage dst,
                 int width, int height);
 
 void cbuf_alloc(VkDevice device, VkCommandPool cpool, VkCommandBuffer *cbuf);
+
 void cbuf_submit_wait(VkQueue queue, VkCommandBuffer cbuf);
+
 void cbuf_begin_onetime(VkCommandBuffer cbuf);
+
+void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float clear_color[4]);
 
 #endif // util_h_INCLUDED

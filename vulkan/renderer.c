@@ -652,8 +652,11 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	// Create attachment to write UV coordinates into
 	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
 		dmabuf.width, dmabuf.height,
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT 
- 		| VK_IMAGE_USAGE_SAMPLED_BIT, &buffer->uv);
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT 
+ 		        | VK_IMAGE_USAGE_SAMPLED_BIT
+                        | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                &buffer->uv);
 
 	VkMemoryRequirements uv_mem_reqs;
 	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->uv, &uv_mem_reqs);

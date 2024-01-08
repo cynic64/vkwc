@@ -144,3 +144,22 @@ bool vulkan_has_extension(size_t count, const char **exts, const char *find) {
 
 	return false;
 }
+
+// Image must already be in TRANSFER_DST_OPTIMAL.
+void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float color[4]) {
+        VkImageSubresourceRange clear_range = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+        };
+
+        VkClearColorValue clear_color = {
+                .float32 = {color[0], color[1], color[2], color[3]}
+        };
+
+        vkCmdClearColorImage(cbuf,
+                image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                &clear_color, 1, &clear_range);
+}
