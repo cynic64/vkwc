@@ -472,6 +472,48 @@ static void alloc_memory(struct wlr_vk_renderer *renderer,
 	}
 }
 
+void render_buffer_create_descriptor_sets(struct wlr_vk_renderer *renderer,
+                struct wlr_vk_render_buffer *buffer) {
+        // TODO: Make sure the descriptor pools get destroyed
+
+        // Intermediate images
+        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                struct wlr_vk_descriptor_pool *dpool = vulkan_alloc_texture_ds(renderer,
+                        &buffer->intermediate_sets[i]);
+                assert(dpool != NULL);
+
+                VkDescriptorImageInfo ds_img_info = {0};
+                ds_img_info.imageView = buffer->intermediate_views[i];
+                ds_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                VkWriteDescriptorSet ds_write = {0};
+                ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                ds_write.descriptorCount = 1;
+                ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                ds_write.dstSet = buffer->intermediate_sets[i];
+                ds_write.pImageInfo = &ds_img_info;
+
+                vkUpdateDescriptorSets(renderer->dev->dev, 1, &ds_write, 0, NULL);
+        }
+
+        // UV buffer
+        struct wlr_vk_descriptor_pool *dpool = vulkan_alloc_texture_ds(renderer, &buffer->uv_set);
+        assert(dpool != NULL);
+
+        VkDescriptorImageInfo uv_ds_info = {0};
+        uv_ds_info.imageView = buffer->uv_view;
+        uv_ds_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet ds_write = {0};
+        ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        ds_write.descriptorCount = 1;
+        ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        ds_write.dstSet = buffer->uv_set;
+        ds_write.pImageInfo = &uv_ds_info;
+
+        vkUpdateDescriptorSets(renderer->dev->dev, 1, &ds_write, 0, NULL);
+}
+
 // This gets called once for every swapchain image and once whenever the cursor
 // changes. Each cursor image gets its own render buffer.
 static struct wlr_vk_render_buffer *create_render_buffer(
@@ -574,26 +616,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL,
                         &buffer->intermediate_views[i]);
                 assert(res == VK_SUCCESS);
-
-                // Create a descriptor set to be able to sample the image in
-                // the fragment shader
-                // TODO: Make sure this dpool gets destroyed
-                struct wlr_vk_descriptor_pool *dpool = vulkan_alloc_texture_ds(renderer,
-                        &buffer->intermediate_sets[i]);
-                assert(dpool != NULL);
-
-                VkDescriptorImageInfo ds_img_info = {0};
-                ds_img_info.imageView = buffer->intermediate_views[i];
-                ds_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                VkWriteDescriptorSet ds_write = {0};
-                ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                ds_write.descriptorCount = 1;
-                ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                ds_write.dstSet = buffer->intermediate_sets[i];
-                ds_write.pImageInfo = &ds_img_info;
-
-                vkUpdateDescriptorSets(dev, 1, &ds_write, 0, NULL);
         }
 
 	// Create depth buffer
@@ -631,7 +653,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
 		dmabuf.width, dmabuf.height,
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT 
- 		| VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &buffer->uv);
+ 		| VK_IMAGE_USAGE_SAMPLED_BIT, &buffer->uv);
 
 	VkMemoryRequirements uv_mem_reqs;
 	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->uv, &uv_mem_reqs);
@@ -722,6 +744,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	wl_signal_add(&wlr_buffer->events.destroy, &buffer->buffer_destroy);
 	wl_list_insert(&renderer->render_buffers, &buffer->link);
 
+        render_buffer_create_descriptor_sets(renderer, buffer);
+
 	return buffer;
 
 	vkDestroyImageView(renderer->dev->dev, buffer->depth_view, NULL);
@@ -743,7 +767,7 @@ error_buffer:
 	return NULL;
 }
 
-// interface implementation
+// Interface implementation
 static bool vulkan_bind_buffer(struct wlr_renderer *wlr_renderer,
 		struct wlr_buffer *wlr_buffer) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);

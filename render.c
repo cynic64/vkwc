@@ -430,17 +430,32 @@ void render_end(struct wlr_renderer *wlr_renderer) {
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
+        // Transition UV to SHADER_READ_ONLY
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                1);
+
+        // Begin render pass
         begin_postprocess_render_pass(renderer->cb,
                 render_buf->postprocess_framebuffers[framebuffer_idx],
                 setup->postprocess_rpass, rect, width, height);
 
+        // Bind descriptors
         VkDescriptorSet desc_sets[] =
-                {render_buf->intermediate_sets[framebuffer_idx]};
+                {render_buf->intermediate_sets[framebuffer_idx], render_buf->uv_set};
 
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),
                 desc_sets, 0, NULL);
 
+        // We don't actually use the PushConstants struct, so this is a bit
+        // cheeky. But the int fits so it's OK.
+	vkCmdPushConstants(cbuf, renderer->pipe_layout,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0, sizeof(renderer->postprocess_mode), &renderer->postprocess_mode);
         vkCmdDraw(cbuf, 4, 1, 0, 0);
 
         vkCmdEndRenderPass(cbuf);

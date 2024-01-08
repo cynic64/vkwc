@@ -15,6 +15,7 @@
 #define WLR_VK_RENDER_MODE_COUNT 3
 // Need two intermediate images so we can sample one while rendering the next.
 #define INTERMEDIATE_IMAGE_COUNT 2
+#define POSTPROCESS_MODE_COUNT 2
 
 // Used for all shaders
 struct PushConstants {
@@ -193,6 +194,7 @@ struct wlr_vk_render_buffer {
 	VkImage uv;
 	VkImageView uv_view;
 	VkDeviceMemory uv_mem;
+        VkDescriptorSet uv_set;
 
         // UV buffer on host. Needed for checking what pixel of a window the
         // mouse is over.
@@ -259,11 +261,13 @@ struct wlr_vk_renderer {
 
 	struct wl_list render_buffers; // wlr_vk_render_buffer
 
-	// Instead of copying the entire UV texture each frame, we only copy the pixel under the cursor.
+        // Instead of copying the entire UV texture each frame, we only copy
+        // the pixel under the cursor.
 	// For that, however, we need to know where the cursor actually is.
 	int cursor_x;
 	int cursor_y;
 	bool should_copy_uv;
+        int postprocess_mode;
 
 	struct {
 		VkCommandBuffer cb;

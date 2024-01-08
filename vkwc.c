@@ -396,7 +396,12 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			surface->z_rot = 0;
 		}
 		return true;
-	}
+	} else if (sym == XKB_KEY_r) {
+                struct wlr_vk_renderer *vk_renderer =
+                        (struct wlr_vk_renderer *) server->renderer;
+                vk_renderer->postprocess_mode++;
+                vk_renderer->postprocess_mode %= POSTPROCESS_MODE_COUNT;
+        }
 
 	for (int i = 0; i < sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0]); i++) {
 		enum CursorMode mode = TRANSFORM_MODES[i].mode;
