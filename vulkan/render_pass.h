@@ -12,4 +12,6 @@ void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
 
 void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass);
 
+void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass);
+
 #endif // render_pass_h_INCLUDED

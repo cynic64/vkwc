@@ -147,14 +147,17 @@ void vulkan_format_props_finish(struct wlr_vk_format_props *props);
 
 // For each format we want to render, we need a separate renderpass
 // and therefore also separate pipelines.
+// TODO: Maybe get rid of this?
 struct wlr_vk_render_format_setup {
 	struct wl_list link;
 	VkFormat render_format; // used in renderpass
-	VkRenderPass render_pass;
+	VkRenderPass rpass;
+	VkRenderPass postprocess_rpass;
 
 	VkPipeline simple_tex_pipe;
 	VkPipeline tex_pipe;
 	VkPipeline quad_pipe;
+	VkPipeline postprocess_pipe;
 };
 
 // Renderer-internal represenation of an wlr_buffer imported for rendering.
@@ -219,6 +222,8 @@ struct wlr_vk_renderer {
 	VkShaderModule simple_tex_frag_module;
 	VkShaderModule tex_frag_module;
 	VkShaderModule quad_frag_module;
+	VkShaderModule postprocess_vert_module;
+	VkShaderModule postprocess_frag_module;
 
 	VkDescriptorSetLayout tex_desc_layout;
 	VkDescriptorSetLayout background_desc_layout;
@@ -356,12 +361,6 @@ struct wlr_vk_buffer_span {
 	struct wlr_vk_shared_buffer *buffer;
 	struct wlr_vk_allocation alloc;
 };
-
-// util TODO: move this to util.h
-void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
-                VkRenderPass rpass, VkRect2D render_area,
-                int screen_width, int screen_height);
-
 
 #define wlr_vk_error(fmt, res, ...) wlr_log(WLR_ERROR, fmt ": %s (%d)", \
 	vulkan_strerror(res), res, ##__VA_ARGS__)

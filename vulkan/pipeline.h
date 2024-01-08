@@ -14,4 +14,8 @@ void create_pipeline_layout(VkDevice device, VkSampler tex_sampler,
                 int layout_count, VkDescriptorSetLayout *layouts,
 		VkPipelineLayout *pipe_layout);
 
+void create_postprocess_pipe(VkDevice device,
+                VkShaderModule vert_module, VkShaderModule frag_module,
+		VkRenderPass rpass, VkPipelineLayout pipe_layout, VkPipeline *pipe);
+
 #endif // pipeline_h_INCLUDED

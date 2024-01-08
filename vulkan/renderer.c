@@ -26,6 +26,8 @@
 #include "vulkan/shaders/texture.frag.h"
 #include "vulkan/shaders/simple_texture.frag.h"
 #include "vulkan/shaders/quad.frag.h"
+#include "vulkan/shaders/postprocess.vert.h"
+#include "vulkan/shaders/postprocess.frag.h"
 #include "vulkan/util.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/pipeline.h"
@@ -145,9 +147,11 @@ static void destroy_render_format_setup(struct wlr_vk_renderer *renderer,
 	}
 
 	VkDevice dev = renderer->dev->dev;
-	vkDestroyRenderPass(dev, setup->render_pass, NULL);
+	vkDestroyRenderPass(dev, setup->rpass, NULL);
+	vkDestroyPipeline(dev, setup->simple_tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->quad_pipe, NULL);
+	vkDestroyPipeline(dev, setup->postprocess_pipe, NULL);
 }
 
 static void shared_buffer_destroy(struct wlr_vk_renderer *r,
@@ -680,6 +684,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         buffer->intermediate_views[i],
                         buffer->depth_view,
                         buffer->uv_view,
+                        buffer->image_view,
                 };
                 VkFramebufferCreateInfo fb_info = {0};
                 fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -689,7 +694,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 fb_info.width = dmabuf.width;
                 fb_info.height = dmabuf.height;
                 fb_info.layers = 1u;
-                fb_info.renderPass = buffer->render_setup->render_pass;
+                fb_info.renderPass = buffer->render_setup->rpass;
 
                 res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffers[i]);
                 if (res != VK_SUCCESS) {
@@ -909,7 +914,7 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
         renderer->scissor = rect;
 
         begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
-                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
+                render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
 	// Bind descriptor sets
         vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1089,7 +1094,10 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 
 	vkDestroyShaderModule(dev->dev, renderer->vert_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->tex_frag_module, NULL);
+	vkDestroyShaderModule(dev->dev, renderer->simple_tex_frag_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->quad_frag_module, NULL);
+	vkDestroyShaderModule(dev->dev, renderer->postprocess_vert_module, NULL);
+	vkDestroyShaderModule(dev->dev, renderer->postprocess_frag_module, NULL);
 
 	vkDestroyFence(dev->dev, renderer->fence, NULL);
 	vkDestroyPipelineLayout(dev->dev, renderer->pipe_layout, NULL);
@@ -1362,7 +1370,7 @@ void create_tex_desc_layout(VkDevice device, VkSampler tex_sampler,
 // Creates static render data, such as sampler, layouts and shader modules
 // for the given rednerer.
 // Cleanup is done by destroying the renderer.
-static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
+void init_static_render_data(struct wlr_vk_renderer *renderer) {
 	VkResult res;
 	VkDevice dev = renderer->dev->dev;
 
@@ -1381,10 +1389,7 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 	sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
 	res = vkCreateSampler(dev, &sampler_info, NULL, &renderer->sampler);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create sampler", res);
-		return false;
-	}
+        assert(res == VK_SUCCESS);
 
         // Descriptor layout for textures and frame so far (background)
         create_tex_desc_layout(renderer->dev->dev, renderer->sampler,
@@ -1405,43 +1410,42 @@ static bool init_static_render_data(struct wlr_vk_renderer *renderer) {
 	sinfo.codeSize = sizeof(common_vert_data);
 	sinfo.pCode = common_vert_data;
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->vert_module);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create vertex shader module", res);
-		return false;
-	}
+        assert(res == VK_SUCCESS);
 
 	// simple tex frag
 	sinfo.codeSize = sizeof(simple_texture_frag_data);
 	sinfo.pCode = simple_texture_frag_data;
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->simple_tex_frag_module);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create tex fragment shader module", res);
-		return false;
-	}
+        assert(res == VK_SUCCESS);
 
 	// tex frag
 	sinfo.codeSize = sizeof(texture_frag_data);
 	sinfo.pCode = texture_frag_data;
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->tex_frag_module);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create tex fragment shader module", res);
-		return false;
-	}
+        assert(res == VK_SUCCESS);
 
 	// quad frag
 	sinfo.codeSize = sizeof(quad_frag_data);
 	sinfo.pCode = quad_frag_data;
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->quad_frag_module);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create quad fragment shader module", res);
-		return false;
-	}
+        assert(res == VK_SUCCESS);
 
-	return true;
+	// postprocess vert
+	sinfo.codeSize = sizeof(postprocess_vert_data);
+	sinfo.pCode = postprocess_vert_data;
+	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_vert_module);
+        assert(res == VK_SUCCESS);
+
+	// postprocess frag
+	sinfo.codeSize = sizeof(postprocess_frag_data);
+	sinfo.pCode = postprocess_frag_data;
+	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_frag_module);
+        assert(res == VK_SUCCESS);
 }
 
 static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 		struct wlr_vk_renderer *renderer, VkFormat format) {
+        printf("Create render setup for format %d\n", format);
 	struct wlr_vk_render_format_setup *setup;
 	wl_list_for_each(setup, &renderer->render_format_setups, link) {
 		if (setup->render_format == format) {
@@ -1457,20 +1461,25 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
 	setup->render_format = format;
 
-        create_render_pass(renderer->dev->dev, format, &setup->render_pass);
+        create_render_pass(renderer->dev->dev, format, &setup->rpass);
+        create_postprocess_render_pass(renderer->dev->dev, format, &setup->postprocess_rpass);
 
         // Create pipelines
         create_pipeline_with_depth(renderer->dev->dev,
                 renderer->vert_module, renderer->tex_frag_module,
-                setup->render_pass, renderer->pipe_layout, &setup->tex_pipe);
+                setup->rpass, renderer->pipe_layout, &setup->tex_pipe);
 
         create_pipeline_with_depth(renderer->dev->dev,
                 renderer->vert_module, renderer->simple_tex_frag_module,
-                setup->render_pass, renderer->pipe_layout, &setup->simple_tex_pipe);
+                setup->rpass, renderer->pipe_layout, &setup->simple_tex_pipe);
 
         create_pipeline_with_depth(renderer->dev->dev,
                 renderer->vert_module, renderer->quad_frag_module,
-                setup->render_pass, renderer->pipe_layout, &setup->quad_pipe);
+                setup->rpass, renderer->pipe_layout, &setup->quad_pipe);
+
+        create_postprocess_pipe(renderer->dev->dev,
+                renderer->postprocess_vert_module, renderer->postprocess_frag_module,
+                setup->postprocess_rpass, renderer->pipe_layout, &setup->postprocess_pipe);
 
 	wl_list_insert(&renderer->render_format_setups, &setup->link);
 	return setup;
@@ -1497,9 +1506,7 @@ struct wlr_renderer *vulkan_renderer_create_for_device(struct wlr_vk_device *dev
 	wl_list_init(&renderer->render_format_setups);
 	wl_list_init(&renderer->render_buffers);
 
-	if (!init_static_render_data(renderer)) {
-		goto error;
-	}
+	init_static_render_data(renderer);
 
 	// command pool
 	VkCommandPoolCreateInfo cpool_info = {0};

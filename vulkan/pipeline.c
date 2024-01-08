@@ -119,20 +119,103 @@ void create_pipeline_with_depth(VkDevice device,
 	assert(res == VK_SUCCESS);
 }
 
+// Pipeline for postprocess pass, so no depth buffer and no blending and such.
+void create_postprocess_pipe(VkDevice device,
+                VkShaderModule vert_module, VkShaderModule frag_module,
+		VkRenderPass rpass, VkPipelineLayout pipe_layout, VkPipeline *pipe) {
+	// Shaders
+	VkPipelineShaderStageCreateInfo vert_stage = {
+		.sType= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .module = vert_module,
+		.pName = "main",
+	};
+	VkPipelineShaderStageCreateInfo frag_stage = {
+		.sType= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = frag_module,
+		.pName = "main",
+	};
+
+	VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
+
+	// Info
+	VkPipelineInputAssemblyStateCreateInfo assembly = {0};
+	assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+
+        // Rasterizer
+	VkPipelineRasterizationStateCreateInfo rasterization = {0};
+	rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterization.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterization.cullMode = VK_CULL_MODE_NONE;
+	rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterization.lineWidth = 1.f;
+
+        // Blending
+	VkPipelineColorBlendAttachmentState blend_attachment = {0};
+	blend_attachment.blendEnable = VK_FALSE;
+
+        // Only one blend attachment since only output to one image, unlike the
+        // window pass which outputs to the intermediate buffer and the UV
+        // buffer.
+        VkPipelineColorBlendAttachmentState blend_attachments[] = {blend_attachment};
+
+	VkPipelineColorBlendStateCreateInfo blend = {0};
+	blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	blend.attachmentCount = sizeof(blend_attachments) / sizeof(blend_attachments[0]);
+	blend.pAttachments = blend_attachments;
+
+        // Multisampling
+	VkPipelineMultisampleStateCreateInfo multisample = {0};
+	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+        // Viewport
+	VkPipelineViewportStateCreateInfo viewport = {0};
+	viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewport.viewportCount = 1;
+	viewport.scissorCount = 1;
+
+        // Dynamic state
+	VkDynamicState dynStates[2] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo dynamic = {0};
+	dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamic.pDynamicStates = dynStates;
+	dynamic.dynamicStateCount = 2;
+
+        // Vertex
+	VkPipelineVertexInputStateCreateInfo vertex = {0};
+	vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+        // Final info
+	VkGraphicsPipelineCreateInfo pinfo = {0};
+	pinfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pinfo.layout = pipe_layout;
+	pinfo.renderPass = rpass;
+	pinfo.subpass = 0;
+	pinfo.stageCount = sizeof(shader_stages) / sizeof(shader_stages[0]);
+	pinfo.pStages = shader_stages;
+
+	pinfo.pInputAssemblyState = &assembly;
+	pinfo.pRasterizationState = &rasterization;
+	pinfo.pColorBlendState = &blend;
+	pinfo.pMultisampleState = &multisample;
+	pinfo.pViewportState = &viewport;
+	pinfo.pDynamicState = &dynamic;
+	pinfo.pVertexInputState = &vertex;
+
+	VkResult res = vkCreateGraphicsPipelines(device, NULL, 1, &pinfo, NULL, pipe);
+	assert(res == VK_SUCCESS);
+}
+
 // Create a pipeline layout with PushConstants. You have to make the descriptor layouts first.
 void create_pipeline_layout(VkDevice device, VkSampler tex_sampler,
                 int layout_count, VkDescriptorSetLayout *layouts,
 		VkPipelineLayout *pipe_layout) {
-	// Descriptor set layouts - one for each set
-        // This is for sampling the windows that have already been drawn
-	VkDescriptorSetLayoutBinding background_binding = {
-                .binding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = &tex_sampler,
-        };
-
 	// Pipeline layout
 	VkPushConstantRange pc_ranges[1] = {0};
 	pc_ranges[0].size = sizeof(struct PushConstants);

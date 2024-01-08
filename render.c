@@ -79,7 +79,7 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         renderer->scissor = rect;
 
         begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
-                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
+                render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
         // We don't bother rendering from one surface to the other because we
         // don't support fancy blurred transparency stuff here. So we don't
@@ -218,7 +218,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
         // Starts the command buffer and enters the render pass
         begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
-                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
+                render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
         VkDescriptorSet desc_sets[] =
                 {render_buf->intermediate_sets[prev_idx], texture->ds};
@@ -294,25 +294,14 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
-
-        // Submit
-        cbuf_submit_wait(renderer->dev->queue, renderer->cb);
-        renderer->stage.recording = false;
-
-	renderer->bound_pipe = VK_NULL_HANDLE;
+        VkCommandBuffer cbuf = renderer->cb;
 
         int width = renderer->render_width;
         int height = renderer->render_height;
-	renderer->render_width = 0;
-	renderer->render_height = 0;
 
 	// Copy UV to host-visible memory, but only the pixel under the cursor
         // Transition UV to TRANSFER_SRC_OPTIMAL
-        VkCommandBuffer copy_cbuf;
-        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
-        cbuf_begin_onetime(copy_cbuf);
-
-        vulkan_image_transition_cbuf(copy_cbuf,
+        vulkan_image_transition_cbuf(cbuf,
                 render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
@@ -340,19 +329,14 @@ void render_end(struct wlr_renderer *wlr_renderer) {
                 },
         };
 
-        vkCmdCopyImageToBuffer(copy_cbuf,
+        vkCmdCopyImageToBuffer(cbuf,
                 render_buf->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 render_buf->host_uv,
                 1, &uv_copy_region);
 
-        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
-
         // Copy intermediate image to final output
         // Transition final to IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        cbuf_alloc(renderer->dev->dev, renderer->command_pool, &copy_cbuf);
-        cbuf_begin_onetime(copy_cbuf);
-
-        vulkan_image_transition_cbuf(copy_cbuf,
+        vulkan_image_transition_cbuf(cbuf,
                 render_buf->image, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -363,7 +347,7 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
         int framebuffer_idx = render_buf->framebuffer_idx;
-        vulkan_image_transition_cbuf(copy_cbuf,
+        vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[framebuffer_idx],
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -371,13 +355,21 @@ void render_end(struct wlr_renderer *wlr_renderer) {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Now do the actual copy
-        vulkan_copy_image(copy_cbuf, render_buf->intermediates[framebuffer_idx],
+        vulkan_copy_image(cbuf, render_buf->intermediates[framebuffer_idx],
                 render_buf->image,
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
                 width, height
         );
 
-        cbuf_submit_wait(renderer->dev->queue, copy_cbuf);
+        // Submit
+        cbuf_submit_wait(renderer->dev->queue, renderer->cb);
+        renderer->stage.recording = false;
+
+	renderer->bound_pipe = VK_NULL_HANDLE;
+
+	renderer->render_width = 0;
+	renderer->render_height = 0;
+
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;
