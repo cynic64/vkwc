@@ -377,6 +377,10 @@ void vulkan_copy_image(VkCommandBuffer cbuf, VkImage src, VkImage dst,
                 int src_x, int src_y, int dst_x, int dst_y,
                 int width, int height);
 
+void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
+                VkRenderPass rpass, VkRect2D render_area,
+                int screen_width, int screen_height);
+
 void cbuf_alloc(VkDevice device, VkCommandPool cpool, VkCommandBuffer *cbuf);
 void cbuf_submit_wait(VkQueue queue, VkCommandBuffer cbuf);
 void cbuf_begin_onetime(VkCommandBuffer cbuf);

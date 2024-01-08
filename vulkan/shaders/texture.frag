@@ -61,7 +61,7 @@ void main() {
 
         vec3 prev_color = get_blurred_background();
 
-        vec3 final_color = window_color * 0.8 + prev_color * 0.2;
+        vec3 final_color = window_color * 0.9 + prev_color * 0.1;
 	out_color = vec4(final_color, 1.0);
         // First component of surface_id is the actual surface ID, second
         // component is alpha. Alpha should be 1 unless we want to make the

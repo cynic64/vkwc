@@ -21,7 +21,6 @@
 
 #include "render/pixel_format.h"
 #include "render/vulkan.h"
-#include "vulkan/intermediate.h"
 #include "vulkan/shaders/common.vert.h"
 #include "vulkan/shaders/texture.frag.h"
 #include "vulkan/shaders/simple_texture.frag.h"
@@ -862,6 +861,33 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	}
 }
 
+void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
+                VkRenderPass rpass, VkRect2D render_area,
+                int screen_width, int screen_height) {
+	// Clear attachments
+	VkClearValue clear_values[4] = {0};
+	// intermediate color - don't set, we keep what's there
+	// depth
+	clear_values[1].depthStencil.depth = 1.0;
+	clear_values[1].depthStencil.stencil = 0;
+	// postprocess out
+	clear_values[3].color.float32[0] = 0.0;
+	clear_values[3].color.float32[1] = 0.0;
+	clear_values[3].color.float32[2] = 0.0;
+
+	VkRenderPassBeginInfo rpass_info = {0};
+	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	rpass_info.renderArea = render_area;
+	rpass_info.renderPass = rpass;
+	rpass_info.framebuffer = framebuffer;
+	rpass_info.clearValueCount = 4;
+	rpass_info.pClearValues = clear_values;
+	vkCmdBeginRenderPass(cbuf, &rpass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+	VkViewport vp = {0.f, 0.f, (float) screen_width, (float) screen_height, 0.f, 1.f};
+	vkCmdSetViewport(cbuf, 0, 1, &vp);
+	vkCmdSetScissor(cbuf, 0, 1, &render_area);
+}
 // This only gets used by the cursor I think. I use the function with the same
 // name in ../render.c for drawing window textures. I know, I know...
 static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
@@ -905,7 +931,7 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 	renderer->scissor = rect;
 
 	int framebuffer_idx = render_buf->framebuffer_idx;
-        begin_render_operation(cbuf, render_buf->framebuffers[framebuffer_idx],
+        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
                 render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
 	// Bind pipe

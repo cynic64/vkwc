@@ -62,7 +62,6 @@ sources = files(
   'vulkan/texture.c',
   'vulkan/util.c',
   'vulkan/vulkan.c',
-  'vulkan/intermediate.c',
   'render.c',
   'util.c',
   'surface.c',

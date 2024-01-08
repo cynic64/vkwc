@@ -43,7 +43,6 @@
 #include "render.h"
 #include "util.h"
 #include "render/vulkan.h"
-#include "vulkan/intermediate.h"
 
 struct RenderData {
 	struct wlr_output *output;
@@ -107,7 +106,7 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
 	};
 
         // Begin render pass
-        begin_render_operation(cbuf, render_buf->framebuffers[framebuffer_idx],
+        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
                 render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
@@ -214,8 +213,7 @@ void render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 	}
 
         // Starts the command buffer and enters the render pass
-        // TODO: get rid of vulkan/intermediate.c or at least make it clearer what it does
-        begin_render_operation(cbuf, render_buf->framebuffers[framebuffer_idx],
+        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
                 render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
         // Bind pipeline and descriptor sets
