@@ -121,9 +121,7 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
                 // We do need to load it because we might sample it.
 		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                // The intermediate draw functions always transition to
-                // TRANSFER_SRC after they finish.
-		.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
