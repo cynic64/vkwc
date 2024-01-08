@@ -867,6 +867,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
 		struct wlr_texture *wlr_texture, const struct wlr_fbox *box,
 		const float matrix[static 9], float alpha) {
+        printf("render_subtex\n");
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         VkCommandBuffer cbuf = renderer->cb;
 

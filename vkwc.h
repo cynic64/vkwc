@@ -70,6 +70,7 @@ struct Server {
 	struct wlr_box grab_geobox;
 	uint32_t resize_edges;
 	struct Surface *grabbed_surface;
+        struct Surface *last_mouse_surface;
 
 	struct wlr_output *output;
 	struct wlr_output_layout *output_layout;	// Even though we only support one output,

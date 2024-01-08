@@ -569,8 +569,13 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 	check_uv(server, server->cursor->x, server->cursor->y, &surface, &surface_x, &surface_y);
 
 	if (surface == NULL) {
-                //printf("Nothing under cursor\n");
-                wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr", server->cursor);
+                if (server->last_mouse_surface != NULL) {
+                        // There's nothing under the cursor, so set the mouse
+                        // image to the generic one.
+                        wlr_xcursor_manager_set_cursor_image(server->cursor_mgr, "left_ptr",
+                                server->cursor);
+                        server->last_mouse_surface = NULL;
+                }
 	} else {
 		//
 		// Send	pointer	enter and motion events.
@@ -587,6 +592,8 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
                 //printf("Send %d %d to id %f\n", surface_x, surface_y, surface->id);
 		wlr_seat_pointer_notify_motion(seat, time, surface_x, surface_y);
 		wlr_seat_pointer_notify_frame(server->seat);
+
+                server->last_mouse_surface = surface;
 	}
 }
 
