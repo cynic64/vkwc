@@ -230,13 +230,10 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 	// Draw
         // Unfortunately the rest of wlroots (although I only use the hardware
         // cursor) is row-major, otherwise I would set column-major in the
-        // shader and avoid this.
+        // shader and avoid the transpose.
 	struct PushConstants push_constants;
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			push_constants.mat4[i][j] = matrix[j][i];
-		}
-	};
+        glm_mat4_inv(matrix, push_constants.mat4);
+        glm_mat4_transpose(push_constants.mat4);
 
 	// This used to be more complicated. Go back to TinyWL's way if something breaks.
 	push_constants.uv_off[0] = 0;
@@ -373,6 +370,17 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
                                 | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                         1);
         }
+
+        // Transition depth to DEPTH_STENCIL_ATTACHMENT_OPTIMAL - usually the
+        // render passes in the draw commands do this automatically. But if
+        // nothing gets drawn, that doesn't happen, and render_end excepts the
+        // depth buffer to be DEPTH_STENCIL
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->depth, VK_IMAGE_ASPECT_DEPTH_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                VK_ACCESS_NONE, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                1);
 }
 
 void render_end(struct wlr_renderer *wlr_renderer) {
@@ -531,7 +539,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
         // Draw frame counter. render_rect_simple doesn't draw from one
         // framebuffer into the other, we don't have to increment framebuffer_idx
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	render_rect_simple(renderer, color, 10, 10, 10, 10);
+	//render_rect_simple(renderer, color, 10, 10, 10, 10);
 
 	// Draw each surface
         for (int i = 0; i < surface_count; i++) {

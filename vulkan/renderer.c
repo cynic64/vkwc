@@ -1506,8 +1506,10 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
         create_postprocess_render_pass(renderer->dev->dev, format, &setup->postprocess_rpass);
 
         // Create pipelines
+        // We can use the postprocess vert shader because it does exactly what
+        // we want it to: outputs a fullscreen quad.
         create_pipeline_with_depth(renderer->dev->dev,
-                renderer->vert_module, renderer->tex_frag_module,
+                renderer->postprocess_vert_module, renderer->tex_frag_module,
                 setup->rpass, renderer->pipe_layout, &setup->tex_pipe);
 
         create_pipeline_with_depth(renderer->dev->dev,
