@@ -1117,7 +1117,6 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 	vkDestroyFence(dev->dev, renderer->fence, NULL);
 	vkDestroyPipelineLayout(dev->dev, renderer->pipe_layout, NULL);
 	vkDestroyDescriptorSetLayout(dev->dev, renderer->tex_desc_layout, NULL);
-	vkDestroyDescriptorSetLayout(dev->dev, renderer->background_desc_layout, NULL);
 	vkDestroySampler(dev->dev, renderer->sampler, NULL);
 	vkDestroyCommandPool(dev->dev, renderer->command_pool, NULL);
 
@@ -1371,7 +1370,6 @@ void create_tex_desc_layout(VkDevice device, VkSampler tex_sampler,
                 .pImmutableSamplers = &tex_sampler,
         };
 
-        // Aaaaaand for the window texture
 	VkDescriptorSetLayoutCreateInfo layout_info = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .bindingCount = 1,
@@ -1406,15 +1404,16 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
 	res = vkCreateSampler(dev, &sampler_info, NULL, &renderer->sampler);
         assert(res == VK_SUCCESS);
 
-        // Descriptor layout for textures and frame so far (background)
-        create_tex_desc_layout(renderer->dev->dev, renderer->sampler,
-                &renderer->background_desc_layout);
+        // Descriptor layout for textures.
         create_tex_desc_layout(renderer->dev->dev, renderer->sampler, &renderer->tex_desc_layout);
+
+        // We reuse this for the frame so far because it's the same samper
+        // and descriptor count.
+        VkDescriptorSetLayout desc_layouts[] =
+                {renderer->tex_desc_layout, renderer->tex_desc_layout};
 
         // Pipeline layout, gets used for everything since we use the same
         // uniforms and stuff in every shader.
-        VkDescriptorSetLayout desc_layouts[] =
-                {renderer->background_desc_layout, renderer->tex_desc_layout};
 	create_pipeline_layout(renderer->dev->dev, renderer->sampler,
                 sizeof(desc_layouts) / sizeof(desc_layouts[0]), desc_layouts,
                 &renderer->pipe_layout);
