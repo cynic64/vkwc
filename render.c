@@ -41,8 +41,9 @@
 #include <wlr/render/vulkan.h>
 
 #include "render.h"
-#include "util.h"
+#include "vulkan/util.h"
 #include "render/vulkan.h"
+#include "vulkan/render_pass.h"
 
 struct RenderData {
 	struct wlr_output *output;
@@ -67,14 +68,18 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         assert(render_buf != NULL);
         assert(cbuf != NULL);
 
-	VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
-	renderer->scissor = rect;
-
+        // Bind pipeline, if necessary
         VkPipeline pipe = render_buf->render_setup->quad_pipe;
         if (pipe != renderer->bound_pipe) {
                 vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
                 renderer->bound_pipe = pipe;
         };
+
+        VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
+        renderer->scissor = rect;
+
+        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
+                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
         // We don't bother rendering from one surface to the other because we
         // don't support fancy blurred transparency stuff here. So we don't
@@ -104,10 +109,6 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
 			push_constants.mat4[i][j] = matrix[j][i];
 		}
 	};
-
-        // Begin render pass
-        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
-                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -144,12 +145,6 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         assert(render_buf != NULL);
         assert(cbuf != NULL);
 
-        // I could scissor to only the region being drawn to. I'm not sure it's
-        // worth it though, especially because it gets complicated with
-        // spinning surfaces and such.
-	VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
-	renderer->scissor = rect;
-
         // Copy the pixels from the previous buffer into this one
         // Previous image is already in IMAGE_LAYOUT_TRANSFER_SRC
         int prev_idx = render_buf->framebuffer_idx;
@@ -174,7 +169,9 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         // render pass expects. It's a bit of a weird setup, but it's easier
         // because render_rect_simple and the other render_subtexture bind the
         // render pass without copying first so TRANSFER_SRC is better for
-        // them.
+        // them. Alternatively, I could change the render pass to expect
+        // TRANSFER_DST and make render_rect_simple and render_subtexture do
+        // transitions.
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -206,16 +203,22 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 		wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
 	}
 
-        // Starts the command buffer and enters the render pass
-        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
-                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
-
         // Bind pipeline and descriptor sets
 	VkPipeline pipe	= renderer->current_render_buffer->render_setup->tex_pipe;
 	if (pipe != renderer->bound_pipe) {
 		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
 		renderer->bound_pipe = pipe;
 	}
+
+        // I could scissor to only the region being drawn to. I'm not sure it's
+        // worth it though, especially because it gets complicated with
+        // spinning surfaces and such.
+        VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
+        renderer->scissor = rect;
+
+        // Starts the command buffer and enters the render pass
+        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
+                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
         VkDescriptorSet desc_sets[] =
                 {render_buf->intermediate_sets[prev_idx], texture->ds};
@@ -225,10 +228,9 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 desc_sets, 0, NULL);
 
 	// Draw
-        // Unfortunately the rest of wlroots is row-major, otherwise I would
-        // set column-major in the shader and avoid this
-        // TODO: since I've replaced all the wlroots stuff I could switch to
-        // column-major
+        // Unfortunately the rest of wlroots (although I only use the hardware
+        // cursor) is row-major, otherwise I would set column-major in the
+        // shader and avoid this.
 	struct PushConstants push_constants;
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
@@ -317,14 +319,8 @@ void render_end(struct wlr_renderer *wlr_renderer) {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
-        if (renderer->cursor_x >= width) {
-                fprintf(stderr, "Cursor past width! %d vs %d\n", renderer->cursor_x, width);
-                renderer->cursor_x = width - 1;
-        }
-        if (renderer->cursor_y >= height) {
-                fprintf(stderr, "Cursor past height! %d vs %d\n", renderer->cursor_y, height);
-                renderer->cursor_y = height - 1;
-        }
+        assert(renderer->cursor_x < width);
+        assert(renderer->cursor_y < height);
 
         VkBufferImageCopy uv_copy_region = {
                 .bufferOffset = 0,
@@ -537,7 +533,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 }
 
 // How the layouts work:
-// vulkan_begin sets everything to TRANSFER_SRC
+// render_begin / vulkan_begin sets everything to TRANSFER_SRC
 //
 // render_subexture in vulkan/renderer.c expects [framebuffer_idx] to be
 // TRANSFER_SRC, and sets it to TRANSFER_SRC when it's done.

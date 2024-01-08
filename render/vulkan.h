@@ -10,6 +10,8 @@
 #include <wlr/render/drm_format_set.h>
 #include <wlr/render/interface.h>
 
+#include "../vulkan/error.h"
+
 #define WLR_VK_RENDER_MODE_COUNT 3
 // Need two intermediate images so we can sample one while rendering the next.
 #define INTERMEDIATE_IMAGE_COUNT 2
@@ -355,35 +357,10 @@ struct wlr_vk_buffer_span {
 };
 
 // util TODO: move this to util.h
-bool vulkan_has_extension(size_t count, const char **exts, const char *find);
-const char *vulkan_strerror(VkResult err);
-
-void vulkan_image_transition(VkDevice device, VkQueue queue, VkCommandPool cpool,
-                VkImage image, VkImageAspectFlags aspect,
-                VkImageLayout old_lt, VkImageLayout new_lt,
-                VkAccessFlags src_access, VkAccessFlags dst_access,
-                VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
-                uint32_t mip_levels);
-
-void vulkan_image_transition_cbuf(VkCommandBuffer cbuf,
-                VkImage image, VkImageAspectFlags aspect,
-                VkImageLayout old_lt, VkImageLayout new_lt,
-                VkAccessFlags src_access, VkAccessFlags dst_access,
-                VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage,
-                uint32_t mip_levels);
-
-void vulkan_copy_image(VkCommandBuffer cbuf, VkImage src, VkImage dst,
-                VkImageAspectFlagBits aspect,
-                int src_x, int src_y, int dst_x, int dst_y,
-                int width, int height);
-
 void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
                 VkRenderPass rpass, VkRect2D render_area,
                 int screen_width, int screen_height);
 
-void cbuf_alloc(VkDevice device, VkCommandPool cpool, VkCommandBuffer *cbuf);
-void cbuf_submit_wait(VkQueue queue, VkCommandBuffer cbuf);
-void cbuf_begin_onetime(VkCommandBuffer cbuf);
 
 #define wlr_vk_error(fmt, res, ...) wlr_log(WLR_ERROR, fmt ": %s (%d)", \
 	vulkan_strerror(res), res, ##__VA_ARGS__)

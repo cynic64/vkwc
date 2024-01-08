@@ -17,6 +17,7 @@
 #include <wlr/render/vulkan.h>
 #include <wlr/backend/interface.h>
 #include <wlr/types/wlr_linux_dmabuf_v1.h>
+#include <wlr/types/wlr_buffer.h>
 #include <cglm/cglm.h>
 
 #include "render/pixel_format.h"
@@ -25,7 +26,8 @@
 #include "vulkan/shaders/texture.frag.h"
 #include "vulkan/shaders/simple_texture.frag.h"
 #include "vulkan/shaders/quad.frag.h"
-#include <wlr/types/wlr_buffer.h>
+#include "vulkan/util.h"
+#include "vulkan/render_pass.h"
 
 static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
 static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
@@ -415,9 +417,7 @@ static void handle_render_buffer_destroy(struct wl_listener *listener, void *dat
 
 static void create_image(struct wlr_vk_renderer *renderer,
 		VkFormat format, VkFormatFeatureFlagBits features,
-                int width, int height,
-                VkImageUsageFlagBits usage,
-                VkImage *image) {
+                int width, int height, VkImageUsageFlagBits usage, VkImage *image) {
 	VkFormatProperties format_props;
 	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, format, &format_props);
 	if ((format_props.optimalTilingFeatures & features) != features) {
@@ -469,6 +469,8 @@ static void alloc_memory(struct wlr_vk_renderer *renderer,
 	}
 }
 
+// This gets called once for every swapchain image and once whenever the cursor
+// changes. Each cursor image gets its own render buffer.
 static struct wlr_vk_render_buffer *create_render_buffer(
 		struct wlr_vk_renderer *renderer, struct wlr_buffer *wlr_buffer) {
 	VkResult res;
@@ -512,10 +514,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	view_info.image = buffer->image;
 	view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	view_info.format = fmt->format.vk_format;
-	view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-	view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-	view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-	view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 	view_info.subresourceRange = (VkImageSubresourceRange) {
 		VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
 	};
@@ -861,33 +859,6 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	}
 }
 
-void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
-                VkRenderPass rpass, VkRect2D render_area,
-                int screen_width, int screen_height) {
-	// Clear attachments
-	VkClearValue clear_values[4] = {0};
-	// intermediate color - don't set, we keep what's there
-	// depth
-	clear_values[1].depthStencil.depth = 1.0;
-	clear_values[1].depthStencil.stencil = 0;
-	// postprocess out
-	clear_values[3].color.float32[0] = 0.0;
-	clear_values[3].color.float32[1] = 0.0;
-	clear_values[3].color.float32[2] = 0.0;
-
-	VkRenderPassBeginInfo rpass_info = {0};
-	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	rpass_info.renderArea = render_area;
-	rpass_info.renderPass = rpass;
-	rpass_info.framebuffer = framebuffer;
-	rpass_info.clearValueCount = 4;
-	rpass_info.pClearValues = clear_values;
-	vkCmdBeginRenderPass(cbuf, &rpass_info, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport vp = {0.f, 0.f, (float) screen_width, (float) screen_height, 0.f, 1.f};
-	vkCmdSetViewport(cbuf, 0, 1, &vp);
-	vkCmdSetScissor(cbuf, 0, 1, &render_area);
-}
 // This only gets used by the cursor I think. I use the function with the same
 // name in ../render.c for drawing window textures. I know, I know...
 static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_renderer,
@@ -923,23 +894,23 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
         // We don't have to transition from TRANSFER_SRC because the render
         // pass does that for us.
 
-	// Enter render pass. Eventually I'll make it so it only does this if
-	// necessary.
         int screen_width = render_buf->wlr_buffer->width;
         int screen_height = render_buf->wlr_buffer->height;
-	VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
-	renderer->scissor = rect;
 
 	int framebuffer_idx = render_buf->framebuffer_idx;
-        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
-                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
-	// Bind pipe
+	// Begin render pass and bind pipeline, if necessary
         VkPipeline pipe = renderer->current_render_buffer->render_setup->simple_tex_pipe;
         if (pipe != renderer->bound_pipe) {
                 vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
                 renderer->bound_pipe = pipe;
         }
+
+        VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
+        renderer->scissor = rect;
+
+        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
+                render_buf->render_setup->render_pass, rect, screen_width, screen_height);
 
 	// Bind descriptor sets
         vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,

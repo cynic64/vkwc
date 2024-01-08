@@ -13,6 +13,7 @@
 #include <stdio.h>
 
 #include <wlr/interfaces/wlr_buffer.h>
+#include "util.h"
 
 static const struct wlr_texture_impl texture_impl;
 
