@@ -228,12 +228,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 desc_sets, 0, NULL);
 
 	// Draw
-        // Unfortunately the rest of wlroots (although I only use the hardware
-        // cursor) is row-major, otherwise I would set column-major in the
-        // shader and avoid the transpose.
 	struct PushConstants push_constants;
         glm_mat4_inv(matrix, push_constants.mat4);
-        glm_mat4_transpose(push_constants.mat4);
 
 	// This used to be more complicated. Go back to TinyWL's way if something breaks.
 	push_constants.uv_off[0] = 0;
@@ -539,7 +535,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
         // Draw frame counter. render_rect_simple doesn't draw from one
         // framebuffer into the other, we don't have to increment framebuffer_idx
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	//render_rect_simple(renderer, color, 10, 10, 10, 10);
+	render_rect_simple(renderer, color, 10, 10, 10, 10);
 
 	// Draw each surface
         for (int i = 0; i < surface_count; i++) {

@@ -5,7 +5,7 @@ layout(set = 0, binding = 0) uniform sampler2D current_frame;
 // This is the window texture
 layout(set = 1, binding = 0) uniform sampler2D tex;
 
-layout(std140, push_constant, row_major) uniform UBO {
+layout(std140, push_constant) uniform UBO {
 	mat4 proj;
 	vec2 uv_offset;
 	vec2 uv_size;
