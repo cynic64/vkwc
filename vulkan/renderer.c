@@ -33,8 +33,6 @@ static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
 static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
 static const size_t start_descriptor_pool_size = 256u;
 static bool default_debug = true;
-static const VkFormat DEPTH_FORMAT = VK_FORMAT_D32_SFLOAT;
-static const VkFormat UV_FORMAT = VK_FORMAT_R16G16B16A16_UNORM;
 
 static const struct wlr_renderer_impl renderer_impl;
 
@@ -1859,117 +1857,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
 	setup->render_format = format;
 
-	// util
-	VkDevice dev = renderer->dev->dev;
-	VkResult res;
-
-	// Intermediate
-	VkAttachmentDescription intermediate_attach = {
-		.format = format,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
-	// Depth
-	VkAttachmentDescription depth_attach = {
-		.format = DEPTH_FORMAT,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	};
-
-	// UV
-	VkAttachmentDescription uv_attach = {
-		.format = UV_FORMAT,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
-	// Attachment references
-	VkAttachmentReference intermediate_out_ref = {
-		.attachment = 0,
-		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-	VkAttachmentReference depth_ref = {
-		.attachment = 1,
-		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-	};
-	VkAttachmentReference uv_attach_ref = {
-		.attachment = 2,
-		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
-	VkAttachmentReference render_attachments[] = {intermediate_out_ref, uv_attach_ref};
-
-	VkSubpassDescription render_subpass = {
-		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-		.colorAttachmentCount = sizeof(render_attachments) / sizeof(render_attachments[0]),
-		.pColorAttachments = render_attachments,
-		.pDepthStencilAttachment = &depth_ref,
-	};
-
-        VkSubpassDescription subpasses[] = {render_subpass};
-
-	VkSubpassDependency deps[2] = {0};
-        // I think there's multiple things rolled into one here. Among other
-        // things, vertex buffer reads wait on transfer writes and texture
-        // reads wait on color attachment output
-	deps[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	deps[0].srcStageMask = VK_PIPELINE_STAGE_HOST_BIT |
-		VK_PIPELINE_STAGE_TRANSFER_BIT |
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT |
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	deps[0].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT |
-		VK_ACCESS_TRANSFER_WRITE_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	deps[0].dstSubpass = 0;
-	deps[0].dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
-	deps[0].dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT |
-		VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
-		VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-		VK_ACCESS_SHADER_READ_BIT;
-
-	// Memory reads and writes must wait on this frame finishing rendering
-	deps[1].srcSubpass = 0;
-	deps[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	deps[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-	deps[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT |
-		VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	deps[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT |
-		VK_ACCESS_MEMORY_READ_BIT;
-
-	VkAttachmentDescription attachments[] = {
-                intermediate_attach,
-                depth_attach,
-                uv_attach,
-        };
-
-	VkRenderPassCreateInfo rpass_info = {0};
-	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	rpass_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
-	rpass_info.pAttachments = attachments;
-	rpass_info.subpassCount = sizeof(subpasses) / sizeof(subpasses[0]);
-	rpass_info.pSubpasses = subpasses;
-	rpass_info.dependencyCount = sizeof(deps) / sizeof(deps[0]);
-	rpass_info.pDependencies = deps;
-
-	res = vkCreateRenderPass(dev, &rpass_info, NULL, &setup->render_pass);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("Failed to create render pass", res);
-		free(setup);
-		return NULL;
-	}
+        create_render_pass(renderer->dev->dev, format, &setup->render_pass);
 
 	if (!init_tex_pipeline(renderer, setup->render_pass, renderer->pipe_layout, &setup->tex_pipe)) {
 		goto error;
