@@ -11,7 +11,7 @@ layout(std140, push_constant) uniform UBO {
 	vec2 uv_size;
         vec4 color;
         vec2 surface_id;
-        vec2 screen_dims;
+        vec2 surface_dims;
 } data;
 
 layout(location = 0) in vec2 global_uv;
@@ -40,15 +40,35 @@ vec2 get_local_uv() {
         return inverted.xy / inverted.w;
 }
 
+vec4 get_outside_color(vec2 uv) {
+        float x_dist, y_dist;
+        if (uv.x > 1) x_dist = data.surface_dims.x * (uv.x - 1);
+        if (uv.x < 0) x_dist = data.surface_dims.x * -uv.x;
+        if (uv.y > 1) y_dist = data.surface_dims.y * (uv.y - 1);
+        if (uv.y < 0) y_dist = data.surface_dims.y * -uv.y;
+
+        if (x_dist < 0) x_dist = 0;
+        if (y_dist < 0) y_dist = 0;
+
+        float dist_sq = x_dist * x_dist + y_dist * y_dist;
+        if (dist_sq > 15*15 && dist_sq < 16*16) {
+                return vec4(1);
+        } else {
+                return vec4(0);
+        }
+}
+
 void main() {
         vec2 uv = get_local_uv();
 
         float thing = 0;
         if (uv.x > 0 && uv.x < 1 && uv.y > 0 && uv.y < 1) {
+                // We're in the window
                 out_color = vec4(texture(tex, uv).rgb, 0.9);
                 out_uv = vec4(uv, data.surface_id.x, 1);
         } else {
-                out_color = vec4(uv, 0, 0.5);
+                // We're outside the window
+                out_color = get_outside_color(uv);
                 out_uv = vec4(0);
         }
 }

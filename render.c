@@ -192,7 +192,9 @@ void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRec
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
 void render_texture(struct wlr_renderer *wlr_renderer,
-                struct wlr_texture *wlr_texture, mat4 matrix, float surface_id, bool render_uv) {
+                struct wlr_texture *wlr_texture, mat4 matrix,
+                int surface_width, int surface_height,
+                float surface_id, bool render_uv) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
@@ -307,8 +309,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 	push_constants.uv_size[1] = 1;
         push_constants.surface_id[0] = surface_id;
         push_constants.surface_id[1] = render_uv ? 1 : 0;
-        push_constants.screen_dims[0] = screen_width;
-        push_constants.screen_dims[1] = screen_height;
+        push_constants.surface_dims[0] = surface_width;
+        push_constants.surface_dims[1] = surface_height;
 
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -347,7 +349,8 @@ static void render_surface(struct wlr_output *output, struct Surface *surface) {
         // Only make the surface clickable if it's an XDG surface.
         bool render_uv = surface->xdg_surface != NULL;
 
-	render_texture(output->renderer, texture, surface->matrix, surface->id, render_uv);
+	render_texture(output->renderer, texture, surface->matrix,
+                surface->width, surface->height, surface->id, render_uv);
 }
 
 // Comparison function so we can qsort surfaces by Z.

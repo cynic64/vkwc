@@ -29,7 +29,7 @@ struct PushConstants {
         // be 1 except for textures we want to draw without them absorbing
         // clicks, like Firefox's weird subsurface setup.
         float surface_id[2];
-        float screen_dims[2];
+        float surface_dims[2];
 };
 
 struct wlr_vk_descriptor_pool;
