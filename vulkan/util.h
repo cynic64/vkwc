@@ -33,7 +33,4 @@ void cbuf_begin_onetime(VkCommandBuffer cbuf);
 
 void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float clear_color[4]);
 
-double vulkan_get_elapsed(VkDevice device, VkQueryPool query_pool, double timestamp_period,
-                int start_idx);
-
 #endif // vulkan_util_h_INCLUDED

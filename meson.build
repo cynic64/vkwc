@@ -62,6 +62,7 @@ sources = files(
   'vulkan/texture.c',
   'vulkan/error.c',
   'vulkan/util.c',
+  'vulkan/timer.c',
   'vulkan/vulkan.c',
   'vulkan/render_pass.c',
   'vulkan/pipeline.c',

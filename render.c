@@ -42,6 +42,7 @@
 
 #include "render.h"
 #include "vulkan/util.h"
+#include "vulkan/timer.h"
 #include "util.h"
 #include "render/vulkan.h"
 #include "vulkan/render_pass.h"
