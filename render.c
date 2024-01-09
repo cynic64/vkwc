@@ -303,10 +303,6 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         glm_mat4_inv(matrix, push_constants.mat4);
 
 	// This used to be more complicated. Go back to TinyWL's way if something breaks.
-	push_constants.uv_off[0] = 0;
-	push_constants.uv_off[1] = 0;
-	push_constants.uv_size[0] = 1;
-	push_constants.uv_size[1] = 1;
         push_constants.surface_id[0] = surface_id;
         push_constants.surface_id[1] = render_uv ? 1 : 0;
         push_constants.surface_dims[0] = surface_width;
@@ -527,7 +523,7 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         VkRect2D rect = {{0, 0}, {width, height}};
         renderer->scissor = rect;
 
-        // Transition intermediate ot SHADER_READ_ONLY_OPTIMAL - I wanted the
+        // Transition intermediate to SHADER_READ_ONLY_OPTIMAL - I wanted the
         // render pass to this for me but it doesn't for whatever reason.
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,

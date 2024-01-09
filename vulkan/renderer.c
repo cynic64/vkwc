@@ -991,11 +991,6 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
         struct PushConstants vert_pcr_data;
         mat3_to_mat4(final_matrix, vert_pcr_data.mat4);
 
-        vert_pcr_data.uv_off[0] = box->x / wlr_texture->width;
-        vert_pcr_data.uv_off[1] = box->y / wlr_texture->height;
-        vert_pcr_data.uv_size[0] = box->width / wlr_texture->width;
-        vert_pcr_data.uv_size[1] = box->height / wlr_texture->height;
-
         vkCmdPushConstants(cbuf, renderer->pipe_layout,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(vert_pcr_data), &vert_pcr_data);

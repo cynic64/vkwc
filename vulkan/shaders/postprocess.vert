@@ -4,8 +4,6 @@
 // alignment. Easier to deal with (tighly-packed) mat4 though.
 layout(std140, push_constant, row_major) uniform UBO {
 	mat4 proj;
-	vec2 uv_offset;
-	vec2 uv_size;
         vec4 color;
         vec2 surface_id;
 } data;

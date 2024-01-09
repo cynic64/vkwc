@@ -20,8 +20,6 @@
 // Used for all shaders
 struct PushConstants {
 	float mat4[4][4];
-	float uv_off[2];
-	float uv_size[2];
         // This is only used when rendering quads
         float color[4];
         // This is only used when rendering textures. First component is

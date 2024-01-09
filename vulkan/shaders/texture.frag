@@ -7,8 +7,6 @@ layout(set = 1, binding = 0) uniform sampler2D tex;
 
 layout(std140, push_constant) uniform UBO {
 	mat4 proj;
-	vec2 uv_offset;
-	vec2 uv_size;
         vec4 color;
         vec2 surface_id;
         vec2 surface_dims;
