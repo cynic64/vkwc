@@ -30,6 +30,7 @@ struct PushConstants {
         // clicks, like Firefox's weird subsurface setup.
         float surface_id[2];
         float surface_dims[2];
+        float screen_dims[2];
         float is_focused;
 };
 

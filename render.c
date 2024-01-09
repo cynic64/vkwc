@@ -311,6 +311,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         push_constants.surface_id[1] = render_uv ? 1 : 0;
         push_constants.surface_dims[0] = surface_width;
         push_constants.surface_dims[1] = surface_height;
+        push_constants.screen_dims[0] = screen_width;
+        push_constants.screen_dims[1] = screen_height;
         push_constants.is_focused = is_focused;
 
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,

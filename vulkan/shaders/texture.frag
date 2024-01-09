@@ -12,6 +12,7 @@ layout(std140, push_constant) uniform UBO {
         vec4 color;
         vec2 surface_id;
         vec2 surface_dims;
+        vec2 screen_dims;
         float is_focused;
 } data;
 
@@ -76,13 +77,29 @@ vec4 get_outside_color(vec2 uv) {
         }
 }
 
+vec3 get_blurred_background() {
+        vec2 uv = global_uv;
+        vec2 halfpixel = 0.5 / (data.screen_dims);
+        float offset = 3.0;
+
+        vec4 sum = texture(current_frame, uv) * 4.0;
+        sum += texture(current_frame, uv - halfpixel.xy * offset);
+        sum += texture(current_frame, uv + halfpixel.xy * offset);
+        sum += texture(current_frame, uv + vec2(halfpixel.x, -halfpixel.y) * offset);
+        sum += texture(current_frame, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
+
+        return (sum / 8.0).rgb;
+}
+
 void main() {
         vec2 uv = get_local_uv();
 
         float thing = 0;
         if (uv.x > 0 && uv.x < 1 && uv.y > 0 && uv.y < 1) {
                 // We're in the window
-                out_color = vec4(texture(tex, uv).rgb, 0.9);
+                vec4 window = texture(tex, uv);
+                vec3 background = get_blurred_background();
+                out_color = vec4(window.rgb * 0.9 + background * 0.1, window.a);
                 out_uv = vec4(uv, data.surface_id.x, 1);
         } else {
                 // We're outside the window
