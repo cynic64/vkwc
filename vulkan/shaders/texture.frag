@@ -72,6 +72,25 @@ vec4 get_outside_color(vec2 uv) {
                 }
         } else if (dist < 16) {
                 return background;
+        }
+
+        // Shadow stuff
+        if (uv.y < 0) y_dist -= 32;
+        y_dist -= 16;
+        x_dist -= 16;
+
+        if (x_dist < 0) x_dist = 0;
+        if (y_dist < 0) y_dist = 0;
+
+        dist = sqrt(x_dist*x_dist + y_dist*y_dist);
+
+        if (dist < 32) {
+                float shadow_opacity = 1 - dist / 32;
+                // Make it fade fast
+                shadow_opacity *= shadow_opacity;
+                shadow_opacity *= shadow_opacity;
+                vec3 shadow_color = bright.rgb;
+                return vec4(shadow_color, 0.5 * shadow_opacity);
         } else {
                 return vec4(0);
         }

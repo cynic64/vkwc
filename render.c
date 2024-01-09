@@ -148,7 +148,7 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
 void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRect2D *rect) {
         // The whole point of making the fragment shader fill was so I'd have
         // some space. This adds it back in.
-        int padding = 64;
+        int padding = 80;
 
         // Figure out where the corners end up
         float corners[4][4] = {
