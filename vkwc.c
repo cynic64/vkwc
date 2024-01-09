@@ -92,6 +92,8 @@ static void surface_handle_destroy(struct wl_listener *listener, void *data) {
 void calc_matrices(struct wl_list *surfaces, int output_width, int output_height) {
 	struct Surface *surface;
 
+        double start_time = get_time();
+
 	wl_list_for_each(surface, surfaces, link) {
 		surface->x_rot += surface->x_rot_speed;
 		surface->y_rot += surface->y_rot_speed;
@@ -197,10 +199,14 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
 		}
 	}
+
+        printf("calc_matrices took %5.3f ms\n", (get_time() - start_time) * 1000);
 }
 
 void check_uv(struct Server *server, int cursor_x, int cursor_y,
         	struct Surface **surface_out, int *surface_x, int *surface_y) {
+        double start_time = get_time();
+
 	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor
 	// and the x and y relative to this surface.
 	// Returns NULL to surface if there is no surface under the cursor.
@@ -224,10 +230,9 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	};
 	assert(render_buffer != NULL);
 
-	// Map the depth buffer
-	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
-
-	VkDeviceSize uv_byte_count = width * height * 4;
+	// Map the UV buffer
+        // We only need a single pixel, so 4 bytes
+	VkDeviceSize uv_byte_count = 4;
 	void *uv_mem;
 	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
 	struct { uint8_t r; uint8_t g; uint8_t b; uint8_t a; } *pixel = uv_mem;
@@ -240,6 +245,7 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
 
 	//printf("id, x, y: %f %f %f\n", pixel_surface_id, pixel_x_norm, pixel_y_norm);
+        printf("check_uv took %5.3f ms\n", (get_time() - start_time) * 1000);
 
 	// Close to 0 means the cursor is above the background, so no surface
 	if (pixel_surface_id < error_margin) {

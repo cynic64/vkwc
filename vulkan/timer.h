@@ -9,7 +9,8 @@
 #define TIMER_RENDER_TEXTURE 6
 #define TIMER_RENDER_END 8
 #define TIMER_RENDER_BEGIN_1 10
-#define TIMER_COUNT 12
+#define TIMER_RENDER_TEXTURE_1 12
+#define TIMER_COUNT 14
 
 double vulkan_get_elapsed(VkDevice device, VkQueryPool query_pool, double timestamp_period,
                 int start_idx);

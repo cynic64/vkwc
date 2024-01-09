@@ -161,6 +161,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
         // There might have already been a texture rendered, so reset the timers
         vkCmdResetQueryPool(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE, 2);
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1, 2);
         // Start GPU timer
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE);
 
@@ -178,7 +179,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-        // Actually copy
+        // Actually copy - this costs about 0.5 ms, or 1/3rd of entire
+        // render_texture. Not good!
         vulkan_copy_image(cbuf, render_buf->intermediates[prev_idx],
                 render_buf->intermediates[framebuffer_idx],
                 VK_IMAGE_ASPECT_COLOR_BIT,
@@ -263,7 +265,14 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(push_constants), &push_constants);
+
+        // This costs about 0.9ms, which sucks! It's actually not the fragment
+        // shader - we can discard() literally every fragment and it only
+        // decreases to 0.8. I guess it's just the cost of outputting to two
+        // fullscreen buffers.
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
 	vkCmdDraw(cbuf, 4, 1, 0, 0);
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
 
         // Finish
 	vkCmdEndRenderPass(cbuf);
@@ -317,8 +326,8 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         render_buf->framebuffer_idx = 0;
 
         if (!renderer->stage.recording) {
-                // Sometimes recording *is* true, unlike vulkan_begin. So I
-                // guess the cursor renders before us? Hardware cursors are
+                // Sometimes stage.recording *is* true, unlike vulkan_begin. So
+                // I guess the cursor renders before us? Hardware cursors are
                 // whack, man.
                 cbuf_begin_onetime(cbuf);
                 renderer->stage.recording = true;
@@ -338,7 +347,6 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
         // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
-        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -357,7 +365,8 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-        // This is REALLY SLOW! I need to squeeze more out of a smaller format I think.
+        // The clears are very slow, about 0.3ms each.
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
         vulkan_clear_image(cbuf, render_buf->uv, (float [4]){0, 0, 0, 1});
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
 
@@ -542,6 +551,9 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         printf("\t[GPU] Most recent render_texture: %5.3f ms\n",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_TEXTURE) * 1000);
+        printf("\t[GPU] Most recent render_texture subsection: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_RENDER_TEXTURE_1) * 1000);
         printf("\t[GPU] render_end: %5.3f ms\n",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_END) * 1000);

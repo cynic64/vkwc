@@ -309,7 +309,7 @@ VkPhysicalDevice vulkan_find_drm_phdev(struct wlr_vk_instance *ini, int drm_fd) 
 		return VK_NULL_HANDLE;
 	}
 
-	for (uint32_t i = 0; i < num_phdevs; ++i) {
+	for (int i = 0; i < num_phdevs; i++) {
 		VkPhysicalDevice phdev = phdevs[i];
 
 		// check whether device supports vulkan 1.1, needed for
