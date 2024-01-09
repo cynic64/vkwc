@@ -11,6 +11,7 @@
 #include <math.h>
 #include <drm_fourcc.h>
 #include <assert.h>
+#include <limits.h>
 
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
@@ -142,6 +143,51 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_RECT);
 }
 
+// Sometimes we want to set a tight scissor around a window that might be
+// rotated weirdly. This figures out the screen coordinates.
+void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRect2D *rect) {
+        // The whole point of making the fragment shader fill was so I'd have
+        // some space. This adds it back in.
+        int padding = 32;
+
+        // Figure out where the corners end up
+        float corners[4][4] = {
+                {0, 0, 0, 1},
+                {1, 0, 0, 1},
+                {0, 1, 0, 1},
+                {1, 1, 0, 1}
+        };
+        int min_x = INT_MAX, min_y = INT_MAX, max_x = INT_MIN, max_y = INT_MIN;
+        for (int i = 0; i < 4; i++) {
+                float dest[4];
+                glm_mat4_mulv(matrix, corners[i], dest);
+                dest[0] /= dest[3];
+                dest[1] /= dest[3];
+                int x = (dest[0] * 0.5 + 0.5) * screen_width;
+                int y = (dest[1] * 0.5 + 0.5) * screen_height;
+
+                if (x < min_x) min_x = x;
+                if (y < min_y) min_y = y;
+                if (x > max_x) max_x = x;
+                if (y > max_y) max_y = y;
+        }
+        min_x -= padding;
+        min_y -= padding;
+        max_x += padding;
+        max_y += padding;
+
+        if (min_x < 0) min_x = 0;
+        if (min_y < 0) min_y = 0;
+        if (max_x > screen_width) max_x = screen_width;
+        if (max_y > screen_height) max_y = screen_height;
+
+        rect->offset.x = min_x;
+        rect->offset.y = min_y;
+        rect->extent.width = max_x - min_x;
+        rect->extent.height = max_y - min_y;
+}
+
+
 // Set render_uv to false to, well, not render to the UV texture. That will
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
@@ -234,7 +280,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         // I could scissor to only the region being drawn to. I'm not sure it's
         // worth it though, especially because it gets complicated with
         // spinning surfaces and such.
-        VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
+        VkRect2D rect;
+        get_rect_for_matrix(screen_width, screen_height, matrix, &rect);
         renderer->scissor = rect;
 
         // Starts the command buffer and enters the render pass
