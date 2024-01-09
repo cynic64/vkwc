@@ -31,6 +31,7 @@
 #include "vulkan/util.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/pipeline.h"
+#include "vulkan/timer.h"
 #include "../util.h"
 
 static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
@@ -1490,16 +1491,6 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
 	sinfo.pCode = postprocess_frag_data;
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_frag_module);
         assert(res == VK_SUCCESS);
-
-        // Query pool
-        VkQueryPoolCreateInfo query_info = {0};
-        query_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-        query_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        // One query before a call, one after.
-        query_info.queryCount = 2;
-
-        res = vkCreateQueryPool(dev, &query_info, NULL, &renderer->query_pool);
-        assert(res == VK_SUCCESS);
 }
 
 static struct wlr_vk_render_format_setup *find_or_create_render_setup(
@@ -1613,6 +1604,15 @@ struct wlr_renderer *vulkan_renderer_create_for_device(struct wlr_vk_device *dev
 		wlr_vk_error("vkAllocateCommandBuffers", res);
 		goto error;
 	}
+
+        // Timestamp query pool
+        VkQueryPoolCreateInfo query_info = {0};
+        query_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+        query_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        query_info.queryCount = TIMER_COUNT;
+
+        res = vkCreateQueryPool(dev->dev, &query_info, NULL, &renderer->query_pool);
+        assert(res == VK_SUCCESS);
 
 	return &renderer->wlr_renderer;
 

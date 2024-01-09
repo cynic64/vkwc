@@ -227,15 +227,15 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	// Map the depth buffer
 	int width = render_buffer->wlr_buffer->width, height = render_buffer->wlr_buffer->height;
 
-	VkDeviceSize uv_byte_count = width * height * 8;
+	VkDeviceSize uv_byte_count = width * height * 4;
 	void *uv_mem;
 	vkMapMemory(renderer->dev->dev, render_buffer->host_uv_mem, 0, uv_byte_count, 0, &uv_mem);
-	struct { uint16_t r; uint16_t g; uint16_t b; uint16_t a; } *pixel = uv_mem;
+	struct { uint8_t r; uint8_t g; uint8_t b; uint8_t a; } *pixel = uv_mem;
 
-	float pixel_surface_id = (double) pixel[0].b / UINT16_MAX;
-	double pixel_x_norm = (double) pixel[0].r / UINT16_MAX;
-	double pixel_y_norm = (double) pixel[0].g / UINT16_MAX;
-	double error_margin = 1.0 / 65536;
+	float pixel_surface_id = (double) pixel[0].b / UINT8_MAX;
+	double pixel_x_norm = (double) pixel[0].r / UINT8_MAX;
+	double pixel_y_norm = (double) pixel[0].g / UINT8_MAX;
+	double error_margin = 1.0 / 256;
 
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
 

@@ -73,6 +73,11 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         assert(render_buf != NULL);
         assert(cbuf != NULL);
 
+        // There might have already been a rect drawn, so reset the timers
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, TIMER_RENDER_RECT, 2);
+
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_RECT);
+
         // Bind pipeline, if necessary
         VkPipeline pipe = render_buf->render_setup->quad_pipe;
         if (pipe != renderer->bound_pipe) {
@@ -133,6 +138,8 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
+
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_RECT);
 }
 
 // Set render_uv to false to, well, not render to the UV texture. That will
@@ -143,12 +150,19 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
+        double start_time = get_time();
+
         int screen_width = render_buf->wlr_buffer->width;
         int screen_height = render_buf->wlr_buffer->height;
 
         VkCommandBuffer cbuf = renderer->cb;
         assert(render_buf != NULL);
         assert(cbuf != NULL);
+
+        // There might have already been a texture rendered, so reset the timers
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE, 2);
+        // Start GPU timer
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE);
 
         // Copy the pixels from the previous buffer into this one
         // Previous image is already in IMAGE_LAYOUT_TRANSFER_SRC
@@ -261,9 +275,14 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
+        // End GPU timer
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE);
 
         // I don't really know what this does, vulkan_texture_destroy uses it
         texture->last_used = renderer->frame;
+
+        printf("\t[CPU] render_texture: %5.3f ms\n", (get_time() - start_time) * 1000);
+
 }
 
 static void render_surface(struct wlr_output *output, struct Surface *surface) {
@@ -306,18 +325,11 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         }
 
         // Reset timers
-        vkCmdResetQueryPool(cbuf, renderer->query_pool, 0, 2);
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, 0, TIMER_COUNT);
 
-        vkCmdWriteTimestamp(cbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, renderer->query_pool, 0);
-
-        // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
-        vulkan_image_transition_cbuf(renderer->cb,
-                renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                // Want to wait for whoever was reading from it before we write to it
-                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
+        // Start GPU timers
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN);
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_EVERYTHING);
 
 	renderer->render_width = width;
 	renderer->render_height = height;
@@ -326,6 +338,7 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
         // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -344,7 +357,9 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
+        // This is REALLY SLOW! I need to squeeze more out of a smaller format I think.
         vulkan_clear_image(cbuf, render_buf->uv, (float [4]){0, 0, 0, 1});
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
 
         // Transition UV back to COLOR_ATTACHMENT_OPTIMAL
         vulkan_image_transition_cbuf(cbuf,
@@ -390,6 +405,9 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
                 VK_ACCESS_NONE, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                 1);
+
+        // End GPU timer
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN);
 }
 
 void render_end(struct wlr_renderer *wlr_renderer) {
@@ -402,6 +420,9 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         int width = renderer->render_width;
         int height = renderer->render_height;
+
+        // Start GPU timer
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_END);
 
 	// Copy UV to host-visible memory, but only the pixel under the cursor
         // Transition UV to TRANSFER_SRC_OPTIMAL
@@ -489,24 +510,44 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         vkCmdEndRenderPass(cbuf);
 
-        vkCmdWriteTimestamp(cbuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                renderer->query_pool, 1);
+        // End GPU timer
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_EVERYTHING);
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END);
 
         // Submit
         double pre_submit_time = get_time();
+        double elapsed = (pre_submit_time - start_time) * 1000;
+        printf("\t[CPU] render_end up to submit: %5.3f ms\n", elapsed);
+
         cbuf_submit_wait(renderer->dev->queue, renderer->cb);
-        double elapsed = (get_time() - pre_submit_time) * 1000;
-        printf("\tSubmit took %5.2f ms on CPU\n", elapsed);
+
+        elapsed = (get_time() - pre_submit_time) * 1000;
+        printf("\t[CPU] Submit: %5.2f ms\n", elapsed);
 
         renderer->stage.recording = false;
 	renderer->bound_pipe = VK_NULL_HANDLE;
 	renderer->render_width = 0;
 	renderer->render_height = 0;
 
-        // Check timestamps
-        printf("\tSubmit took %5.3f ms on GPU\n",
+        // Check GPU timestamps
+        printf("\t[GPU] render_begin: %5.3f ms\n",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, 0) * 1000);
+                        renderer->dev->instance->timestamp_period, TIMER_RENDER_BEGIN) * 1000);
+        printf("\t[GPU] render_begin subsection: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_RENDER_BEGIN_1) * 1000);
+        printf("\t[GPU] Most recent render_rect: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_RENDER_RECT) * 1000);
+        printf("\t[GPU] Most recent render_texture: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_RENDER_TEXTURE) * 1000);
+        printf("\t[GPU] render_end: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_RENDER_END) * 1000);
+        printf("\t[GPU] Entire pipeline: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_EVERYTHING) * 1000);
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;
