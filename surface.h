@@ -25,12 +25,16 @@ struct Surface {
 					// TODO: make it null when toplevel instead
 
 	mat4 matrix;
-	int width, height;
+        int width, height;
+	int tex_width, tex_height;
 
 	// Set these and calc_matrices will do the rest. Rotations in radians, speeds in radians per frame.
 	float x, y, z;
 	double x_rot, y_rot, z_rot;
 	double x_rot_speed, y_rot_speed, z_rot_speed;
+
+        // Timestamp when the surface was created
+        double spawn_time;
 };
 
 struct Surface *find_surface(struct wlr_surface *needle, struct wl_list *haystack);

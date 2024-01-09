@@ -30,6 +30,7 @@ struct PushConstants {
         float surface_dims[2];
         float screen_dims[2];
         float is_focused;
+        float time_since_spawn;
 };
 
 struct wlr_vk_descriptor_pool;

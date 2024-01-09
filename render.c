@@ -194,6 +194,7 @@ void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRec
 void render_texture(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, mat4 matrix,
                 int surface_width, int surface_height, bool is_focused,
+                float time_since_spawn,
                 float surface_id, bool render_uv) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
@@ -310,6 +311,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         push_constants.screen_dims[0] = screen_width;
         push_constants.screen_dims[1] = screen_height;
         push_constants.is_focused = is_focused;
+        push_constants.time_since_spawn = time_since_spawn;
 
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -349,7 +351,8 @@ static void render_surface(struct wlr_output *output, struct Surface *surface, b
         bool render_uv = surface->xdg_surface != NULL;
 
 	render_texture(output->renderer, texture, surface->matrix,
-                surface->width, surface->height, is_focused, surface->id, render_uv);
+                surface->width, surface->height,
+                is_focused, get_time() - surface->spawn_time, surface->id, render_uv);
 }
 
 // Comparison function so we can qsort surfaces by Z.

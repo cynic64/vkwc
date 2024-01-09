@@ -102,7 +102,14 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 		assert(surface->toplevel != NULL);
 
 		bool is_toplevel = surface->toplevel == surface;
+                double time = get_time();
 		if (is_toplevel) {
+                        // This makes the windows zoom in when they spawn
+                        float scale_factor = (time - surface->spawn_time) / 0.1;
+                        if (scale_factor > 1) scale_factor = 1;
+                        surface->width = scale_factor * surface->tex_width;
+                        surface->height = scale_factor * surface->tex_height;
+
 			glm_mat4_identity(surface->matrix);
 
 			mat4 view;
@@ -774,6 +781,9 @@ static struct Surface *create_surface(struct Server *server, struct wl_list *sur
 	surface->wlr_surface = wlr_surface;
 	surface->toplevel = NULL;
 	surface->id = (double) rand() / RAND_MAX;
+        surface->spawn_time = get_time();
+        surface->x = server->cursor->x - server->output->width / 2;
+        surface->y = server->cursor->y - server->output->height / 2;
 
 	wl_list_insert(surfaces->prev, &surface->link);
 
@@ -788,13 +798,13 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 	struct wlr_xdg_surface *xdg_surface = surface->xdg_surface;
 	struct wlr_surface *wlr_surface = xdg_surface->surface;
 
-	surface->width = wlr_surface->current.width;
-	surface->height = wlr_surface->current.height;
+	surface->tex_width = wlr_surface->current.width;
+	surface->tex_height = wlr_surface->current.height;
 
 	focus_surface(server->seat, surface);
 
 	printf("Surface mapped (id %f), set dims to %d %d\n",
-                surface->id, surface->width, surface->height);
+                surface->id, surface->tex_width, surface->tex_height);
 }
 
 // Adds a subsurface to the server's list of surfaces.
