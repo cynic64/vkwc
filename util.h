@@ -8,4 +8,6 @@ struct wlr_scene_node *get_toplevel_node(struct wlr_scene_node *node);
 
 void print_scene_graph(struct wlr_scene_node *node, int	level);
 
+double get_time();
+
 #endif // util_h_INCLUDED

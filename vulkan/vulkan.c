@@ -317,6 +317,10 @@ VkPhysicalDevice vulkan_find_drm_phdev(struct wlr_vk_instance *ini, int drm_fd) 
 		VkPhysicalDeviceProperties phdev_props;
 		vkGetPhysicalDeviceProperties(phdev, &phdev_props);
 
+                // Timestamp period in nanoseconds
+                printf("Timestamp period: %f\n", phdev_props.limits.timestampPeriod);
+                ini->timestamp_period = phdev_props.limits.timestampPeriod;
+
 		log_phdev(&phdev_props);
 
 		if (phdev_props.apiVersion < VK_API_VERSION_1_1) {
@@ -458,10 +462,13 @@ struct wlr_vk_device *vulkan_device_create(struct wlr_vk_instance *ini,
 		vkGetPhysicalDeviceQueueFamilyProperties(phdev, &qfam_count,
 			queue_props);
 
-		bool graphics_found = false;
+		bool graphics_found = false, timestamp_found = false;
 		for (unsigned i = 0u; i < qfam_count; ++i) {
 			graphics_found = queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
-			if (graphics_found) {
+                        // This lets us use vkCmdWriteTimestamp() and friends,
+                        // so we can measure time of individual commands.
+                        timestamp_found = queue_props[i].timestampValidBits > 0;
+			if (graphics_found && timestamp_found) {
 				dev->queue_family = i;
 				break;
 			}

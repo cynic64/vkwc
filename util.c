@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "util.h"
 
@@ -67,4 +68,10 @@ void print_scene_graph(struct wlr_scene_node *node, int	level) {
 	wl_list_for_each(child,	&node->parent->children, link) {
 		print_scene_graph(child, level + 1);
 	}
+}
+
+double get_time() {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+        return ts.tv_sec + (double) ts.tv_nsec / 1000000000;
 }

@@ -42,8 +42,12 @@
 
 #include "render.h"
 #include "vulkan/util.h"
+#include "util.h"
 #include "render/vulkan.h"
 #include "vulkan/render_pass.h"
+
+static double start_time = 0;
+static int frame_count = 0;
 
 struct RenderData {
 	struct wlr_output *output;
@@ -288,14 +292,22 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         assert(render_buf != NULL);
+        VkCommandBuffer cbuf = renderer->cb;
 
         render_buf->framebuffer_idx = 0;
 
-        VkCommandBuffer cbuf = renderer->cb;
         if (!renderer->stage.recording) {
+                // Sometimes recording *is* true, unlike vulkan_begin. So I
+                // guess the cursor renders before us? Hardware cursors are
+                // whack, man.
                 cbuf_begin_onetime(cbuf);
                 renderer->stage.recording = true;
         }
+
+        // Reset timers
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, 0, 2);
+
+        vkCmdWriteTimestamp(cbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, renderer->query_pool, 0);
 
         // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
         vulkan_image_transition_cbuf(renderer->cb,
@@ -384,6 +396,8 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         VkCommandBuffer cbuf = renderer->cb;
+
+        double start_time = get_time();
 
         int width = renderer->render_width;
         int height = renderer->render_height;
@@ -474,14 +488,24 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         vkCmdEndRenderPass(cbuf);
 
+        vkCmdWriteTimestamp(cbuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                renderer->query_pool, 1);
+
         // Submit
+        double pre_submit_time = get_time();
         cbuf_submit_wait(renderer->dev->queue, renderer->cb);
+        double elapsed = (get_time() - pre_submit_time) * 1000;
+        printf("\tSubmit took %5.2f ms on CPU\n", elapsed);
+
         renderer->stage.recording = false;
-
 	renderer->bound_pipe = VK_NULL_HANDLE;
-
 	renderer->render_width = 0;
 	renderer->render_height = 0;
+
+        // Check timestamps
+        printf("\tSubmit took %5.3f ms on GPU\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, 0) * 1000);
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;
@@ -506,6 +530,12 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
 // `surfaces` should be a list of struct Surface, defined in vkwc.c
 bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
+        if (start_time == 0) {
+                start_time = get_time();
+        }
+
+        double frame_start_time = get_time();
+
 	// Get the renderer, i.e. Vulkan or GLES2
 	struct wlr_renderer *renderer =	output->renderer;
 	assert(renderer	!= NULL);
@@ -549,13 +579,22 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
 
 	// Finish
 	render_end(renderer);
+
         renderer->rendering = false;
+
+        double total_elapsed = get_time() - start_time;
+        double framerate = (double) frame_count / total_elapsed;
+        double frame_ms = (get_time() - frame_start_time) * 1000;
 
 	vk_renderer->cursor_x = cursor_x;
 	vk_renderer->cursor_y = cursor_y;
 
 	int tr_width, tr_height;
 	wlr_output_transformed_resolution(output, &tr_width, &tr_height);
+
+        printf("Average FPS: %10.5f, ms this frame: %5.2f\n", framerate, frame_ms);
+
+        frame_count++;
 
 	return wlr_output_commit(output);
 }

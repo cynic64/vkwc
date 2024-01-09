@@ -31,6 +31,7 @@
 #include "vulkan/util.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/pipeline.h"
+#include "../util.h"
 
 static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
 static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
@@ -819,6 +820,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
         VkCommandBuffer cbuf = renderer->cb;
+        assert(renderer->stage.recording == false);
         if (!renderer->stage.recording) {
                 cbuf_begin_onetime(cbuf);
                 renderer->stage.recording = true;
@@ -879,7 +881,11 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
         );
 
         // Submit
+        double start_time = get_time();
         cbuf_submit_wait(renderer->dev->queue, renderer->cb);
+        double elapsed = (get_time() - start_time) * 1000;
+        printf("Cursor submit took %5.2f ms\n", elapsed);
+
         renderer->stage.recording = false;
 
 	renderer->bound_pipe = VK_NULL_HANDLE;
@@ -1146,6 +1152,8 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 	vkDestroyDescriptorSetLayout(dev->dev, renderer->tex_desc_layout, NULL);
 	vkDestroySampler(dev->dev, renderer->sampler, NULL);
 	vkDestroyCommandPool(dev->dev, renderer->command_pool, NULL);
+
+        vkDestroyQueryPool(dev->dev, renderer->query_pool, NULL);
 
 	struct wlr_vk_instance *ini = dev->instance;
 	vulkan_device_destroy(dev);
@@ -1481,6 +1489,16 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
 	sinfo.codeSize = sizeof(postprocess_frag_data);
 	sinfo.pCode = postprocess_frag_data;
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->postprocess_frag_module);
+        assert(res == VK_SUCCESS);
+
+        // Query pool
+        VkQueryPoolCreateInfo query_info = {0};
+        query_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+        query_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        // One query before a call, one after.
+        query_info.queryCount = 2;
+
+        res = vkCreateQueryPool(dev, &query_info, NULL, &renderer->query_pool);
         assert(res == VK_SUCCESS);
 }
 

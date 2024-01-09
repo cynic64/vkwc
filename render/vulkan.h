@@ -43,6 +43,10 @@ struct wlr_vk_instance {
 	size_t extension_count;
 	const char **extensions;
 
+        // How many nanoseconds it takes for the timestamp counter to increase
+        // by 1.
+        float timestamp_period;
+
 	struct {
 		PFN_vkCreateDebugUtilsMessengerEXT createDebugUtilsMessengerEXT;
 		PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugUtilsMessengerEXT;
@@ -246,8 +250,10 @@ struct wlr_vk_renderer {
 	VkCommandBuffer cb;
 	VkPipeline bound_pipe;
 
-        // TODO: Maybe get rid of these and use
-        // current_render_buffer->wlr_buffer->{width,height} instead?
+        // This actually isn't the same as
+        // current_render_buffer->wlr_buffer->{width,height} - they are the
+        // same for the main render but only like 16x16 when the cursor is
+        // being drawn.
 	uint32_t render_width;
 	uint32_t render_height;
 
@@ -268,6 +274,9 @@ struct wlr_vk_renderer {
 	int cursor_y;
 	bool should_copy_uv;
         int postprocess_mode;
+
+        // Lets us measure how long individual calls take
+        VkQueryPool query_pool;
 
 	struct {
 		VkCommandBuffer cb;

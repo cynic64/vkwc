@@ -1,5 +1,5 @@
-#ifndef util_h_INCLUDED
-#define util_h_INCLUDED
+#ifndef vulkan_util_h_INCLUDED
+#define vulkan_util_h_INCLUDED
 
 // This file is for stuff that isn't specific to my compositor, just generic
 // helper functions.
@@ -33,4 +33,7 @@ void cbuf_begin_onetime(VkCommandBuffer cbuf);
 
 void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float clear_color[4]);
 
-#endif // util_h_INCLUDED
+double vulkan_get_elapsed(VkDevice device, VkQueryPool query_pool, double timestamp_period,
+                int start_idx);
+
+#endif // vulkan_util_h_INCLUDED
