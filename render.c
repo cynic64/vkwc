@@ -148,7 +148,7 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
 void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRect2D *rect) {
         // The whole point of making the fragment shader fill was so I'd have
         // some space. This adds it back in.
-        int padding = 32;
+        int padding = 64;
 
         // Figure out where the corners end up
         float corners[4][4] = {
@@ -193,7 +193,7 @@ void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRec
 // instead.
 void render_texture(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, mat4 matrix,
-                int surface_width, int surface_height,
+                int surface_width, int surface_height, bool is_focused,
                 float surface_id, bool render_uv) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
@@ -311,6 +311,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         push_constants.surface_id[1] = render_uv ? 1 : 0;
         push_constants.surface_dims[0] = surface_width;
         push_constants.surface_dims[1] = surface_height;
+        push_constants.is_focused = is_focused;
 
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -339,7 +340,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
 }
 
-static void render_surface(struct wlr_output *output, struct Surface *surface) {
+static void render_surface(struct wlr_output *output, struct Surface *surface, bool is_focused) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
 	if (texture == NULL) {
                 //printf("Could not render surface (dims %d %d)\n", surface->width, surface->height);
@@ -350,7 +351,7 @@ static void render_surface(struct wlr_output *output, struct Surface *surface) {
         bool render_uv = surface->xdg_surface != NULL;
 
 	render_texture(output->renderer, texture, surface->matrix,
-                surface->width, surface->height, surface->id, render_uv);
+                surface->width, surface->height, is_focused, surface->id, render_uv);
 }
 
 // Comparison function so we can qsort surfaces by Z.
@@ -629,7 +630,8 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 }
 
 // `surfaces` should be a list of struct Surface, defined in vkwc.c
-bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_x, int cursor_y) {
+bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
+                struct Surface *focused_surface, int cursor_x, int cursor_y) {
         if (start_time == 0) {
                 start_time = get_time();
         }
@@ -674,7 +676,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces, int cursor_
                         continue;
                 }
 
-		render_surface(output, surface);
+		render_surface(output, surface, surface == focused_surface);
 	};
 
 	// Finish

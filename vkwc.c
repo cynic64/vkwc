@@ -402,6 +402,13 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
 			surface->z_rot = 0;
 		}
 		return true;
+	} else if (sym == XKB_KEY_F11) {
+		struct Surface *surface;
+		check_uv(server, server->cursor->x, server->cursor->y, &surface, NULL, NULL);
+		if (surface != NULL) {
+			surface->z = 0;
+		}
+		return true;
 	} else if (sym == XKB_KEY_r) {
                 struct wlr_vk_renderer *vk_renderer =
                         (struct wlr_vk_renderer *) server->renderer;
@@ -698,7 +705,8 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	calc_matrices(surfaces, output->width, output->height);
 
 	/* Render the scene if needed and commit the output */
-	draw_frame(output, &server->surfaces, server->cursor->x, server->cursor->y);
+	draw_frame(output, &server->surfaces, server->last_mouse_surface,
+                server->cursor->x, server->cursor->y);
 
 	struct timespec	now;
 	clock_gettime(CLOCK_MONOTONIC, &now);

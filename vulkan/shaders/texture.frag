@@ -12,6 +12,7 @@ layout(std140, push_constant) uniform UBO {
         vec4 color;
         vec2 surface_id;
         vec2 surface_dims;
+        float is_focused;
 } data;
 
 layout(location = 0) in vec2 global_uv;
@@ -50,9 +51,26 @@ vec4 get_outside_color(vec2 uv) {
         if (x_dist < 0) x_dist = 0;
         if (y_dist < 0) y_dist = 0;
 
-        float dist_sq = x_dist * x_dist + y_dist * y_dist;
-        if (dist_sq > 15*15 && dist_sq < 16*16) {
-                return vec4(1);
+        float dist = max(x_dist, y_dist);
+
+        vec4 bright = vec4(0.5, 0.5, 0.5, 1);
+        vec4 dark = vec4(0.05, 0.05, 0.05, 1);
+        vec4 background = vec4(0.012, 0.012, 0.012, 1);
+
+        if (data.is_focused == 0) bright = dark;
+
+        if (dist < 1) {
+                return bright;
+        } else if (uv.y < 0 && y_dist < 48 && x_dist < 16) {
+                // "Titlebar" thing at top
+                if (x_dist <= 0 && y_dist > 16 && y_dist < 32) {
+                        // Little box in titlebar
+                        return dark;
+                } else {
+                        return background;
+                }
+        } else if (dist < 16) {
+                return background;
         } else {
                 return vec4(0);
         }
