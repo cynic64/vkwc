@@ -105,7 +105,9 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
                 double time = get_time();
 		if (is_toplevel) {
                         // This makes the windows zoom in when they spawn
-                        float scale_factor = (time - surface->spawn_time) / 0.1;
+                        float scale_factor = (time - surface->spawn_time) / 0.2;
+                        scale_factor = sqrt(scale_factor);
+                        scale_factor = sqrt(scale_factor);
                         if (scale_factor > 1) scale_factor = 1;
                         surface->width = scale_factor * surface->tex_width;
                         surface->height = scale_factor * surface->tex_height;
@@ -526,6 +528,8 @@ static void server_new_pointer(struct Server *server,
 	 * opportunity to do libinput configuration on the device to set
 	 * acceleration, etc. */
 	wlr_cursor_attach_input_device(server->cursor, device);
+        server->cursor->x = server->output->width / 2;
+        server->cursor->y = server->output->height / 2;
 }
 
 static void handle_new_input(struct wl_listener	*listener, void	*data) {
