@@ -225,12 +225,13 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-        // Actually copy - this costs about 0.5 ms, or 1/3rd of entire
-        // render_texture. Not good!
+        // Actually copy - this costs about 0.75ms in fullscreen :-(
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
         vulkan_copy_image(cbuf, render_buf->intermediates[prev_idx],
                 render_buf->intermediates[framebuffer_idx],
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 0, 0, 0, 0, screen_width, screen_height);
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
 
         // Transition back to TRANSFER_SRC_OPTIMAL because that's what the
         // render pass expects. It's a bit of a weird setup, but it's easier
@@ -313,13 +314,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0, sizeof(push_constants), &push_constants);
 
-        // This costs about 0.9ms, which sucks! It's actually not the fragment
-        // shader - we can discard() literally every fragment and it only
-        // decreases to 0.8. I guess it's just the cost of outputting to two
-        // fullscreen buffers.
-        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
+        // This costs about 0.8ms in fullscreen.
 	vkCmdDraw(cbuf, 4, 1, 0, 0);
-        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
 
         // Finish
 	vkCmdEndRenderPass(cbuf);

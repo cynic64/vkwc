@@ -688,6 +688,8 @@ static void handle_cursor_frame(struct wl_listener *listener, void *data) {
 static void handle_output_frame(struct wl_listener *listener, void *data) {
 	/* This	function is called every time an output	is ready to display a frame,
 	 * generally at	the output's refresh rate (e.g.	60Hz). */
+        double start_time = get_time();
+
 	struct Server *server = wl_container_of(listener, server, output_frame);
 	struct wlr_output *output = server->output;
 
@@ -711,6 +713,8 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 
 	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
 	process_cursor_motion(server, time);
+
+        printf("handle_output_frame took %5.3f ms\n", (get_time() - start_time) * 1000);
 }
 
 static void handle_new_output(struct wl_listener *listener, void *data)	{
