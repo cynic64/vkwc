@@ -281,7 +281,6 @@ struct wlr_vk_renderer {
 
 	struct {
 		VkCommandBuffer cb;
-		bool recording;
 		struct wl_list buffers; // type wlr_vk_shared_buffer
 	} stage;
 };

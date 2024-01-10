@@ -124,8 +124,9 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
 		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 // I wanted to make the render pass make the transition from
-                // TRANSFER_SRC to READ_ONLY but it didn't work for whatever
-                // reason. So I do it by hand in render_end instead.
+                // TRANSFER_SRC to SHADER_READ but I think it doesn't work
+                // because finalLayout is *after* the render pass, and we want
+                // it to be SHARED_READ during the pass.
 		.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
@@ -148,9 +149,6 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                // Again, using this to transition so we can sample it didn't
-                // work. Dunno why. Maybe I need to finally understand how
-                // subpass dependencies work - God forbid!
 		.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};

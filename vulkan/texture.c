@@ -78,6 +78,7 @@ static bool write_pixels(struct wlr_texture *wlr_texture,
 
 	// record staging cb
 	// will be executed before next frame
+        printf("write_pixels with image %p\n", texture->image);
 	vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
                 texture->image, VK_IMAGE_ASPECT_COLOR_BIT,
 		old_layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -284,6 +285,8 @@ static struct wlr_texture *vulkan_texture_from_pixels(struct wlr_renderer *wlr_r
 		wlr_vk_error("vkCreateImage failed", res);
 		goto error;
 	}
+
+        printf("vulkan_texture_from_pixels: new image at %p\n", texture->image);
 
 	// memory
 	VkMemoryRequirements mem_reqs;
@@ -497,6 +500,7 @@ VkImage vulkan_import_dmabuf(struct wlr_vk_renderer *renderer,
 		wlr_vk_error("vkCreateImage", res);
 		return VK_NULL_HANDLE;
 	}
+        printf("vulkan_import_dmabuf: new image at %p\n", image);
 
 	unsigned mem_count = disjoint ? plane_count : 1u;
 	VkBindImageMemoryInfo bindi[WLR_DMABUF_MAX_PLANES] = {0};

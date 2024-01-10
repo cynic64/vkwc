@@ -307,54 +307,6 @@ error_alloc:
 	};
 }
 
-VkCommandBuffer vulkan_record_stage_cb(struct wlr_vk_renderer *renderer) {
-	if (!renderer->stage.recording) {
-		VkCommandBufferBeginInfo begin_info = {0};
-		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		vkBeginCommandBuffer(renderer->stage.cb, &begin_info);
-		renderer->stage.recording = true;
-	}
-
-	return renderer->stage.cb;
-}
-
-bool vulkan_submit_stage_wait(struct wlr_vk_renderer *renderer) {
-	if (!renderer->stage.recording) {
-		return false;
-	}
-
-	vkEndCommandBuffer(renderer->stage.cb);
-	renderer->stage.recording = false;
-
-	VkSubmitInfo submit_info = {0};
-	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submit_info.commandBufferCount = 1u;
-	submit_info.pCommandBuffers = &renderer->stage.cb;
-	VkResult res = vkQueueSubmit(renderer->dev->queue, 1,
-		&submit_info, renderer->fence);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkQueueSubmit", res);
-		return false;
-	}
-
-	res = vkWaitForFences(renderer->dev->dev, 1, &renderer->fence, true,
-		UINT64_MAX);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkWaitForFences", res);
-		return false;
-	}
-
-	// NOTE: don't release stage allocations here since they may still be
-	// used for reading. Will be done next frame.
-	res = vkResetFences(renderer->dev->dev, 1, &renderer->fence);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkResetFences", res);
-		return false;
-	}
-
-	return true;
-}
-
 struct wlr_vk_format_props *vulkan_format_props_from_drm(
 		struct wlr_vk_device *dev, uint32_t drm_fmt) {
 	for (size_t i = 0u; i < dev->format_prop_count; ++i) {
@@ -446,6 +398,7 @@ static void create_image(struct wlr_vk_renderer *renderer,
 	};
 
 	VkResult res = vkCreateImage(renderer->dev->dev, &info, NULL, image);
+        printf("create_image: new image at %p\n", *image);
 	if (res != VK_SUCCESS) {
 		fprintf(stderr, "Couldn't create image\n");
 		exit(1);
@@ -821,11 +774,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
         VkCommandBuffer cbuf = renderer->cb;
-        assert(renderer->stage.recording == false);
-        if (!renderer->stage.recording) {
-                cbuf_begin_onetime(cbuf);
-                renderer->stage.recording = true;
-        }
+        cbuf_begin_onetime(cbuf);
 
         // Transition all intermediates to TRANSFER_SRC, because when we start
         // rendering surfaces, it is assumed that the previous intermediate is
@@ -887,12 +836,9 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
         double elapsed = (get_time() - start_time) * 1000;
         printf("Cursor submit took %5.2f ms\n", elapsed);
 
-        renderer->stage.recording = false;
-
 	renderer->bound_pipe = VK_NULL_HANDLE;
         renderer->render_width = 0u;
         renderer->render_height = 0u;
-
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;
@@ -920,11 +866,6 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
         printf("render_subtex\n");
         struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         VkCommandBuffer cbuf = renderer->cb;
-
-        if (!renderer->stage.recording) {
-                cbuf_begin_onetime(cbuf);
-                renderer->stage.recording = true;
-        }
 
 	struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
@@ -1213,6 +1154,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 		wlr_vk_error("vkCreateImage", res);
 		return false;
 	}
+        printf("vulkan_read_pixels: dst_image at %p\n", dst_image);
 
 	VkMemoryRequirements mem_reqs;
 	vkGetImageMemoryRequirements(dev, dst_image, &mem_reqs);
@@ -1245,7 +1187,8 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 		goto free_memory;
 	}
 
-	VkCommandBuffer cb = vulkan_record_stage_cb(vk_renderer);
+	VkCommandBuffer cb = vk_renderer->stage.cb;
+        cbuf_begin_onetime(cb);
 
         vulkan_image_transition(vk_renderer->dev->dev, vk_renderer->dev->queue,
                 vk_renderer->command_pool,
@@ -1320,9 +1263,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-	if (!vulkan_submit_stage_wait(vk_renderer)) {
-		goto free_memory;
-	}
+        cbuf_submit_wait(vk_renderer->dev->queue, cb);
 
 	VkImageSubresource img_sub_res = {
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,

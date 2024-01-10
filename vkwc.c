@@ -106,6 +106,7 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 		if (is_toplevel) {
                         // This makes the windows zoom in when they spawn
                         float scale_factor = (time - surface->spawn_time) / 0.2;
+                        // Make it first scale up quickly, then slowly reach the final size
                         scale_factor = sqrt(scale_factor);
                         scale_factor = sqrt(scale_factor);
                         if (scale_factor > 1) scale_factor = 1;

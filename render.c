@@ -187,6 +187,15 @@ void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRec
         rect->extent.height = max_y - min_y;
 }
 
+void debug_images(struct wlr_renderer *wlr_renderer) {
+	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+
+        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
+                printf("Intermediate image %d at %p\n", i, render_buf->intermediates[i]);
+        }
+        printf("UV is at %p\n", render_buf->uv);
+}
 
 // Set render_uv to false to, well, not render to the UV texture. That will
 // make it so mouse events go "through" the surface and to whatever's below
@@ -196,6 +205,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 int surface_width, int surface_height, bool is_focused,
                 float time_since_spawn,
                 float surface_id, bool render_uv) {
+        printf("Render texture with dims %d %d\n", surface_width, surface_height);
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
@@ -364,7 +374,7 @@ int surface_comp(const void *a, const void *b) {
         return (a_z > b_z) - (a_z < b_z);
 }
 
-static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
+void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
@@ -373,13 +383,7 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 
         render_buf->framebuffer_idx = 0;
 
-        if (!renderer->stage.recording) {
-                // Sometimes stage.recording *is* true, unlike vulkan_begin. So
-                // I guess the cursor renders before us? Hardware cursors are
-                // whack, man.
-                cbuf_begin_onetime(cbuf);
-                renderer->stage.recording = true;
-        }
+        cbuf_begin_onetime(cbuf);
 
         // Reset timers
         vkCmdResetQueryPool(cbuf, renderer->query_pool, 0, TIMER_COUNT);
@@ -465,6 +469,130 @@ static void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
 
         // End GPU timer
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN);
+}
+
+void insert_barriers(struct wlr_vk_renderer *renderer) {
+	VkCommandBuffer cbuf = renderer->cb;
+        // We need to insert the acquire barriers before everything else
+        // executes. But we already recorded all the draw commands! So we need
+        // a second command buffer that we submit first.
+	VkCommandBuffer pre_cbuf = renderer->stage.cb;
+
+	// Insert acquire and release barriers for dmabuf-images
+	unsigned barrier_count = wl_list_length(&renderer->foreign_textures) + 1;
+	VkImageMemoryBarrier* acquire_barriers = calloc(barrier_count, sizeof(VkImageMemoryBarrier));
+	VkImageMemoryBarrier* release_barriers = calloc(barrier_count, sizeof(VkImageMemoryBarrier));
+
+	struct wlr_vk_texture *texture, *tmp_tex;
+	unsigned idx = 0;
+
+	wl_list_for_each_safe(texture, tmp_tex, &renderer->foreign_textures, foreign_link) {
+                printf("Acquire image at %p\n", texture->image);
+                // I'm not sure exactly what a "foreign texture" is. foot
+                // doesn't create any but imv does, for example. Anyway, if
+                // there is a foreign texture we have to transition it to
+                // SHADER_READ_ONLY_OPTIMAL.
+
+		VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
+		if (!texture->transitioned) {
+			src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+			texture->transitioned = true;
+		}
+
+                // Acquire: make sure it's in SHADER_READ_ONLY before any
+                // shader reads
+		acquire_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		acquire_barriers[idx].srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+		acquire_barriers[idx].dstQueueFamilyIndex = renderer->dev->queue_family;
+		acquire_barriers[idx].image = texture->image;
+		acquire_barriers[idx].oldLayout = src_layout;
+		acquire_barriers[idx].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		acquire_barriers[idx].srcAccessMask = 0u; // ignored anyways
+		acquire_barriers[idx].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		acquire_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		acquire_barriers[idx].subresourceRange.layerCount = 1;
+		acquire_barriers[idx].subresourceRange.levelCount = 1;
+
+                // Release: put it back in LAYOUT_GENERAL? I guess we do it so
+                // they can write a new image? idk.
+		release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
+		release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+		release_barriers[idx].image = texture->image;
+		release_barriers[idx].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		release_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		release_barriers[idx].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		release_barriers[idx].dstAccessMask = 0u; // ignored anyways
+		release_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		release_barriers[idx].subresourceRange.layerCount = 1;
+		release_barriers[idx].subresourceRange.levelCount = 1;
+		++idx;
+
+		wl_list_remove(&texture->foreign_link);
+		texture->owned = false;
+	}
+
+        // Also add acquire/release barriers for the current render buffer.
+        // It's worth noting that I used to not include this, and everything
+        // worked fine. But it's in the original code for vulkan/renderer.c, so
+        // I guess it must do something.
+	VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
+	if (!renderer->current_render_buffer->transitioned) {
+		src_layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+		renderer->current_render_buffer->transitioned = true;
+	}
+
+        // Acquire render buffer before rendering: Transition output image to
+        // LAYOUT_GENERAL before any reads and writes to it.
+	acquire_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	acquire_barriers[idx].srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+	acquire_barriers[idx].dstQueueFamilyIndex = renderer->dev->queue_family;
+	acquire_barriers[idx].image = renderer->current_render_buffer->image;
+	acquire_barriers[idx].oldLayout = src_layout;
+	acquire_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	acquire_barriers[idx].srcAccessMask = 0u; // ignored anyways
+        // Including READ here seems a bit weird because we never read from the
+        // output image. But it was in the original code so fuck it, they know
+        // better than me
+	acquire_barriers[idx].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	acquire_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	acquire_barriers[idx].subresourceRange.layerCount = 1;
+	acquire_barriers[idx].subresourceRange.levelCount = 1;
+
+        // Release render buffer after rendering. This doesn't actually change
+        // the layout but does change the queue family, which I guess is
+        // important.
+	release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
+	release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+	release_barriers[idx].image = renderer->current_render_buffer->image;
+        // We transition the screen image to COLOR_ATTACHMENT_OPTIMAL when we
+        // render to it, so now we have to transition it back to GENERAL
+	release_barriers[idx].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	release_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	release_barriers[idx].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	release_barriers[idx].dstAccessMask = 0u; // ignored anyways
+	release_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	release_barriers[idx].subresourceRange.layerCount = 1;
+	release_barriers[idx].subresourceRange.levelCount = 1;
+	++idx;
+
+        cbuf_begin_onetime(pre_cbuf);
+
+	vkCmdPipelineBarrier(pre_cbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		0, 0, NULL, 0, NULL, barrier_count, acquire_barriers);
+
+	vkCmdPipelineBarrier(cbuf, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL, 0, NULL,
+		barrier_count, release_barriers);
+
+	free(acquire_barriers);
+	free(release_barriers);
+
+        cbuf_submit_wait(renderer->dev->queue, pre_cbuf);
 }
 
 void render_end(struct wlr_renderer *wlr_renderer) {
@@ -567,6 +695,12 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         vkCmdEndRenderPass(cbuf);
 
+        // Acquire and release window textures and output image correctly. It
+        // might seem weird to this in render_end and not render_begin. But I
+        // tried putting in render_begin and it's too early - I think the list
+        // of "foreign textures" gets populated while drawing or something.
+        insert_barriers(renderer);
+
         // End GPU timer
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_EVERYTHING);
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END);
@@ -581,7 +715,6 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         elapsed = (get_time() - pre_submit_time) * 1000;
         printf("\t[CPU] Submit: %5.2f ms\n", elapsed);
 
-        renderer->stage.recording = false;
 	renderer->bound_pipe = VK_NULL_HANDLE;
 	renderer->render_width = 0;
 	renderer->render_height = 0;
@@ -681,6 +814,8 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
 	};
 
 	// Finish
+        debug_images(renderer);
+
 	render_end(renderer);
 
         renderer->rendering = false;
