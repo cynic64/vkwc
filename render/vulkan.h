@@ -13,8 +13,6 @@
 #include "../vulkan/error.h"
 
 #define WLR_VK_RENDER_MODE_COUNT 3
-// Need two intermediate images so we can sample one while rendering the next.
-#define INTERMEDIATE_IMAGE_COUNT 2
 #define POSTPROCESS_MODE_COUNT 2
 
 // Used for all shaders
@@ -183,22 +181,20 @@ struct wlr_vk_render_buffer {
 	struct wlr_vk_render_format_setup *render_setup;
 	struct wl_list link; // wlr_vk_renderer.buffers
 
-	// Need multiple so we can sample one while drawing next
-	VkFramebuffer framebuffers[INTERMEDIATE_IMAGE_COUNT];
-        // We still two because we have to read from whichever one we drew to
-        // last, which could be either one.
-	VkFramebuffer postprocess_framebuffers[INTERMEDIATE_IMAGE_COUNT];
+	VkFramebuffer framebuffer;
+        // The postprocess pass uses different images, so it needs to be
+        // separate.
+	VkFramebuffer postprocess_framebuffer;
+
 	uint32_t mem_count;
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
 	bool transitioned;
-        // Whichever framebuffer used last
-        int framebuffer_idx;
 
 	// Intermediate targets - again, we need multiple
-	VkImage intermediates[INTERMEDIATE_IMAGE_COUNT];
-	VkImageView intermediate_views[INTERMEDIATE_IMAGE_COUNT];
-	VkDeviceMemory intermediate_mems[INTERMEDIATE_IMAGE_COUNT];
-        VkDescriptorSet intermediate_sets[INTERMEDIATE_IMAGE_COUNT];
+	VkImage intermediate;
+	VkImageView intermediate_view;
+	VkDeviceMemory intermediate_mem;
+        VkDescriptorSet intermediate_set;
 
 	// Depth buffer
 	VkImage depth;

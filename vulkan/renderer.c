@@ -331,13 +331,11 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 	vkDestroyImageView(dev, buffer->image_view, NULL);
 	vkDestroyImage(dev, buffer->image, NULL);
 
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                vkDestroyImage(dev, buffer->intermediates[i], NULL);
-                vkDestroyImageView(dev, buffer->intermediate_views[i], NULL);
-                vkFreeMemory(dev, buffer->intermediate_mems[i], NULL);
+        vkDestroyImage(dev, buffer->intermediate, NULL);
+        vkDestroyImageView(dev, buffer->intermediate_view, NULL);
+        vkFreeMemory(dev, buffer->intermediate_mem, NULL);
 
-                vkDestroyFramebuffer(dev, buffer->framebuffers[i], NULL);
-        }
+        vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
 
 	vkDestroyImage(dev, buffer->depth, NULL);
 	vkDestroyImageView(dev, buffer->depth_view, NULL);
@@ -433,42 +431,40 @@ void render_buffer_create_descriptor_sets(struct wlr_vk_renderer *renderer,
                 struct wlr_vk_render_buffer *buffer) {
         // TODO: Make sure the descriptor pools get destroyed
 
-        // Intermediate images
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                struct wlr_vk_descriptor_pool *dpool = vulkan_alloc_texture_ds(renderer,
-                        &buffer->intermediate_sets[i]);
-                assert(dpool != NULL);
+        // Intermediate image
+        struct wlr_vk_descriptor_pool *dpool = vulkan_alloc_texture_ds(renderer,
+                &buffer->intermediate_set);
+        assert(dpool != NULL);
 
-                VkDescriptorImageInfo ds_img_info = {0};
-                ds_img_info.imageView = buffer->intermediate_views[i];
-                ds_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        VkDescriptorImageInfo ds_img_info = {0};
+        ds_img_info.imageView = buffer->intermediate_view;
+        ds_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-                VkWriteDescriptorSet ds_write = {0};
-                ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                ds_write.descriptorCount = 1;
-                ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                ds_write.dstSet = buffer->intermediate_sets[i];
-                ds_write.pImageInfo = &ds_img_info;
+        VkWriteDescriptorSet ds_write = {0};
+        ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        ds_write.descriptorCount = 1;
+        ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        ds_write.dstSet = buffer->intermediate_set;
+        ds_write.pImageInfo = &ds_img_info;
 
-                vkUpdateDescriptorSets(renderer->dev->dev, 1, &ds_write, 0, NULL);
-        }
+        vkUpdateDescriptorSets(renderer->dev->dev, 1, &ds_write, 0, NULL);
 
         // UV buffer
-        struct wlr_vk_descriptor_pool *dpool = vulkan_alloc_texture_ds(renderer, &buffer->uv_set);
+        dpool = vulkan_alloc_texture_ds(renderer, &buffer->uv_set);
         assert(dpool != NULL);
 
         VkDescriptorImageInfo uv_ds_info = {0};
         uv_ds_info.imageView = buffer->uv_view;
         uv_ds_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        VkWriteDescriptorSet ds_write = {0};
-        ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        ds_write.descriptorCount = 1;
-        ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        ds_write.dstSet = buffer->uv_set;
-        ds_write.pImageInfo = &uv_ds_info;
+        VkWriteDescriptorSet uv_ds_write = {0};
+        uv_ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        uv_ds_write.descriptorCount = 1;
+        uv_ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        uv_ds_write.dstSet = buffer->uv_set;
+        uv_ds_write.pImageInfo = &uv_ds_info;
 
-        vkUpdateDescriptorSets(renderer->dev->dev, 1, &ds_write, 0, NULL);
+        vkUpdateDescriptorSets(renderer->dev->dev, 1, &uv_ds_write, 0, NULL);
 }
 
 // This gets called once for every swapchain image and once whenever the cursor
@@ -526,47 +522,43 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		renderer, fmt->format.vk_format);
         assert(buffer->render_setup != NULL);
 
-        // Create two intermediate images - we need two for things like blurred
-        // transparency. Whatever window is being drawn on top must be able to
-        // sample the pixels behind it.
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                create_image(renderer, fmt->format.vk_format,
-                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
-                                | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
-                        dmabuf.width, dmabuf.height,
-                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-                                // Needed for clearing it
-                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                                | VK_IMAGE_USAGE_SAMPLED_BIT,
-                        &buffer->intermediates[i]);
+        // Create the intermediate image.
+        create_image(renderer, fmt->format.vk_format,
+                VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+                        | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+                dmabuf.width, dmabuf.height,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                        // Needed for clearing it
+                        | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                        | VK_IMAGE_USAGE_SAMPLED_BIT,
+                &buffer->intermediate);
 
-                VkMemoryRequirements intermediate_mem_reqs;
-                vkGetImageMemoryRequirements(renderer->dev->dev, buffer->intermediates[i],
-                        &intermediate_mem_reqs);
+        VkMemoryRequirements intermediate_mem_reqs;
+        vkGetImageMemoryRequirements(renderer->dev->dev, buffer->intermediate,
+                &intermediate_mem_reqs);
 
-	        alloc_memory(renderer, intermediate_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                        &buffer->intermediate_mems[i]);
+        alloc_memory(renderer, intermediate_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                &buffer->intermediate_mem);
 
-                res = vkBindImageMemory(renderer->dev->dev, buffer->intermediates[i],
-                        buffer->intermediate_mems[i], 0);
-                assert(res == VK_SUCCESS);
+        res = vkBindImageMemory(renderer->dev->dev, buffer->intermediate,
+                buffer->intermediate_mem, 0);
+        assert(res == VK_SUCCESS);
 
-                VkImageViewCreateInfo intermediate_view_info = {
-                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                        .image = buffer->intermediates[i],
-                        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                        .format = fmt->format.vk_format,
-                        .subresourceRange = {
-                                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                .levelCount = 1,
-                                .layerCount = 1,
-                        }
-                };
-                res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL,
-                        &buffer->intermediate_views[i]);
-                assert(res == VK_SUCCESS);
-        }
+        VkImageViewCreateInfo intermediate_view_info = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = buffer->intermediate,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = fmt->format.vk_format,
+                .subresourceRange = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .levelCount = 1,
+                        .layerCount = 1,
+                }
+        };
+        res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL,
+                &buffer->intermediate_view);
+        assert(res == VK_SUCCESS);
 
 	// Create depth buffer
 	create_image(renderer, DEPTH_FORMAT,
@@ -653,45 +645,43 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	assert(res == VK_SUCCESS);
 
 	// Create framebuffers
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                // This is for the intermediate pass - it doesn't include the
-                // final image
-                VkImageView intermediate_attachs[] = {
-                        buffer->intermediate_views[i],
-                        buffer->depth_view,
-                        buffer->uv_view,
-                };
-                VkFramebufferCreateInfo fb_info = {0};
-                fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-                fb_info.attachmentCount =
-                        sizeof(intermediate_attachs) / sizeof(intermediate_attachs[0]);
-                fb_info.pAttachments = intermediate_attachs;
-                fb_info.width = dmabuf.width;
-                fb_info.height = dmabuf.height;
-                fb_info.layers = 1u;
-                fb_info.renderPass = buffer->render_setup->rpass;
+        // This is for the intermediate pass - it doesn't include the
+        // final image
+        VkImageView intermediate_attachs[] = {
+                buffer->intermediate_view,
+                buffer->depth_view,
+                buffer->uv_view,
+        };
+        VkFramebufferCreateInfo fb_info = {0};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.attachmentCount =
+                sizeof(intermediate_attachs) / sizeof(intermediate_attachs[0]);
+        fb_info.pAttachments = intermediate_attachs;
+        fb_info.width = dmabuf.width;
+        fb_info.height = dmabuf.height;
+        fb_info.layers = 1u;
+        fb_info.renderPass = buffer->render_setup->rpass;
 
-                res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffers[i]);
-                assert(res == VK_SUCCESS);
+        res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffer);
+        assert(res == VK_SUCCESS);
 
-                // This is for the postprocess pass - does include the final
-                // image and is created with a different render pass.
-                VkImageView postprocess_attachs[] = {
-                        buffer->intermediate_views[i],
-                        buffer->depth_view,
-                        buffer->uv_view,
-                        buffer->image_view,
-                };
+        // This is for the postprocess pass - does include the final
+        // image and is created with a different render pass.
+        VkImageView postprocess_attachs[] = {
+                buffer->intermediate_view,
+                buffer->depth_view,
+                buffer->uv_view,
+                buffer->image_view,
+        };
 
-                fb_info.attachmentCount =
-                        sizeof(postprocess_attachs) / sizeof(postprocess_attachs[0]);
-                fb_info.pAttachments = postprocess_attachs;
-                fb_info.renderPass = buffer->render_setup->postprocess_rpass;
+        fb_info.attachmentCount =
+                sizeof(postprocess_attachs) / sizeof(postprocess_attachs[0]);
+        fb_info.pAttachments = postprocess_attachs;
+        fb_info.renderPass = buffer->render_setup->postprocess_rpass;
 
-                res = vkCreateFramebuffer(dev, &fb_info, NULL,
-                        &buffer->postprocess_framebuffers[i]);
-                assert(res == VK_SUCCESS);
-        }
+        res = vkCreateFramebuffer(dev, &fb_info, NULL,
+                &buffer->postprocess_framebuffer);
+        assert(res == VK_SUCCESS);
 
 	buffer->buffer_destroy.notify = handle_render_buffer_destroy;
 	wl_signal_add(&wlr_buffer->events.destroy, &buffer->buffer_destroy);
@@ -746,7 +736,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         VkRect2D rect = {{0, 0}, {width, height}};
         renderer->scissor = rect;
 
-        begin_render_pass(cbuf, render_buf->framebuffers[0],
+        begin_render_pass(cbuf, render_buf->framebuffer,
                 render_buf->render_setup->simple_rpass, rect, width, height);
 }
 
@@ -773,16 +763,15 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-        int framebuffer_idx = render_buf->framebuffer_idx;
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[framebuffer_idx],
+                render_buf->intermediate,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Now do the actual copy
-        vulkan_copy_image(cbuf, render_buf->intermediates[framebuffer_idx],
+        vulkan_copy_image(cbuf, render_buf->intermediate,
                 render_buf->image,
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
                 width, height
@@ -790,7 +779,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 
         // Transition intermediate back to COLOR_ATTACHMENT
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[framebuffer_idx],
+                render_buf->intermediate,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,

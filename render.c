@@ -65,8 +65,6 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
-        int framebuffer_idx = render_buf->framebuffer_idx;
-
         int screen_width = render_buf->wlr_buffer->width;
         int screen_height = render_buf->wlr_buffer->height;
 
@@ -89,7 +87,7 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
         renderer->scissor = rect;
 
-        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
+        begin_render_pass(cbuf, render_buf->framebuffer,
                 render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
         // We don't bother rendering from one surface to the other because we
@@ -179,9 +177,7 @@ void debug_images(struct wlr_renderer *wlr_renderer) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                printf("Intermediate image %d at %p\n", i, render_buf->intermediates[i]);
-        }
+        printf("Intermediate image is at %p\n", render_buf->intermediate);
         printf("UV is at %p\n", render_buf->uv);
 }
 
@@ -243,7 +239,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         renderer->scissor = rect;
 
         // Starts the command buffer and enters the render pass
-        begin_render_pass(cbuf, render_buf->framebuffers[0],
+        begin_render_pass(cbuf, render_buf->framebuffer,
                 render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
         VkDescriptorSet desc_sets[] = {texture->ds};
@@ -315,8 +311,6 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
         assert(render_buf != NULL);
         VkCommandBuffer cbuf = renderer->cb;
 
-        render_buf->framebuffer_idx = 0;
-
         cbuf_begin_onetime(cbuf);
 
         // Reset timers
@@ -334,13 +328,13 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
         // from the previous frame.
         // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-        vulkan_clear_image(cbuf, render_buf->intermediates[0], (float [4]) {0.1, 0.1, 0.1, 1});
+        vulkan_clear_image(cbuf, render_buf->intermediate, (float [4]) {0.1, 0.1, 0.1, 1});
 
         // Clear the UV buffer too
         // Transition it to TRANSFER_DST_OPTIMAL so we can clear it. Maybe in
@@ -373,7 +367,7 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
         // Transition intermediate to COLOR_ATTACHMENT_OPTIMAL
 
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -570,14 +564,12 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, setup->postprocess_pipe);
         renderer->bound_pipe = setup->postprocess_pipe;
 
-        int framebuffer_idx = render_buf->framebuffer_idx;
-
         VkRect2D rect = {{0, 0}, {width, height}};
         renderer->scissor = rect;
 
         // Transition intermediate to SHADER_READ_ONLY_OPTIMAL
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[0], VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -597,12 +589,12 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         // Begin render pass
         begin_postprocess_render_pass(renderer->cb,
-                render_buf->postprocess_framebuffers[framebuffer_idx],
+                render_buf->postprocess_framebuffer,
                 setup->postprocess_rpass, rect, width, height);
 
         // Bind descriptors
         VkDescriptorSet desc_sets[] =
-                {render_buf->intermediate_sets[0], render_buf->uv_set};
+                {render_buf->intermediate_set, render_buf->uv_set};
 
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),
@@ -720,8 +712,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
 
         qsort(surfaces_sorted, surface_count, sizeof(surfaces_sorted[0]), surface_comp);
 
-        // Draw frame counter. render_rect_simple doesn't draw from one
-        // framebuffer into the other, we don't have to increment framebuffer_idx
+        // Draw frame counter.
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
 	render_rect_simple(renderer, color, 10, 10, 10, 10);
 
@@ -758,13 +749,3 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
 
 	return wlr_output_commit(output);
 }
-
-// How the layouts work:
-// render_begin / vulkan_begin sets everything to TRANSFER_SRC
-//
-// render_subexture in vulkan/renderer.c expects [framebuffer_idx] to be
-// TRANSFER_SRC, and sets it to TRANSFER_SRC when it's done.
-//
-// render_rect_simple is the same
-//
-// render_subtexture here expects [prev_idx] to be 
