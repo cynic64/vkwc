@@ -157,8 +157,18 @@ void vulkan_format_props_finish(struct wlr_vk_format_props *props);
 struct wlr_vk_render_format_setup {
 	struct wl_list link;
 	VkFormat render_format; // used in renderpass
+        // These names suck but I'm too lazy to fix it.
+        // `rpass` is what gets used in render.c - one render pass for every
+        // surface.
+        // `postprocess_rpass` is what gets used by, well, the postprocess
+        // pass.
+        // `simple_rpass` is what gets used in vulkan/renderer.c. Since we
+        // don't do any fancy effects there, we can just start and end the
+        // render pass once per frame. So unlike `rpass`, it can do the initial
+        // clear for us.
 	VkRenderPass rpass;
 	VkRenderPass postprocess_rpass;
+	VkRenderPass simple_rpass;
 
 	VkPipeline simple_tex_pipe;
 	VkPipeline tex_pipe;

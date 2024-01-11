@@ -14,6 +14,8 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass);
 
 void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass);
 
+void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass);
+
 void begin_postprocess_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
                 VkRenderPass rpass, VkRect2D render_area,
                 int screen_width, int screen_height);

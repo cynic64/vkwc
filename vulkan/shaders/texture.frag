@@ -1,9 +1,7 @@
 #version 450
 
-// This is what's already been drawn already, so all windows below us.
-layout(set = 0, binding = 0) uniform sampler2D current_frame;
 // This is the window texture
-layout(set = 1, binding = 0) uniform sampler2D tex;
+layout(set = 0, binding = 0) uniform sampler2D tex;
 
 layout(std140, push_constant) uniform UBO {
 	mat4 proj;
@@ -99,6 +97,7 @@ vec3 get_blurred_background() {
         vec2 halfpixel = 0.5 / (data.screen_dims);
         float offset = 3.0;
 
+        /*
         vec4 sum = texture(current_frame, uv) * 4.0;
         sum += texture(current_frame, uv - halfpixel.xy * offset);
         sum += texture(current_frame, uv + halfpixel.xy * offset);
@@ -106,6 +105,9 @@ vec3 get_blurred_background() {
         sum += texture(current_frame, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
 
         return (sum / 8.0).rgb;
+        */
+
+        return vec3(0);
 }
 
 void main() {

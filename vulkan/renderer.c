@@ -150,6 +150,8 @@ static void destroy_render_format_setup(struct wlr_vk_renderer *renderer,
 
 	VkDevice dev = renderer->dev->dev;
 	vkDestroyRenderPass(dev, setup->rpass, NULL);
+	vkDestroyRenderPass(dev, setup->postprocess_rpass, NULL);
+	vkDestroyRenderPass(dev, setup->simple_rpass, NULL);
 	vkDestroyPipeline(dev, setup->simple_tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->quad_pipe, NULL);
@@ -487,7 +489,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	struct wlr_dmabuf_attributes dmabuf = {0};
 	if (!wlr_buffer_get_dmabuf(wlr_buffer, &dmabuf)) {
-		goto error_buffer;
+		fprintf(stderr, "get_dmabuf failed\n");
+                exit(1);
 	}
 
 	wlr_log(WLR_DEBUG, "vulkan create_render_buffer: %.4s, %dx%d",
@@ -496,9 +499,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	// This is what gets presented
 	buffer->image = vulkan_import_dmabuf(renderer, &dmabuf,
 		buffer->memories, &buffer->mem_count, true);
-	if (!buffer->image) {
-		goto error_buffer;
-	}
+        assert(buffer->image != NULL);
 
 	VkDevice dev = renderer->dev->dev;
 	const struct wlr_vk_format_props *fmt = vulkan_format_props_from_drm(
@@ -506,7 +507,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	if (fmt == NULL) {
 		wlr_log(WLR_ERROR, "Unsupported pixel format %"PRIx32 " (%.4s)",
 			dmabuf.format, (const char*) &dmabuf.format);
-		goto error_buffer;
+		exit(1);
 	}
 
 	VkImageViewCreateInfo view_info = {0};
@@ -519,27 +520,23 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	};
 
 	res = vkCreateImageView(dev, &view_info, NULL, &buffer->image_view);
-	if (res != VK_SUCCESS) {
-		wlr_vk_error("vkCreateImageView failed", res);
-		goto error_view;
-	}
+        assert(res == VK_SUCCESS);
 
 	buffer->render_setup = find_or_create_render_setup(
 		renderer, fmt->format.vk_format);
-	if (!buffer->render_setup) {
-		goto error_view;
-	}
+        assert(buffer->render_setup != NULL);
 
         // Create two intermediate images - we need two for things like blurred
         // transparency. Whatever window is being drawn on top must be able to
         // sample the pixels behind it.
         for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
                 create_image(renderer, fmt->format.vk_format,
-                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+                                | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
                         dmabuf.width, dmabuf.height,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
                                 | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                // Needed for clearing it
                                 | VK_IMAGE_USAGE_TRANSFER_DST_BIT
                                 | VK_IMAGE_USAGE_SAMPLED_BIT,
                         &buffer->intermediates[i]);
@@ -562,9 +559,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         .format = fmt->format.vk_format,
                         .subresourceRange = {
                                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                .baseMipLevel = 0,
                                 .levelCount = 1,
-                                .baseArrayLayer = 0,
                                 .layerCount = 1,
                         }
                 };
@@ -575,10 +570,9 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
 	// Create depth buffer
 	create_image(renderer, DEPTH_FORMAT,
-		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT,
+		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT,
 	        dmabuf.width, dmabuf.height,
-	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-	        | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	        &buffer->depth);
 
 	VkMemoryRequirements depth_mem_reqs;
@@ -608,8 +602,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
 		dmabuf.width, dmabuf.height,
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT 
- 		        | VK_IMAGE_USAGE_SAMPLED_BIT
+                        | VK_IMAGE_USAGE_SAMPLED_BIT
+                        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
                         | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                 &buffer->uv);
 
@@ -694,7 +688,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 fb_info.pAttachments = postprocess_attachs;
                 fb_info.renderPass = buffer->render_setup->postprocess_rpass;
 
-                res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->postprocess_framebuffers[i]);
+                res = vkCreateFramebuffer(dev, &fb_info, NULL,
+                        &buffer->postprocess_framebuffers[i]);
                 assert(res == VK_SUCCESS);
         }
 
@@ -705,24 +700,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         render_buffer_create_descriptor_sets(renderer, buffer);
 
 	return buffer;
-
-	vkDestroyImageView(renderer->dev->dev, buffer->depth_view, NULL);
-	vkFreeMemory(renderer->dev->dev, buffer->depth_mem, NULL);
-	vkDestroyImage(renderer->dev->dev, buffer->depth, NULL);
-error_view:
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                vkDestroyFramebuffer(dev, buffer->framebuffers[i], NULL);
-                vkDestroyFramebuffer(dev, buffer->postprocess_framebuffers[i], NULL);
-        }
-	vkDestroyImageView(dev, buffer->image_view, NULL);
-	vkDestroyImage(dev, buffer->image, NULL);
-	for (size_t i = 0u; i < buffer->mem_count; ++i) {
-		vkFreeMemory(dev, buffer->memories[i], NULL);
-	}
-error_buffer:
-	wlr_dmabuf_attributes_finish(&dmabuf);
-	free(buffer);
-	return NULL;
 }
 
 // Interface implementation
@@ -758,54 +735,35 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         assert(render_buf != NULL);
 
-        // Transition UV image to COLOR_ATTACHMENT_OPTIMAL. 
-        vulkan_image_transition(renderer->dev->dev, renderer->dev->queue, renderer->command_pool,
-                renderer->current_render_buffer->uv, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                // Want to wait for whoever was reading from it before we write to it
-                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
 
 	renderer->render_width = width;
 	renderer->render_height = height;
 	renderer->bound_pipe = VK_NULL_HANDLE;
 
-        // Clear the first intermediate image, otherwise we have leftover junk
-        // from the previous frame.
         VkCommandBuffer cbuf = renderer->cb;
         cbuf_begin_onetime(cbuf);
 
-        // Transition all intermediates to TRANSFER_SRC, because when we start
-        // rendering surfaces, it is assumed that the previous intermediate is
-        // already in TRANSFER_SRC.
+        VkRect2D rect = {{0, 0}, {width, height}};
+        renderer->scissor = rect;
 
-        for (int i = 0; i < INTERMEDIATE_IMAGE_COUNT; i++) {
-                VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-                vulkan_image_transition_cbuf(cbuf,
-                        render_buf->intermediates[i], VK_IMAGE_ASPECT_COLOR_BIT,
-                        src_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        VK_ACCESS_TRANSFER_WRITE_BIT,
-                        VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT
-                                | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        1);
-        }
+        begin_render_pass(cbuf, render_buf->framebuffers[0],
+                render_buf->render_setup->simple_rpass, rect, width, height);
 }
 
 static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+        VkCommandBuffer cbuf = renderer->cb;
 
         int width = render_buf->wlr_buffer->width;
         int height = render_buf->wlr_buffer->height;
 
+        vkCmdEndRenderPass(cbuf);
+
         // Copy intermediate image to final output
         // Transition final to IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        vulkan_image_transition_cbuf(renderer->cb,
+        vulkan_image_transition_cbuf(cbuf,
                 render_buf->image, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -816,23 +774,31 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 
         // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
         int framebuffer_idx = render_buf->framebuffer_idx;
-        vulkan_image_transition_cbuf(renderer->cb,
+        vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediates[framebuffer_idx],
                 VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
 
         // Now do the actual copy
-        vulkan_copy_image(renderer->cb, render_buf->intermediates[framebuffer_idx],
+        vulkan_copy_image(cbuf, render_buf->intermediates[framebuffer_idx],
                 render_buf->image,
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
                 width, height
         );
 
+        // Transition intermediate back to COLOR_ATTACHMENT
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediates[framebuffer_idx],
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 1);
+
         // Submit
         double start_time = get_time();
-        cbuf_submit_wait(renderer->dev->queue, renderer->cb);
+        cbuf_submit_wait(renderer->dev->queue, cbuf);
         double elapsed = (get_time() - start_time) * 1000;
         printf("Cursor submit took %5.2f ms\n", elapsed);
 
@@ -891,9 +857,8 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
         int screen_width = render_buf->wlr_buffer->width;
         int screen_height = render_buf->wlr_buffer->height;
 
-	int framebuffer_idx = render_buf->framebuffer_idx;
-
-	// Begin render pass and bind pipeline, if necessary
+        // Begin render pass and bind pipeline, if necessary. TODO: bind the
+        // pipeline once in vulkan_begin and don't bother doing it here.
         VkPipeline pipe = renderer->current_render_buffer->render_setup->simple_tex_pipe;
         if (pipe != renderer->bound_pipe) {
                 vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
@@ -902,9 +867,6 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
 
         VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
         renderer->scissor = rect;
-
-        begin_render_pass(cbuf, render_buf->framebuffers[framebuffer_idx],
-                render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
 	// Bind descriptor sets
         vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -937,16 +899,6 @@ static bool vulkan_render_subtexture_with_matrix(struct wlr_renderer *wlr_render
                 0, sizeof(vert_pcr_data), &vert_pcr_data);
         vkCmdDraw(cbuf, 4, 1, 0, 0);
         texture->last_used = renderer->frame;
-
-        vkCmdEndRenderPass(cbuf);
-
-	// Transition back to TRANSFER_SRC_OPTIMAL
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediates[framebuffer_idx], VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                1);
 
         return true;
 }
@@ -1449,6 +1401,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
         create_render_pass(renderer->dev->dev, format, &setup->rpass);
         create_postprocess_render_pass(renderer->dev->dev, format, &setup->postprocess_rpass);
+        create_simple_render_pass(renderer->dev->dev, format, &setup->simple_rpass);
 
         // Create pipelines
         // We can use the postprocess vert shader because it does exactly what
