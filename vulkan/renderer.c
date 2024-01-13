@@ -502,7 +502,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         assert(buffer->render_setup != NULL);
 
         // Create the intermediate image.
-        create_image(renderer, fmt->format.vk_format,
+        create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
                 VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
                         | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
                 dmabuf.width, dmabuf.height,
@@ -529,7 +529,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 &buffer->intermediate_view);
 
         // Create the mini image at quarter resolution
-        create_image(renderer, fmt->format.vk_format,
+        create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
                 VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
                         | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
                 dmabuf.width * MINI_IMAGE_SCALE, dmabuf.height * MINI_IMAGE_SCALE,
@@ -553,7 +553,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 &buffer->mini_view);
 
 	// Create depth buffer
-	create_image(renderer, DEPTH_FORMAT,
+	create_image(renderer->dev->phdev, renderer->dev->dev, DEPTH_FORMAT,
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT,
 	        dmabuf.width, dmabuf.height,
 	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -569,7 +569,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 VK_IMAGE_ASPECT_DEPTH_BIT, &buffer->depth_view);
 
 	// Create attachment to write UV coordinates into
-	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
+	create_image(renderer->dev->phdev, renderer->dev->dev,
+                UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
 		dmabuf.width, dmabuf.height,
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                         | VK_IMAGE_USAGE_SAMPLED_BIT

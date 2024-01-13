@@ -166,11 +166,11 @@ void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float color[4]) {
                 &clear_color, 1, &clear_range);
 }
 
-void create_image(struct wlr_vk_renderer *renderer,
+void create_image(VkPhysicalDevice phys_dev, VkDevice device,
 		VkFormat format, VkFormatFeatureFlagBits features,
                 int width, int height, VkImageUsageFlagBits usage, VkImage *image) {
 	VkFormatProperties format_props;
-	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, format, &format_props);
+	vkGetPhysicalDeviceFormatProperties(phys_dev, format, &format_props);
 	if ((format_props.optimalTilingFeatures & features) != features) {
 		fprintf(stderr, "Format %d doesn't support necessary features %d",
                         format, features);
@@ -192,7 +192,7 @@ void create_image(struct wlr_vk_renderer *renderer,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
 
-	VkResult res = vkCreateImage(renderer->dev->dev, &info, NULL, image);
+	VkResult res = vkCreateImage(device, &info, NULL, image);
         printf("create_image: new image at %p\n", *image);
 	if (res != VK_SUCCESS) {
 		fprintf(stderr, "Couldn't create image\n");

@@ -33,7 +33,7 @@ void cbuf_begin_onetime(VkCommandBuffer cbuf);
 
 void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float clear_color[4]);
 
-void create_image(struct wlr_vk_renderer *renderer,
+void create_image(VkPhysicalDevice phys_dev, VkDevice device,
 		VkFormat format, VkFormatFeatureFlagBits features,
                 int width, int height, VkImageUsageFlagBits usage, VkImage *image);
 
