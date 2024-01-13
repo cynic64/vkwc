@@ -14,6 +14,7 @@
 
 #define WLR_VK_RENDER_MODE_COUNT 3
 #define POSTPROCESS_MODE_COUNT 2
+#define BLUR_PASSES 5
 
 // Used for all shaders
 struct PushConstants {

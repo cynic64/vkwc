@@ -229,7 +229,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         get_rect_for_matrix(screen_width, screen_height, matrix, &rect);
         renderer->scissor = rect;
 
-        // Do one blur pass from the intermeidate into the first blur image
+        // Do one blur pass from the intermediate into the first blur image
         // Transition intermediate to SHADER_READ
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
@@ -238,23 +238,60 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
-	VkPipeline pipe	= renderer->current_render_buffer->render_setup->blur_pipes[0];
-	if (pipe != renderer->bound_pipe) {
-		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		renderer->bound_pipe = pipe;
-	}
+        int last_blur_idx = -1;
+        for (int i = 0; i < BLUR_PASSES; i++) {
+                // The image we're rendering to
+                int blur_idx = i % 2;
+                if (i != 0) {
+                        // Unless we're on the first pass, we have to transition
+                        // the previous blur image to SHADER_READ_ONLY
+                        vulkan_image_transition_cbuf(cbuf,
+                                render_buf->blurs[last_blur_idx], VK_IMAGE_ASPECT_COLOR_BIT,
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                VK_ACCESS_SHADER_READ_BIT,
+                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                1);
+                }
 
-        begin_render_pass(cbuf, render_buf->blur_framebuffers[0],
-                render_buf->render_setup->blur_rpass[0], rect, screen_width, screen_height);
+                VkPipeline pipe	=
+                        renderer->current_render_buffer->render_setup->blur_pipes[blur_idx];
+                if (pipe != renderer->bound_pipe) {
+                        vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+                        renderer->bound_pipe = pipe;
+                }
 
-        // We want to sample the intermediate image
-	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		renderer->pipe_layout, 0, 1,
-                &render_buf->intermediate_set, 0, NULL);
+                begin_render_pass(cbuf, render_buf->blur_framebuffers[blur_idx],
+                        render_buf->render_setup->blur_rpass[blur_idx],
+                        rect, screen_width, screen_height);
 
-        vkCmdDraw(cbuf, 4, 1, 0, 0);
+                VkDescriptorSet *in_set = &render_buf->blur_sets[last_blur_idx];
+                if (i == 0) {
+                        // If this is the first pass, sample the intermediate
+                        // image instead.
+                        in_set = &render_buf->intermediate_set;
+                }
+                vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        renderer->pipe_layout, 0, 1, in_set, 0, NULL);
 
-        vkCmdEndRenderPass(cbuf);
+                struct PushConstants push_constants;
+                push_constants.screen_dims[0] = screen_width;
+                push_constants.screen_dims[1] = screen_height;
+                // We re-use is_focused for radius.
+                push_constants.is_focused = 1.5 + (BLUR_PASSES - i);
+
+                vkCmdPushConstants(cbuf, renderer->pipe_layout,
+                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                        0, sizeof(push_constants), &push_constants);
+
+                vkCmdDraw(cbuf, 4, 1, 0, 0);
+
+                vkCmdEndRenderPass(cbuf);
+
+                last_blur_idx = blur_idx;
+        }
 
         // Transition intermediate back to COLOR_ATTACH
         vulkan_image_transition_cbuf(cbuf,
@@ -266,14 +303,14 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
         // Transition blur image to SHADER_READ_ONLY
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->blurs[0], VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->blurs[last_blur_idx], VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
         // Bind pipeline and descriptor sets
-	pipe = renderer->current_render_buffer->render_setup->tex_pipe;
+	VkPipeline pipe = renderer->current_render_buffer->render_setup->tex_pipe;
 	if (pipe != renderer->bound_pipe) {
 		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
 		renderer->bound_pipe = pipe;
@@ -283,14 +320,14 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         begin_render_pass(cbuf, render_buf->framebuffer,
                 render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
-        VkDescriptorSet desc_sets[] = {render_buf->blur_sets[0], texture->ds};
+        VkDescriptorSet desc_sets[] = {render_buf->blur_sets[last_blur_idx], texture->ds};
 
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),
                 desc_sets, 0, NULL);
 
 	// Draw
-	struct PushConstants push_constants;
+        struct PushConstants push_constants = {0};
         glm_mat4_inv(matrix, push_constants.mat4);
 
         push_constants.surface_id[0] = surface_id;
