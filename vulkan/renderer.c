@@ -538,7 +538,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
                         VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
                                 | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
-                        dmabuf.width, dmabuf.height,
+                        dmabuf.width * BLUR_IMAGE_SCALE, dmabuf.height * BLUR_IMAGE_SCALE,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                 | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
                                 | VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -639,11 +639,17 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
         // This is for the blur passes
         for (int i = 0; i < 2; i++) {
-                fb_info.attachmentCount = 1;
-                fb_info.pAttachments = &buffer->blur_views[i];
-                fb_info.renderPass = buffer->render_setup->blur_rpass[i];
+                VkFramebufferCreateInfo blur_fb_info = {0};
+                blur_fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+                blur_fb_info.width = dmabuf.width * BLUR_IMAGE_SCALE;
+                blur_fb_info.height = dmabuf.height * BLUR_IMAGE_SCALE;
+                blur_fb_info.layers = 1u;
 
-                res = vkCreateFramebuffer(dev, &fb_info, NULL,
+                blur_fb_info.attachmentCount = 1;
+                blur_fb_info.pAttachments = &buffer->blur_views[i];
+                blur_fb_info.renderPass = buffer->render_setup->blur_rpass[i];
+
+                res = vkCreateFramebuffer(dev, &blur_fb_info, NULL,
                         &buffer->blur_framebuffers[i]);
                 assert(res == VK_SUCCESS);
         }

@@ -14,7 +14,10 @@
 
 #define WLR_VK_RENDER_MODE_COUNT 3
 #define POSTPROCESS_MODE_COUNT 2
+// Anything less has lots of artifacts
 #define BLUR_PASSES 5
+// This + BLUR_PASSES controls how heavy the blur is.
+#define BLUR_IMAGE_SCALE 0.5
 
 // Used for all shaders
 struct PushConstants {

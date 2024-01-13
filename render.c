@@ -242,6 +242,10 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         for (int i = 0; i < BLUR_PASSES; i++) {
                 // The image we're rendering to
                 int blur_idx = i % 2;
+
+                int width = screen_width * BLUR_IMAGE_SCALE;
+                int height = screen_height * BLUR_IMAGE_SCALE;
+
                 if (i != 0) {
                         // Unless we're on the first pass, we have to transition
                         // the previous blur image to SHADER_READ_ONLY
@@ -263,9 +267,15 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                         renderer->bound_pipe = pipe;
                 }
 
+                VkRect2D blur_rect;
+                blur_rect.offset.x = rect.offset.x * BLUR_IMAGE_SCALE;
+                blur_rect.offset.y = rect.offset.y * BLUR_IMAGE_SCALE;
+                blur_rect.extent.width = rect.extent.width * BLUR_IMAGE_SCALE;
+                blur_rect.extent.height = rect.extent.height * BLUR_IMAGE_SCALE;
+
                 begin_render_pass(cbuf, render_buf->blur_framebuffers[blur_idx],
                         render_buf->render_setup->blur_rpass[blur_idx],
-                        rect, screen_width, screen_height);
+                        blur_rect, width, height);
 
                 VkDescriptorSet *in_set = &render_buf->blur_sets[last_blur_idx];
                 if (i == 0) {
@@ -277,8 +287,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                         renderer->pipe_layout, 0, 1, in_set, 0, NULL);
 
                 struct PushConstants push_constants;
-                push_constants.screen_dims[0] = screen_width;
-                push_constants.screen_dims[1] = screen_height;
+                push_constants.screen_dims[0] = width;
+                push_constants.screen_dims[1] = height;
                 // We re-use is_focused for radius.
                 push_constants.is_focused = 1.5 + (BLUR_PASSES - i);
 
