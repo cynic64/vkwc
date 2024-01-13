@@ -14,6 +14,8 @@
 
 #define WLR_VK_RENDER_MODE_COUNT 3
 #define POSTPROCESS_MODE_COUNT 2
+// The mini image should be a quarter resolution compared to the intermediate
+#define MINI_IMAGE_SCALE 0.25
 
 // Used for all shaders
 struct PushConstants {

@@ -492,11 +492,11 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         | VK_IMAGE_USAGE_SAMPLED_BIT,
                 &buffer->intermediate);
 
-        VkMemoryRequirements intermediate_mem_reqs;
+        VkMemoryRequirements mem_reqs;
         vkGetImageMemoryRequirements(renderer->dev->dev, buffer->intermediate,
-                &intermediate_mem_reqs);
+                &mem_reqs);
 
-        alloc_memory(renderer, intermediate_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        alloc_memory(renderer, mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                 &buffer->intermediate_mem);
 
         res = vkBindImageMemory(renderer->dev->dev, buffer->intermediate,
@@ -507,6 +507,30 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 buffer->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 &buffer->intermediate_view);
 
+        // Create the mini image at quarter resolution
+        create_image(renderer, fmt->format.vk_format,
+                VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+                        | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+                dmabuf.width * MINI_IMAGE_SCALE, dmabuf.height * MINI_IMAGE_SCALE,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                        | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                        | VK_IMAGE_USAGE_SAMPLED_BIT,
+                &buffer->mini);
+
+        vkGetImageMemoryRequirements(renderer->dev->dev, buffer->mini,
+                &mem_reqs);
+
+        alloc_memory(renderer, mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                &buffer->mini_mem);
+
+        res = vkBindImageMemory(renderer->dev->dev, buffer->mini,
+                buffer->mini_mem, 0);
+        assert(res == VK_SUCCESS);
+
+        create_image_view(renderer->dev->dev, fmt->format.vk_format,
+                buffer->mini, VK_IMAGE_ASPECT_COLOR_BIT,
+                &buffer->mini_view);
+
 	// Create depth buffer
 	create_image(renderer, DEPTH_FORMAT,
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -514,9 +538,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	        &buffer->depth);
 
-	VkMemoryRequirements depth_mem_reqs;
-	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth, &depth_mem_reqs);
-	alloc_memory(renderer, depth_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->depth_mem);
+	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth, &mem_reqs);
+	alloc_memory(renderer, mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->depth_mem);
 
 	res = vkBindImageMemory(renderer->dev->dev, buffer->depth, buffer->depth_mem, 0);
 	assert(res == VK_SUCCESS);
@@ -533,9 +556,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                 &buffer->uv);
 
-	VkMemoryRequirements uv_mem_reqs;
-	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->uv, &uv_mem_reqs);
-	alloc_memory(renderer, uv_mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->uv_mem);
+	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->uv, &mem_reqs);
+	alloc_memory(renderer, mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->uv_mem);
 
 	res = vkBindImageMemory(renderer->dev->dev, buffer->uv, buffer->uv_mem, 0);
 	assert(res == VK_SUCCESS);
@@ -554,9 +576,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkCreateBuffer(renderer->dev->dev, &host_uv_info, NULL, &buffer->host_uv);
 	assert(res == VK_SUCCESS);
 
-	VkMemoryRequirements host_uv_mem_reqs;
-	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->host_uv, &host_uv_mem_reqs);
-	alloc_memory(renderer, host_uv_mem_reqs,
+	vkGetBufferMemoryRequirements(renderer->dev->dev, buffer->host_uv, &mem_reqs);
+	alloc_memory(renderer, mem_reqs,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
 		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 		| VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
@@ -969,7 +990,8 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	VkDevice dev = vk_renderer->dev->dev;
 	VkImage src_image = vk_renderer->current_render_buffer->screen;
 
-	const struct wlr_pixel_format_info *pixel_format_info = drm_get_pixel_format_info(drm_format);
+	const struct wlr_pixel_format_info *pixel_format_info =
+                drm_get_pixel_format_info(drm_format);
 	if (!pixel_format_info) {
 		wlr_log(WLR_ERROR, "vulkan_read_pixels: could not find pixel format info "
 				"for DRM format 0x%08x", drm_format);
@@ -988,8 +1010,9 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	vkGetPhysicalDeviceFormatProperties(vk_renderer->dev->phdev, dst_format, &dst_format_props);
 	vkGetPhysicalDeviceFormatProperties(vk_renderer->dev->phdev, src_format, &src_format_props);
 
-	bool blit_supported = src_format_props.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT &&
-		dst_format_props.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT;
+	bool blit_supported =
+                src_format_props.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT
+                && dst_format_props.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT;
 	if (!blit_supported && src_format != dst_format) {
 		wlr_log(WLR_ERROR, "vulkan_read_pixels: blit unsupported and no manual "
 					"conversion available from src to dst format.");
