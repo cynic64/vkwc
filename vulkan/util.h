@@ -33,4 +33,11 @@ void cbuf_begin_onetime(VkCommandBuffer cbuf);
 
 void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float clear_color[4]);
 
+void create_image(struct wlr_vk_renderer *renderer,
+		VkFormat format, VkFormatFeatureFlagBits features,
+                int width, int height, VkImageUsageFlagBits usage, VkImage *image);
+
+void create_image_view(VkDevice device, VkFormat format, VkImage image,
+                VkImageAspectFlagBits aspect, VkImageView *view);
+
 #endif // vulkan_util_h_INCLUDED

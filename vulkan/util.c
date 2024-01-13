@@ -2,6 +2,8 @@
 #include <wlr/util/log.h>
 #include <assert.h>
 #include "../render/vulkan.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "util.h"
 
@@ -162,4 +164,55 @@ void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float color[4]) {
         vkCmdClearColorImage(cbuf,
                 image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 &clear_color, 1, &clear_range);
+}
+
+void create_image(struct wlr_vk_renderer *renderer,
+		VkFormat format, VkFormatFeatureFlagBits features,
+                int width, int height, VkImageUsageFlagBits usage, VkImage *image) {
+	VkFormatProperties format_props;
+	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, format, &format_props);
+	if ((format_props.optimalTilingFeatures & features) != features) {
+		fprintf(stderr, "Format %d doesn't support necessary features %d",
+                        format, features);
+		exit(1);
+	}
+
+	struct VkImageCreateInfo info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = format,
+		.extent.width = width,
+		.extent.height = height,
+		.extent.depth = 1,
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = usage,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+
+	VkResult res = vkCreateImage(renderer->dev->dev, &info, NULL, image);
+        printf("create_image: new image at %p\n", *image);
+	if (res != VK_SUCCESS) {
+		fprintf(stderr, "Couldn't create image\n");
+		exit(1);
+	}
+}
+
+void create_image_view(VkDevice device, VkFormat format, VkImage image,
+                VkImageAspectFlagBits aspect, VkImageView *view) {
+        VkImageViewCreateInfo view_info = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = image,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = format,
+                .subresourceRange = {
+                        .aspectMask = aspect,
+                        .levelCount = 1,
+                        .layerCount = 1,
+                }
+        };
+        VkResult res = vkCreateImageView(device, &view_info, NULL, view);
+        assert(res == VK_SUCCESS);
 }

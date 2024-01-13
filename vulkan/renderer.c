@@ -372,39 +372,6 @@ static void handle_render_buffer_destroy(struct wl_listener *listener, void *dat
 	destroy_render_buffer(buffer);
 }
 
-static void create_image(struct wlr_vk_renderer *renderer,
-		VkFormat format, VkFormatFeatureFlagBits features,
-                int width, int height, VkImageUsageFlagBits usage, VkImage *image) {
-	VkFormatProperties format_props;
-	vkGetPhysicalDeviceFormatProperties(renderer->dev->phdev, format, &format_props);
-	if ((format_props.optimalTilingFeatures & features) != features) {
-		fprintf(stderr, "Format %d doesn't support necessary features %d", format, features);
-		exit(1);
-	}
-
-	struct VkImageCreateInfo info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = format,
-		.extent.width = width,
-		.extent.height = height,
-		.extent.depth = 1,
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = usage,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
-
-	VkResult res = vkCreateImage(renderer->dev->dev, &info, NULL, image);
-        printf("create_image: new image at %p\n", *image);
-	if (res != VK_SUCCESS) {
-		fprintf(stderr, "Couldn't create image\n");
-		exit(1);
-	}
-}
-
 static void alloc_memory(struct wlr_vk_renderer *renderer,
 		VkMemoryRequirements requirements, VkMemoryPropertyFlagBits properties,
                 VkDeviceMemory *memory) {
@@ -506,17 +473,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		exit(1);
 	}
 
-	VkImageViewCreateInfo view_info = {0};
-	view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	view_info.image = buffer->image;
-	view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	view_info.format = fmt->format.vk_format;
-	view_info.subresourceRange = (VkImageSubresourceRange) {
-		VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
-	};
-
-	res = vkCreateImageView(dev, &view_info, NULL, &buffer->image_view);
-        assert(res == VK_SUCCESS);
+        create_image_view(dev, fmt->format.vk_format, buffer->image,
+                VK_IMAGE_ASPECT_COLOR_BIT, &buffer->image_view);
 
 	buffer->render_setup = find_or_create_render_setup(
 		renderer, fmt->format.vk_format);
@@ -545,20 +503,9 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 buffer->intermediate_mem, 0);
         assert(res == VK_SUCCESS);
 
-        VkImageViewCreateInfo intermediate_view_info = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                .image = buffer->intermediate,
-                .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                .format = fmt->format.vk_format,
-                .subresourceRange = {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .levelCount = 1,
-                        .layerCount = 1,
-                }
-        };
-        res = vkCreateImageView(renderer->dev->dev, &intermediate_view_info, NULL,
+        create_image_view(renderer->dev->dev, fmt->format.vk_format,
+                buffer->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 &buffer->intermediate_view);
-        assert(res == VK_SUCCESS);
 
 	// Create depth buffer
 	create_image(renderer, DEPTH_FORMAT,
@@ -574,21 +521,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkBindImageMemory(renderer->dev->dev, buffer->depth, buffer->depth_mem, 0);
 	assert(res == VK_SUCCESS);
 
-	VkImageViewCreateInfo depth_view_info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = buffer->depth,
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
-		.format = DEPTH_FORMAT,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		}
-	};
-	res = vkCreateImageView(renderer->dev->dev, &depth_view_info, NULL, &buffer->depth_view);
-	assert(res == VK_SUCCESS);
+        create_image_view(renderer->dev->dev, DEPTH_FORMAT, buffer->depth,
+                VK_IMAGE_ASPECT_DEPTH_BIT, &buffer->depth_view);
 
 	// Create attachment to write UV coordinates into
 	create_image(renderer, UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
@@ -606,21 +540,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 	res = vkBindImageMemory(renderer->dev->dev, buffer->uv, buffer->uv_mem, 0);
 	assert(res == VK_SUCCESS);
 
-	VkImageViewCreateInfo uv_view_info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = buffer->uv,
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
-		.format = UV_FORMAT,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		}
-	};
-	res = vkCreateImageView(renderer->dev->dev, &uv_view_info, NULL, &buffer->uv_view);
-	assert(res == VK_SUCCESS);
+        create_image_view(renderer->dev->dev, UV_FORMAT, buffer->uv,
+                VK_IMAGE_ASPECT_COLOR_BIT, &buffer->uv_view);
 
 	// Create host-visible UV buffer
 	VkBufferCreateInfo host_uv_info = {

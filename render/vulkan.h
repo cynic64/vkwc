@@ -190,11 +190,17 @@ struct wlr_vk_render_buffer {
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
 	bool transitioned;
 
-	// Intermediate targets - again, we need multiple
+	// Intermediate target
 	VkImage intermediate;
 	VkImageView intermediate_view;
 	VkDeviceMemory intermediate_mem;
         VkDescriptorSet intermediate_set;
+
+        // Scaled-down version of the intermediate to sample for blur
+	VkImage mini;
+	VkImageView mini_view;
+	VkDeviceMemory mini_mem;
+        VkDescriptorSet mini_set;
 
 	// Depth buffer
 	VkImage depth;
