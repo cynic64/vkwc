@@ -196,6 +196,7 @@ struct wlr_vk_render_buffer {
 	VkImage intermediate;
 	VkImageView intermediate_view;
 	VkDeviceMemory intermediate_mem;
+        // Needed so we can sample it in the postprocess pass
         VkDescriptorSet intermediate_set;
 
         // Scaled-down version of the intermediate to sample for blur

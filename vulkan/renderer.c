@@ -335,6 +335,10 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
         vkDestroyImageView(dev, buffer->intermediate_view, NULL);
         vkFreeMemory(dev, buffer->intermediate_mem, NULL);
 
+        vkDestroyImage(dev, buffer->mini, NULL);
+        vkDestroyImageView(dev, buffer->mini_view, NULL);
+        vkFreeMemory(dev, buffer->mini_mem, NULL);
+
         vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
 
 	vkDestroyImage(dev, buffer->depth, NULL);
@@ -415,6 +419,23 @@ void render_buffer_create_descriptor_sets(struct wlr_vk_renderer *renderer,
         ds_write.pImageInfo = &ds_img_info;
 
         vkUpdateDescriptorSets(renderer->dev->dev, 1, &ds_write, 0, NULL);
+
+        // Mini image
+        dpool = vulkan_alloc_texture_ds(renderer, &buffer->mini_set);
+        assert(dpool != NULL);
+
+        VkDescriptorImageInfo mini_ds_info = {0};
+        mini_ds_info.imageView = buffer->mini_view;
+        mini_ds_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet mini_ds_write = {0};
+        mini_ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        mini_ds_write.descriptorCount = 1;
+        mini_ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        mini_ds_write.dstSet = buffer->mini_set;
+        mini_ds_write.pImageInfo = &mini_ds_info;
+
+        vkUpdateDescriptorSets(renderer->dev->dev, 1, &mini_ds_write, 0, NULL);
 
         // UV buffer
         dpool = vulkan_alloc_texture_ds(renderer, &buffer->uv_set);
@@ -1173,7 +1194,8 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 		memcpy(p, d, height * stride);
 	} else {
 		for (size_t i = 0; i < height; ++i) {
-			memcpy(p + i * stride + dst_x * bpp / 8, d + i * pack_stride, width * bpp / 8);
+			memcpy(p + i * stride + dst_x * bpp / 8, d + i * pack_stride,
+                                width * bpp / 8);
 		}
 	}
 

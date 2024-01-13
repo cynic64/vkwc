@@ -224,6 +224,67 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 		wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
 	}
 
+        // Copy the intermediate into the mini image so we can sample it for
+        // blur
+        // Transition intermediate to TRANSFER_SRC
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
+
+        // Transition mini image into TRANSFER_DST
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->mini, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                1);
+
+        // Blit
+        VkImageBlit blit_region = {
+                .srcSubresource = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .layerCount = 1,
+                },
+                .srcOffsets = {
+                        { .x = 0, .y = 0 },
+                        { .x = screen_width, .y = screen_height, .z = 1 },
+                },
+                .dstSubresource = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .layerCount = 1,
+                },
+                .dstOffsets = {
+                        { .x = 0, .y = 0 },
+                        { .x = screen_width * MINI_IMAGE_SCALE,
+                                .y = screen_height * MINI_IMAGE_SCALE, .z = 1 },
+                },
+        };
+        vkCmdBlitImage(cbuf,
+                render_buf->intermediate, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                render_buf->mini, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1,
+                &blit_region,
+                VK_FILTER_LINEAR);
+
+        // Transition intermediate back to COLOR_ATTACH
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                1);
+
+        // Transition mini image to SHADER_READ_ONLY
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->mini, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                1);
+
         // Bind pipeline and descriptor sets
 	VkPipeline pipe	= renderer->current_render_buffer->render_setup->tex_pipe;
 	if (pipe != renderer->bound_pipe) {
@@ -242,7 +303,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         begin_render_pass(cbuf, render_buf->framebuffer,
                 render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
-        VkDescriptorSet desc_sets[] = {texture->ds};
+        VkDescriptorSet desc_sets[] = {render_buf->mini_set, texture->ds};
 
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),

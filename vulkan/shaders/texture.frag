@@ -1,7 +1,9 @@
 #version 450
 
+// This is what's been drawn so far
+layout(set = 0, binding = 0) uniform sampler2D current_frame;
 // This is the window texture
-layout(set = 0, binding = 0) uniform sampler2D tex;
+layout(set = 1, binding = 0) uniform sampler2D tex;
 
 layout(std140, push_constant) uniform UBO {
 	mat4 proj;
@@ -30,7 +32,10 @@ uint hash(uint x) {
 vec2 get_local_uv() {
         // Get the local UV from the global UV and inverted projection matrix.
         // Explanation at bottom of file.
-        float r0 = data.proj[0][2], r1 = data.proj[1][2], r2 = data.proj[2][2], r3 = data.proj[3][2];
+        float r0 = data.proj[0][2];
+        float r1 = data.proj[1][2];
+        float r2 = data.proj[2][2];
+        float r3 = data.proj[3][2];
         float x = global_uv.x * 2 - 1, y = global_uv.y * 2 - 1;
         float z = -(r3 + x*r0 + y*r1) / r2;
 
@@ -93,21 +98,7 @@ vec4 get_outside_color(vec2 uv) {
 }
 
 vec3 get_blurred_background() {
-        vec2 uv = global_uv;
-        vec2 halfpixel = 0.5 / (data.screen_dims);
-        float offset = 3.0;
-
-        /*
-        vec4 sum = texture(current_frame, uv) * 4.0;
-        sum += texture(current_frame, uv - halfpixel.xy * offset);
-        sum += texture(current_frame, uv + halfpixel.xy * offset);
-        sum += texture(current_frame, uv + vec2(halfpixel.x, -halfpixel.y) * offset);
-        sum += texture(current_frame, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
-
-        return (sum / 8.0).rgb;
-        */
-
-        return vec3(0);
+        return texture(current_frame, global_uv).rgb;
 }
 
 void main() {
