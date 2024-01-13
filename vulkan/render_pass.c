@@ -222,7 +222,52 @@ void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *r
         assert(res == VK_SUCCESS);
 }
 
-// It's different because we output to the screen instead of UV, depth and intermediate.
+// Blur
+void create_blur_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
+	// Single output
+	VkAttachmentDescription output_attach = {
+		.format = format,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+                // We do need to load it because we might sample it.
+		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	};
+
+	// Attachment references
+	VkAttachmentReference output_attach_ref = {
+		.attachment = 0,
+		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	};
+
+	VkAttachmentReference render_attachments[] = {output_attach_ref};
+
+	VkSubpassDescription render_subpass = {
+		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+		.colorAttachmentCount = sizeof(render_attachments) / sizeof(render_attachments[0]),
+		.pColorAttachments = render_attachments,
+	};
+
+        VkSubpassDescription subpasses[] = {render_subpass};
+
+	VkAttachmentDescription attachments[] = {
+                output_attach,
+        };
+
+	VkRenderPassCreateInfo rpass_info = {0};
+	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	rpass_info.attachmentCount = sizeof(attachments) / sizeof(attachments[0]);
+	rpass_info.pAttachments = attachments;
+	rpass_info.subpassCount = sizeof(subpasses) / sizeof(subpasses[0]);
+	rpass_info.pSubpasses = subpasses;
+
+	VkResult res = vkCreateRenderPass(device, &rpass_info, NULL, rpass);
+        assert(res == VK_SUCCESS);
+}
+
+// It's different because we output to the screen instead of UV, depth and
+// intermediate. TODO: get rid of intermediate, depth and UV from here.
 void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 	// Intermediate
 	VkAttachmentDescription intermediate_attach = {

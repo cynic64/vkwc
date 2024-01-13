@@ -224,86 +224,66 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 		wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
 	}
 
-        // Copy the intermediate into the mini image so we can sample it for
-        // blur
-        // Transition intermediate to TRANSFER_SRC
+        // Scissor to only the window being drawn + some padding
+        VkRect2D rect;
+        get_rect_for_matrix(screen_width, screen_height, matrix, &rect);
+        renderer->scissor = rect;
+
+        // Do one blur pass from the intermeidate into the first blur image
+        // Transition intermediate to SHADER_READ
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
-        // Transition mini image into TRANSFER_DST
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->mini, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                1);
-
-        // Blit
-        VkImageBlit blit_region = {
-                .srcSubresource = {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .layerCount = 1,
-                },
-                .srcOffsets = {
-                        { .x = 0, .y = 0 },
-                        { .x = screen_width, .y = screen_height, .z = 1 },
-                },
-                .dstSubresource = {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .layerCount = 1,
-                },
-                .dstOffsets = {
-                        { .x = 0, .y = 0 },
-                        { .x = screen_width * MINI_IMAGE_SCALE,
-                                .y = screen_height * MINI_IMAGE_SCALE, .z = 1 },
-                },
-        };
-        vkCmdBlitImage(cbuf,
-                render_buf->intermediate, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                render_buf->mini, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                1,
-                &blit_region,
-                VK_FILTER_LINEAR);
-
-        // Transition intermediate back to COLOR_ATTACH
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
-
-        // Transition mini image to SHADER_READ_ONLY
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->mini, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                1);
-
-        // Bind pipeline and descriptor sets
-	VkPipeline pipe	= renderer->current_render_buffer->render_setup->tex_pipe;
+	VkPipeline pipe	= renderer->current_render_buffer->render_setup->blur_pipes[0];
 	if (pipe != renderer->bound_pipe) {
 		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
 		renderer->bound_pipe = pipe;
 	}
 
-        // I could scissor to only the region being drawn to. I'm not sure it's
-        // worth it though, especially because it gets complicated with
-        // spinning surfaces and such.
-        VkRect2D rect;
-        get_rect_for_matrix(screen_width, screen_height, matrix, &rect);
-        renderer->scissor = rect;
+        begin_render_pass(cbuf, render_buf->blur_framebuffers[0],
+                render_buf->render_setup->blur_rpass[0], rect, screen_width, screen_height);
+
+        // We want to sample the intermediate image
+	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		renderer->pipe_layout, 0, 1,
+                &render_buf->intermediate_set, 0, NULL);
+
+        vkCmdDraw(cbuf, 4, 1, 0, 0);
+
+        vkCmdEndRenderPass(cbuf);
+
+        // Transition intermediate back to COLOR_ATTACH
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                1);
+
+        // Transition blur image to SHADER_READ_ONLY
+        vulkan_image_transition_cbuf(cbuf,
+                render_buf->blurs[0], VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                1);
+
+        // Bind pipeline and descriptor sets
+	pipe = renderer->current_render_buffer->render_setup->tex_pipe;
+	if (pipe != renderer->bound_pipe) {
+		vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+		renderer->bound_pipe = pipe;
+	}
 
         // Starts the command buffer and enters the render pass
         begin_render_pass(cbuf, render_buf->framebuffer,
                 render_buf->render_setup->rpass, rect, screen_width, screen_height);
 
-        VkDescriptorSet desc_sets[] = {render_buf->mini_set, texture->ds};
+        VkDescriptorSet desc_sets[] = {render_buf->blur_sets[0], texture->ds};
 
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),

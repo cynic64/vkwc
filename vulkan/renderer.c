@@ -28,6 +28,7 @@
 #include "vulkan/shaders/quad.frag.h"
 #include "vulkan/shaders/postprocess.vert.h"
 #include "vulkan/shaders/postprocess.frag.h"
+#include "vulkan/shaders/blur.frag.h"
 #include "vulkan/util.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/pipeline.h"
@@ -155,6 +156,10 @@ static void destroy_render_format_setup(struct wlr_vk_renderer *renderer,
 	vkDestroyPipeline(dev, setup->simple_tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->quad_pipe, NULL);
+        for (int i = 0; i < 2; i++) {
+	        vkDestroyPipeline(dev, setup->blur_pipes[i], NULL);
+                vkDestroyRenderPass(dev, setup->blur_rpass[i], NULL);
+        }
 	vkDestroyPipeline(dev, setup->postprocess_pipe, NULL);
 }
 
@@ -335,9 +340,11 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
         vkDestroyImageView(dev, buffer->intermediate_view, NULL);
         vkFreeMemory(dev, buffer->intermediate_mem, NULL);
 
-        vkDestroyImage(dev, buffer->mini, NULL);
-        vkDestroyImageView(dev, buffer->mini_view, NULL);
-        vkFreeMemory(dev, buffer->mini_mem, NULL);
+        for (int i = 0; i < 2; i++) {
+                vkDestroyImage(dev, buffer->blurs[i], NULL);
+                vkDestroyImageView(dev, buffer->blur_views[i], NULL);
+                vkFreeMemory(dev, buffer->blur_mems[i], NULL);
+        }
 
         vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
 
@@ -407,52 +414,50 @@ void render_buffer_create_descriptor_sets(struct wlr_vk_renderer *renderer,
                 &buffer->intermediate_set);
         assert(dpool != NULL);
 
-        VkDescriptorImageInfo ds_img_info = {0};
-        ds_img_info.imageView = buffer->intermediate_view;
-        ds_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        VkDescriptorImageInfo img_info = {0};
+        img_info.imageView = buffer->intermediate_view;
+        img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        VkWriteDescriptorSet ds_write = {0};
-        ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        ds_write.descriptorCount = 1;
-        ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        ds_write.dstSet = buffer->intermediate_set;
-        ds_write.pImageInfo = &ds_img_info;
+        VkWriteDescriptorSet write = {0};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.dstSet = buffer->intermediate_set;
+        write.pImageInfo = &img_info;
 
-        vkUpdateDescriptorSets(renderer->dev->dev, 1, &ds_write, 0, NULL);
+        vkUpdateDescriptorSets(renderer->dev->dev, 1, &write, 0, NULL);
 
-        // Mini image
-        dpool = vulkan_alloc_texture_ds(renderer, &buffer->mini_set);
-        assert(dpool != NULL);
+        // Blur images
+        for (int i = 0; i < 2; i++) {
+                dpool = vulkan_alloc_texture_ds(renderer, &buffer->blur_sets[i]);
+                assert(dpool != NULL);
 
-        VkDescriptorImageInfo mini_ds_info = {0};
-        mini_ds_info.imageView = buffer->mini_view;
-        mini_ds_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                img_info.imageView = buffer->blur_views[i];
+                img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        VkWriteDescriptorSet mini_ds_write = {0};
-        mini_ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        mini_ds_write.descriptorCount = 1;
-        mini_ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        mini_ds_write.dstSet = buffer->mini_set;
-        mini_ds_write.pImageInfo = &mini_ds_info;
+                write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                write.descriptorCount = 1;
+                write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                write.dstSet = buffer->blur_sets[i];
+                write.pImageInfo = &img_info;
 
-        vkUpdateDescriptorSets(renderer->dev->dev, 1, &mini_ds_write, 0, NULL);
+                vkUpdateDescriptorSets(renderer->dev->dev, 1, &write, 0, NULL);
+        }
 
         // UV buffer
         dpool = vulkan_alloc_texture_ds(renderer, &buffer->uv_set);
         assert(dpool != NULL);
 
-        VkDescriptorImageInfo uv_ds_info = {0};
-        uv_ds_info.imageView = buffer->uv_view;
-        uv_ds_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        img_info.imageView = buffer->uv_view;
+        img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        VkWriteDescriptorSet uv_ds_write = {0};
-        uv_ds_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        uv_ds_write.descriptorCount = 1;
-        uv_ds_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        uv_ds_write.dstSet = buffer->uv_set;
-        uv_ds_write.pImageInfo = &uv_ds_info;
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.dstSet = buffer->uv_set;
+        write.pImageInfo = &img_info;
 
-        vkUpdateDescriptorSets(renderer->dev->dev, 1, &uv_ds_write, 0, NULL);
+        vkUpdateDescriptorSets(renderer->dev->dev, 1, &write, 0, NULL);
 }
 
 // This gets called once for every swapchain image and once whenever the cursor
@@ -528,29 +533,32 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 buffer->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 &buffer->intermediate_view);
 
-        // Create the mini image at quarter resolution
-        create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
-                VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
-                        | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
-                dmabuf.width * MINI_IMAGE_SCALE, dmabuf.height * MINI_IMAGE_SCALE,
-                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                        | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                        | VK_IMAGE_USAGE_SAMPLED_BIT,
-                &buffer->mini);
+        // Create the blur images
+        for (int i = 0; i < 2; i++) {
+                create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
+                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+                                | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+                        dmabuf.width, dmabuf.height,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        &buffer->blurs[i]);
 
-        vkGetImageMemoryRequirements(renderer->dev->dev, buffer->mini,
-                &mem_reqs);
+                vkGetImageMemoryRequirements(renderer->dev->dev, buffer->blurs[i],
+                        &mem_reqs);
 
-        alloc_memory(renderer, mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                &buffer->mini_mem);
+                alloc_memory(renderer, mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        &buffer->blur_mems[i]);
 
-        res = vkBindImageMemory(renderer->dev->dev, buffer->mini,
-                buffer->mini_mem, 0);
-        assert(res == VK_SUCCESS);
+                res = vkBindImageMemory(renderer->dev->dev, buffer->blurs[i],
+                        buffer->blur_mems[i], 0);
+                assert(res == VK_SUCCESS);
 
-        create_image_view(renderer->dev->dev, fmt->format.vk_format,
-                buffer->mini, VK_IMAGE_ASPECT_COLOR_BIT,
-                &buffer->mini_view);
+                create_image_view(renderer->dev->dev, fmt->format.vk_format,
+                        buffer->blurs[i], VK_IMAGE_ASPECT_COLOR_BIT,
+                        &buffer->blur_views[i]);
+        }
 
 	// Create depth buffer
 	create_image(renderer->dev->phdev, renderer->dev->dev, DEPTH_FORMAT,
@@ -628,6 +636,17 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 
         res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffer);
         assert(res == VK_SUCCESS);
+
+        // This is for the blur passes
+        for (int i = 0; i < 2; i++) {
+                fb_info.attachmentCount = 1;
+                fb_info.pAttachments = &buffer->blur_views[i];
+                fb_info.renderPass = buffer->render_setup->blur_rpass[i];
+
+                res = vkCreateFramebuffer(dev, &fb_info, NULL,
+                        &buffer->blur_framebuffers[i]);
+                assert(res == VK_SUCCESS);
+        }
 
         // This is for the postprocess pass - does include the final
         // image and is created with a different render pass.
@@ -986,6 +1005,7 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 	vkDestroyShaderModule(dev->dev, renderer->tex_frag_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->simple_tex_frag_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->quad_frag_module, NULL);
+	vkDestroyShaderModule(dev->dev, renderer->blur_frag_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->postprocess_vert_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->postprocess_frag_module, NULL);
 
@@ -1324,6 +1344,12 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->quad_frag_module);
         assert(res == VK_SUCCESS);
 
+	// blur frag
+	sinfo.codeSize = sizeof(blur_frag_data);
+	sinfo.pCode = blur_frag_data;
+	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->blur_frag_module);
+        assert(res == VK_SUCCESS);
+
 	// postprocess vert
 	sinfo.codeSize = sizeof(postprocess_vert_data);
 	sinfo.pCode = postprocess_vert_data;
@@ -1357,6 +1383,9 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
         create_render_pass(renderer->dev->dev, format, &setup->rpass);
         create_postprocess_render_pass(renderer->dev->dev, format, &setup->postprocess_rpass);
+        for (int i = 0; i < 2; i++) {
+                create_blur_render_pass(renderer->dev->dev, format, &setup->blur_rpass[i]);
+        }
         create_simple_render_pass(renderer->dev->dev, format, &setup->simple_rpass);
 
         // Create pipelines
@@ -1373,6 +1402,12 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
         create_pipeline_with_depth(renderer->dev->dev,
                 renderer->vert_module, renderer->quad_frag_module,
                 setup->rpass, renderer->pipe_layout, &setup->quad_pipe);
+
+        for (int i = 0; i < 2; i++) {
+                create_postprocess_pipe(renderer->dev->dev,
+                        renderer->postprocess_vert_module, renderer->blur_frag_module,
+                        setup->blur_rpass[i], renderer->pipe_layout, &setup->blur_pipes[i]);
+        }
 
         create_postprocess_pipe(renderer->dev->dev,
                 renderer->postprocess_vert_module, renderer->postprocess_frag_module,

@@ -5,6 +5,7 @@ vulkan_shaders_src = [
   'simple_texture.frag',
   'postprocess.vert',
   'postprocess.frag',
+  'blur.frag',
 ]
 
 glslang = find_program('glslangValidator', native: true, required: true)

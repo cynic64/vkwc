@@ -14,8 +14,6 @@
 
 #define WLR_VK_RENDER_MODE_COUNT 3
 #define POSTPROCESS_MODE_COUNT 2
-// The mini image should be a quarter resolution compared to the intermediate
-#define MINI_IMAGE_SCALE 0.25
 
 // Used for all shaders
 struct PushConstants {
@@ -153,7 +151,8 @@ void vulkan_format_props_finish(struct wlr_vk_format_props *props);
 
 // For each format we want to render, we need a separate renderpass
 // and therefore also separate pipelines.
-// TODO: Maybe get rid of this?
+// TODO: Maybe get rid of this? It means I create all kinds of unnecessary shit
+// just for the cursor, for example.
 struct wlr_vk_render_format_setup {
 	struct wl_list link;
 	VkFormat render_format; // used in renderpass
@@ -169,10 +168,12 @@ struct wlr_vk_render_format_setup {
 	VkRenderPass rpass;
 	VkRenderPass postprocess_rpass;
 	VkRenderPass simple_rpass;
+	VkRenderPass blur_rpass[2];
 
 	VkPipeline simple_tex_pipe;
 	VkPipeline tex_pipe;
 	VkPipeline quad_pipe;
+	VkPipeline blur_pipes[2];
 	VkPipeline postprocess_pipe;
 };
 
@@ -187,6 +188,8 @@ struct wlr_vk_render_buffer {
         // The postprocess pass uses different images, so it needs to be
         // separate.
 	VkFramebuffer postprocess_framebuffer;
+        // So does blur
+	VkFramebuffer blur_framebuffers[2];
 
 	uint32_t mem_count;
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
@@ -199,11 +202,11 @@ struct wlr_vk_render_buffer {
         // Needed so we can sample it in the postprocess pass
         VkDescriptorSet intermediate_set;
 
-        // Scaled-down version of the intermediate to sample for blur
-	VkImage mini;
-	VkImageView mini_view;
-	VkDeviceMemory mini_mem;
-        VkDescriptorSet mini_set;
+        // Images we go back and forth between to do multiple blur passes
+	VkImage blurs[2];
+	VkImageView blur_views[2];
+	VkDeviceMemory blur_mems[2];
+        VkDescriptorSet blur_sets[2];
 
 	// Depth buffer
 	VkImage depth;
@@ -247,6 +250,7 @@ struct wlr_vk_renderer {
 	VkShaderModule simple_tex_frag_module;
 	VkShaderModule tex_frag_module;
 	VkShaderModule quad_frag_module;
+	VkShaderModule blur_frag_module;
 	VkShaderModule postprocess_vert_module;
 	VkShaderModule postprocess_frag_module;
 
