@@ -468,7 +468,7 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
 	acquire_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	acquire_barriers[idx].srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
 	acquire_barriers[idx].dstQueueFamilyIndex = renderer->dev->queue_family;
-	acquire_barriers[idx].image = renderer->current_render_buffer->image;
+	acquire_barriers[idx].image = renderer->current_render_buffer->screen;
 	acquire_barriers[idx].oldLayout = src_layout;
 	acquire_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
 	acquire_barriers[idx].srcAccessMask = 0u; // ignored anyways
@@ -487,7 +487,7 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
 	release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
 	release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-	release_barriers[idx].image = renderer->current_render_buffer->image;
+	release_barriers[idx].image = renderer->current_render_buffer->screen;
         // We transition the screen image to COLOR_ATTACHMENT_OPTIMAL when we
         // render to it, so now we have to transition it back to GENERAL
 	release_barriers[idx].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;

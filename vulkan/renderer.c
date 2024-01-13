@@ -328,8 +328,8 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 
 	VkDevice dev = buffer->renderer->dev->dev;
 
-	vkDestroyImageView(dev, buffer->image_view, NULL);
-	vkDestroyImage(dev, buffer->image, NULL);
+	vkDestroyImageView(dev, buffer->screen_view, NULL);
+	vkDestroyImage(dev, buffer->screen, NULL);
 
         vkDestroyImage(dev, buffer->intermediate, NULL);
         vkDestroyImageView(dev, buffer->intermediate_view, NULL);
@@ -460,9 +460,9 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		(const char*) &dmabuf.format, dmabuf.width, dmabuf.height);
 
 	// This is what gets presented
-	buffer->image = vulkan_import_dmabuf(renderer, &dmabuf,
+	buffer->screen = vulkan_import_dmabuf(renderer, &dmabuf,
 		buffer->memories, &buffer->mem_count, true);
-        assert(buffer->image != NULL);
+        assert(buffer->screen != NULL);
 
 	VkDevice dev = renderer->dev->dev;
 	const struct wlr_vk_format_props *fmt = vulkan_format_props_from_drm(
@@ -473,8 +473,8 @@ static struct wlr_vk_render_buffer *create_render_buffer(
 		exit(1);
 	}
 
-        create_image_view(dev, fmt->format.vk_format, buffer->image,
-                VK_IMAGE_ASPECT_COLOR_BIT, &buffer->image_view);
+        create_image_view(dev, fmt->format.vk_format, buffer->screen,
+                VK_IMAGE_ASPECT_COLOR_BIT, &buffer->screen_view);
 
 	buffer->render_setup = find_or_create_render_setup(
 		renderer, fmt->format.vk_format);
@@ -592,7 +592,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 buffer->intermediate_view,
                 buffer->depth_view,
                 buffer->uv_view,
-                buffer->image_view,
+                buffer->screen_view,
         };
 
         fb_info.attachmentCount =
@@ -675,7 +675,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
         // Copy intermediate image to final output
         // Transition final to IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
         vulkan_image_transition_cbuf(cbuf,
-                render_buf->image, VK_IMAGE_ASPECT_COLOR_BIT,
+                render_buf->screen, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
                 // I'm not really sure what to put here. I think the "proper"
@@ -693,7 +693,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
 
         // Now do the actual copy
         vulkan_copy_image(cbuf, render_buf->intermediate,
-                render_buf->image,
+                render_buf->screen,
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
                 width, height
         );
@@ -967,7 +967,7 @@ static bool vulkan_read_pixels(struct wlr_renderer *wlr_renderer,
 	bool success = false;
 	struct wlr_vk_renderer *vk_renderer = vulkan_get_renderer(wlr_renderer);
 	VkDevice dev = vk_renderer->dev->dev;
-	VkImage src_image = vk_renderer->current_render_buffer->image;
+	VkImage src_image = vk_renderer->current_render_buffer->screen;
 
 	const struct wlr_pixel_format_info *pixel_format_info = drm_get_pixel_format_info(drm_format);
 	if (!pixel_format_info) {

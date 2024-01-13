@@ -222,8 +222,8 @@ struct wlr_vk_render_buffer {
         // We don't render directly to it because we want to be able to choose
         // what we display - either the windows, the depth buffer or the UV
         // buffer.
-	VkImage image;
-	VkImageView image_view;
+	VkImage screen;
+	VkImageView screen_view;
 
         // Lets us know which render buffer was in use last (corresponds to
         // frame in wlr_vk_renderer)
