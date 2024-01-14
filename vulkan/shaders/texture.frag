@@ -1,7 +1,7 @@
 #version 450
 
-// This is what's been drawn so far
-layout(set = 0, binding = 0) uniform sampler2D current_frame;
+// This is what's been drawn so far, but blurred heavily
+layout(set = 0, binding = 0) uniform sampler2D blur;
 // This is the window texture
 layout(set = 1, binding = 0) uniform sampler2D tex;
 
@@ -27,6 +27,20 @@ uint hash(uint x) {
         x += ( x << 15u );
 
         return x;
+}
+
+// Adapted from https://stackoverflow.com/questions/4200224/random-noise-functions-for-glsl
+float random_float(vec2 uv) {
+        uint h = hash(floatBitsToUint(uv.x) ^ hash(floatBitsToUint(uv.y)));
+
+	const uint ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+	const uint ieeeOne      = 0x3F800000u; // 1.0 in IEEE binary32
+
+	h &= ieeeMantissa;                     // Keep only mantissa bits (fractional part)
+	h |= ieeeOne;                          // Add fractional part to 1.0
+
+	float  f = uintBitsToFloat( h );       // Range [1:2]
+	return f - 1.0;                        // Range [0:1]
 }
 
 vec2 get_local_uv() {
@@ -90,7 +104,7 @@ vec4 get_outside_color(vec2 uv) {
                 // Make it fade fast
                 shadow_opacity *= shadow_opacity;
                 shadow_opacity *= shadow_opacity;
-                vec3 shadow_color = bright.rgb;
+                vec3 shadow_color = vec3(0);
                 return vec4(shadow_color, 0.5 * shadow_opacity);
         } else {
                 return vec4(0);
@@ -98,7 +112,9 @@ vec4 get_outside_color(vec2 uv) {
 }
 
 vec3 get_blurred_background() {
-        return texture(current_frame, global_uv).rgb;
+        vec2 uv = global_uv;
+
+        return texture(blur, uv).rgb;
 }
 
 void main() {
@@ -109,7 +125,16 @@ void main() {
                 // We're in the window
                 vec4 window = texture(tex, uv);
                 vec3 background = get_blurred_background();
-                out_color = vec4(window.rgb * 0.9 + background * 0.1, window.a);
+                float opacity = data.is_focused == 1 ? 0.9 : 0.7;
+
+                float noise_factor = 0.1;
+                opacity -= noise_factor * random_float(uv);
+
+                float alpha = window.a;
+                window *= opacity;
+                background *= (1 - opacity);
+
+                out_color = vec4(window.rgb + background, alpha);
                 out_uv = vec4(uv, data.surface_id.x, 1);
         } else {
                 // We're outside the window

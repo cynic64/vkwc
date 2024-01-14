@@ -17,7 +17,7 @@
 // Anything less has lots of artifacts
 #define BLUR_PASSES 5
 // This + BLUR_PASSES controls how heavy the blur is.
-#define BLUR_IMAGE_SCALE 0.5
+#define BLUR_IMAGE_SCALE 0.25
 
 // Used for all shaders
 struct PushConstants {

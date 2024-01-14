@@ -230,7 +230,10 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         renderer->scissor = rect;
 
         // Do one blur pass from the intermediate into the first blur image
+        // Entire blur process takes 0.56ms with BLUR_IMAGE_SCALE = 0.25 in
+        // fullscreen.
         // Transition intermediate to SHADER_READ
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -302,6 +305,10 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
                 last_blur_idx = blur_idx;
         }
+        // The blur takes almost 1ms on the CPU! Not great. I think I could
+        // reduce this by using a render pass with many subpasses for the
+        // transitions and only binding the blur descriptors once.
+        printf("\t[CPU] render_texture subsection: %5.3f ms\n", (get_time() - start_time) * 1000);
 
         // Transition intermediate back to COLOR_ATTACH
         vulkan_image_transition_cbuf(cbuf,
@@ -318,6 +325,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
+
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
 
         // Bind pipeline and descriptor sets
 	VkPipeline pipe = renderer->current_render_buffer->render_setup->tex_pipe;
