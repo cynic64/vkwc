@@ -181,9 +181,14 @@ void debug_images(struct wlr_renderer *wlr_renderer) {
         printf("UV is at %p\n", render_buf->uv);
 }
 
-// Assumes image is in SHADER_READ_ONLY
+// Assumes image is in SHADER_READ_ONLY. If with_threshold is set, a threshold
+// will first be applied to the image. So you end up with just the bright parts
+// blurred.
 void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
-                int screen_width, int screen_height, VkDescriptorSet *src_image_set) {
+                int screen_width, int screen_height, int pass_count, VkDescriptorSet *src_image_set,
+                bool with_threshold) {
+        assert(pass_count <= BLUR_PASSES);
+
         VkCommandBuffer cbuf = renderer->cb;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
@@ -196,15 +201,15 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_BLUR);
 
         int last_image_idx = 0;
-        for (int i = 0; i < 2 * BLUR_PASSES - 1; i++) {
+        for (int i = 0; i < 2 * pass_count - 1; i++) {
                 int image_idx;
-                if (i < BLUR_PASSES) {
+                if (i < pass_count) {
                         // Always blur to the next image while downsampling
                         image_idx = i;
                 } else {
-                        // When i == BLUR_PASSES, we want to blur to
-                        // [BLUR_PASSES - 2], since that's the one before last.
-                        image_idx = 2 * BLUR_PASSES - i - 2;
+                        // When i == pass_count, we want to blur to
+                        // [pass_count - 2], since that's the one before last.
+                        image_idx = 2 * pass_count - i - 2;
                 }
 
                 float blur_scale = 1.0 / (2 << image_idx);
@@ -260,9 +265,12 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                 // sampling and not our own image here
                 push_constants.screen_dims[0] = width;
                 push_constants.screen_dims[1] = height;
-                if (i >= BLUR_PASSES) {
+                if (i >= pass_count) {
                         // We're upsampling, we reuse is_focused to set that
                         push_constants.is_focused = 1;
+                } else if (i == 0 && with_threshold) {
+                        // Downsample and use threshold. TODO: Less hacky method...
+                        push_constants.is_focused = 2;
                 }
 
                 vkCmdPushConstants(cbuf, renderer->pipe_layout,
@@ -274,7 +282,6 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                 vkCmdEndRenderPass(cbuf);
 
                 last_image_idx = image_idx;
-
         }
 
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_BLUR);
@@ -340,7 +347,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
-        blur_image(renderer, rect, screen_width, screen_height, &render_buf->intermediate_set);
+        blur_image(renderer, rect, screen_width, screen_height, BLUR_PASSES,
+                &render_buf->intermediate_set, false);
 
         // The blur takes almost 1ms on the CPU! Not great. I think I could
         // reduce this by using a render pass with many subpasses for the
@@ -707,7 +715,8 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 
         // Blur entire intermediate
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
-        blur_image(renderer, rect, width, height, &render_buf->intermediate_set);
+        // Only do 3 passes
+        blur_image(renderer, rect, width, height, 4, &render_buf->intermediate_set, true);
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
 
         // Transition blur to SHADER_READ_ONLY
