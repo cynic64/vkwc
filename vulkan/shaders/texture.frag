@@ -132,18 +132,23 @@ void main() {
                 vec3 background = get_blurred_background();
                 float opacity = data.is_focused == 1 ? 0.9 : 0.7;
 
-                float noise_factor = 0.1;
-                float noise = random_float(uv);
-                noise *= noise;
-                noise *= noise;
-                opacity -= noise_factor * noise;
-
                 float alpha = window.a;
                 window *= opacity;
                 background *= (1 - opacity);
 
                 out_color = vec4(window.rgb + background, alpha);
                 out_uv = vec4(uv, data.surface_id.x, 1);
+
+                // Overlay noise
+                float noise = random_float(uv);
+                noise = sqrt(noise);
+                noise = sqrt(noise);
+                float noise_factor = 0.5;
+                noise = noise * noise_factor + (1 -  noise_factor);
+                vec3 upper = vec3(noise);
+                vec3 lower = out_color.rgb;
+                // This is the "overlay" mode from GIMP
+                out_color.rgb = ((1 - lower) * 2 * upper + lower) * lower;
         } else {
                 // We're outside the window
                 out_color = get_outside_color(uv);
