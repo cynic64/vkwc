@@ -156,7 +156,7 @@ static void destroy_render_format_setup(struct wlr_vk_renderer *renderer,
 	vkDestroyPipeline(dev, setup->simple_tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->quad_pipe, NULL);
-        for (int i = 0; i < BLUR_IMAGES; i++) {
+        for (int i = 0; i < BLUR_PASSES; i++) {
 	        vkDestroyPipeline(dev, setup->blur_pipes[i], NULL);
                 vkDestroyRenderPass(dev, setup->blur_rpass[i], NULL);
         }
@@ -340,7 +340,7 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
         vkDestroyImageView(dev, buffer->intermediate_view, NULL);
         vkFreeMemory(dev, buffer->intermediate_mem, NULL);
 
-        for (int i = 0; i < BLUR_IMAGES; i++) {
+        for (int i = 0; i < BLUR_PASSES; i++) {
                 vkDestroyImage(dev, buffer->blurs[i], NULL);
                 vkDestroyImageView(dev, buffer->blur_views[i], NULL);
                 vkFreeMemory(dev, buffer->blur_mems[i], NULL);
@@ -428,7 +428,7 @@ void render_buffer_create_descriptor_sets(struct wlr_vk_renderer *renderer,
         vkUpdateDescriptorSets(renderer->dev->dev, 1, &write, 0, NULL);
 
         // Blur images
-        for (int i = 0; i < BLUR_IMAGES; i++) {
+        for (int i = 0; i < BLUR_PASSES; i++) {
                 dpool = vulkan_alloc_texture_ds(renderer, &buffer->blur_sets[i]);
                 assert(dpool != NULL);
 
@@ -534,9 +534,9 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 &buffer->intermediate_view);
 
         // Create the blur images
-        for (int i = 0; i < BLUR_IMAGES; i++) {
-                int width = dmabuf.width / (1 << i) * BLUR_SCALE;
-                int height = dmabuf.height / (1 << i) * BLUR_SCALE;
+        for (int i = 0; i < BLUR_PASSES; i++) {
+                int width = dmabuf.width / (2 << i);
+                int height = dmabuf.height / (2 << i);
                 if (width < 1) width = 1;
                 if (height < 1) height = 1;
                 create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
@@ -641,11 +641,11 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         assert(res == VK_SUCCESS);
 
         // This is for the blur passes
-        for (int i = 0; i < BLUR_IMAGES; i++) {
+        for (int i = 0; i < BLUR_PASSES; i++) {
                 VkFramebufferCreateInfo blur_fb_info = {0};
                 blur_fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-                blur_fb_info.width = dmabuf.width / (1 << i) * BLUR_SCALE;
-                blur_fb_info.height = dmabuf.height / (1 << i) * BLUR_SCALE;
+                blur_fb_info.width = dmabuf.width / (2 << i);
+                blur_fb_info.height = dmabuf.height / (2 << i);
                 if (blur_fb_info.width < 1) blur_fb_info.width = 1;
                 if (blur_fb_info.height < 1) blur_fb_info.height = 1;
                 blur_fb_info.layers = 1u;
@@ -1304,12 +1304,12 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
 	sampler_info.magFilter = VK_FILTER_LINEAR;
 	sampler_info.minFilter = VK_FILTER_LINEAR;
 	sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-	sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	sampler_info.maxAnisotropy = 1.f;
 	sampler_info.minLod = 0.f;
-	sampler_info.maxLod = 0.25f;
+	sampler_info.maxLod = VK_LOD_CLAMP_NONE;
 	sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
 	res = vkCreateSampler(dev, &sampler_info, NULL, &renderer->sampler);
@@ -1394,7 +1394,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
         create_render_pass(renderer->dev->dev, format, &setup->rpass);
         create_postprocess_render_pass(renderer->dev->dev, format, &setup->postprocess_rpass);
-        for (int i = 0; i < BLUR_IMAGES; i++) {
+        for (int i = 0; i < BLUR_PASSES; i++) {
                 create_blur_render_pass(renderer->dev->dev, format, &setup->blur_rpass[i]);
         }
         create_simple_render_pass(renderer->dev->dev, format, &setup->simple_rpass);
@@ -1414,7 +1414,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
                 renderer->vert_module, renderer->quad_frag_module,
                 setup->rpass, renderer->pipe_layout, &setup->quad_pipe);
 
-        for (int i = 0; i < BLUR_IMAGES; i++) {
+        for (int i = 0; i < BLUR_PASSES; i++) {
                 create_postprocess_pipe(renderer->dev->dev,
                         renderer->postprocess_vert_module, renderer->blur_frag_module,
                         setup->blur_rpass[i], renderer->pipe_layout, &setup->blur_pipes[i]);

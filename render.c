@@ -196,20 +196,23 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_BLUR);
 
         int last_image_idx = 0;
-        for (int i = 0; i < 2 * BLUR_PASSES; i++) {
+        for (int i = 0; i < 2 * BLUR_PASSES - 1; i++) {
                 int image_idx;
                 if (i < BLUR_PASSES) {
                         // Always blur to the next image while downsampling
-                        image_idx = i + 1;
+                        image_idx = i;
                 } else {
                         // When i == BLUR_PASSES, we want to blur to
-                        // [BLUR_PASSES - 1], since that's the one before last.
-                        image_idx = 2 * BLUR_PASSES - i - 1;
+                        // [BLUR_PASSES - 2], since that's the one before last.
+                        image_idx = 2 * BLUR_PASSES - i - 2;
                 }
 
-                float blur_scale = 1.0 / (1 << image_idx) * BLUR_SCALE;
+                float blur_scale = 1.0 / (2 << image_idx);
                 int width = screen_width * blur_scale;
                 int height = screen_height * blur_scale;
+
+                printf("Rendering to %d from %d with dims %d %d\n",
+                        image_idx, last_image_idx, width, height);
 
                 if (i != 0) {
                         // Unless we're on the first pass, we have to transition
@@ -253,6 +256,8 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                         renderer->pipe_layout, 0, 1, in_set, 0, NULL);
 
                 struct PushConstants push_constants = {0};
+                // Important to feed in the dimensions of the image we're
+                // sampling and not our own image here
                 push_constants.screen_dims[0] = width;
                 push_constants.screen_dims[1] = height;
                 if (i >= BLUR_PASSES) {
@@ -353,7 +358,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         // Transition blur image to SHADER_READ_ONLY
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->blurs[0], VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                //VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
@@ -732,8 +738,8 @@ void render_end(struct wlr_renderer *wlr_renderer) {
                 setup->postprocess_rpass, rect, width, height);
 
         // Bind descriptors
-        VkDescriptorSet desc_sets[] =
-                {render_buf->intermediate_set, render_buf->uv_set, render_buf->blur_sets[0]};
+        VkDescriptorSet desc_sets[] = {render_buf->intermediate_set,
+                render_buf->uv_set, render_buf->blur_sets[0]};
 
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),

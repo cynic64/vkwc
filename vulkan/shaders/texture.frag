@@ -69,7 +69,7 @@ vec4 neon(vec3 color, float dist, float size) {
         } else if (dist > -size && dist < size) {
                 // Fade away from the border
                 float opacity = 1 - (abs(dist) / size);
-                opacity *= opacity * opacity * opacity;
+                opacity *= opacity * opacity * opacity * opacity;
                 return vec4(color, opacity);
         } else {
                 return vec4(0);
@@ -120,7 +120,7 @@ vec4 get_outside_color(vec2 uv) {
         sum = mix(sum, neon(vec3(0.076, 0.082, 0.133), dist - 64, 32));
         sum = mix(sum, neon(vec3(0.01, 0.089, 0.133), dist - 80, 32));
         sum = mix(sum, neon(vec3(0.033, 0.235, 0.342), dist - 96, 32));
-        sum = mix(sum, neon(vec3(0.023, 0.392, 0.25), dist - 112, 32));
+        //sum = mix(sum, neon(vec3(0.023, 0.392, 0.25), dist - 112, 32));
 
         return sum;
 }
