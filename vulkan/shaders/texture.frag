@@ -54,7 +54,12 @@ vec2 get_local_uv() {
         float z = -(r3 + x*r0 + y*r1) / r2;
 
         vec4 inverted = data.proj * vec4(x, y, z, 1);
-        return inverted.xy / inverted.w;
+        // The rounding makes sure we always get the same values even if the
+        // window is moved. If it was 0.1, 0.2, 0.3, 0.4 before it will still be
+        // 0.1, 0.2, 0.3, 0.4 even if you move the window.
+        vec2 coords = round(inverted.xy / inverted.w * data.surface_dims);
+
+        return (coords + vec2(0.5)) / data.surface_dims;
 }
 
 vec4 get_outside_color(vec2 uv) {
@@ -128,7 +133,10 @@ void main() {
                 float opacity = data.is_focused == 1 ? 0.9 : 0.7;
 
                 float noise_factor = 0.1;
-                opacity -= noise_factor * random_float(uv);
+                float noise = random_float(uv);
+                noise *= noise;
+                noise *= noise;
+                opacity -= noise_factor * noise;
 
                 float alpha = window.a;
                 window *= opacity;
