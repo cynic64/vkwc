@@ -183,9 +183,17 @@ void debug_images(struct wlr_renderer *wlr_renderer) {
 
 // Assumes image is in SHADER_READ_ONLY
 void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
-                int screen_width, int screen_height, VkDescriptorSet *source_image_set) {
+                int screen_width, int screen_height, VkDescriptorSet *src_image_set) {
         VkCommandBuffer cbuf = renderer->cb;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+
+        double start_time = get_time();
+
+        // There might have already been a texture rendered, so reset the timers
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, TIMER_BLUR, 2);
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, TIMER_BLUR_1, 2);
+
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_BLUR);
 
         int last_image_idx = 0;
         for (int i = 0; i < 2 * BLUR_PASSES; i++) {
@@ -202,9 +210,6 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                 float blur_scale = 1.0 / (1 << image_idx) * BLUR_SCALE;
                 int width = screen_width * blur_scale;
                 int height = screen_height * blur_scale;
-
-                printf("Blur to image idx %d from %d (%d x %d)\n",
-                        image_idx, last_image_idx, width, height);
 
                 if (i != 0) {
                         // Unless we're on the first pass, we have to transition
@@ -239,11 +244,8 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
 
                 VkDescriptorSet *in_set;
                 if (i == 0) {
-                        // If this is the first pass, sample the original image instead.
-                        in_set = source_image_set;
-                        printf("\tUsing source image\n");
+                        in_set = src_image_set;
                 } else {
-                        printf("\tUsing blur image %d\n", last_image_idx);
                         in_set = &render_buf->blur_sets[last_image_idx];
                 }
 
@@ -267,7 +269,12 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                 vkCmdEndRenderPass(cbuf);
 
                 last_image_idx = image_idx;
+
         }
+
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_BLUR);
+
+        printf("\t[CPU] blur: %5.3f ms\n", (get_time() - start_time) * 1000);
 }
 
 // Set render_uv to false to, well, not render to the UV texture. That will
@@ -684,19 +691,18 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         VkRect2D rect = {{0, 0}, {width, height}};
         renderer->scissor = rect;
 
-        // Transition intermediate to SHADER_READ_ONLY_OPTIMAL
+        // Transition intermediate to TRANSFER_SRC
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
         // Blur entire intermediate
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
         blur_image(renderer, rect, width, height, &render_buf->intermediate_set);
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
 
         // Transition blur to SHADER_READ_ONLY
         vulkan_image_transition_cbuf(cbuf,
@@ -785,6 +791,15 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         printf("\t[GPU] render_end: %5.3f ms\n",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_END) * 1000);
+        printf("\t[GPU] render_end subsection: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_RENDER_END_1) * 1000);
+        printf("\t[GPU] Most recent blur: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_BLUR) * 1000);
+        printf("\t[GPU] Most recent blur subsection: %5.3f ms\n",
+                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, TIMER_BLUR_1) * 1000);
         printf("\t[GPU] Entire pipeline: %5.3f ms\n",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_EVERYTHING) * 1000);

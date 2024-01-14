@@ -544,7 +544,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                                 | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
                         width, height,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
                                 | VK_IMAGE_USAGE_TRANSFER_DST_BIT
                                 | VK_IMAGE_USAGE_SAMPLED_BIT,
                         &buffer->blurs[i]);

@@ -23,7 +23,7 @@
 // blur, for example, there's no reason to create a full-res blur image. Not
 // using it right now because there are some are some artifacts, and it annoys
 // me that it's necessary...
-#define BLUR_SCALE 1
+#define BLUR_SCALE 0.5
 
 // Used for all shaders
 struct PushConstants {
