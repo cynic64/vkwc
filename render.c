@@ -181,6 +181,78 @@ void debug_images(struct wlr_renderer *wlr_renderer) {
         printf("UV is at %p\n", render_buf->uv);
 }
 
+// Assumes image is in SHADER_READ_ONLY
+void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
+                int screen_width, int screen_height, VkDescriptorSet *source_image_set) {
+        VkCommandBuffer cbuf = renderer->cb;
+        struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
+
+        // Entire blur process takes 0.56ms with BLUR_IMAGE_SCALE = 0.25 in
+        // fullscreen.
+        for (int i = 0; i < BLUR_PASSES; i++) {
+                // The image we're rendering to
+                int blur_idx = i % 2;
+                // The one w're sampling
+                int last_blur_idx = (i + 1) % 2;
+
+                int width = screen_width * BLUR_IMAGE_SCALE;
+                int height = screen_height * BLUR_IMAGE_SCALE;
+
+                if (i != 0) {
+                        // Unless we're on the first pass, we have to transition
+                        // the previous blur image to SHADER_READ_ONLY
+                        vulkan_image_transition_cbuf(cbuf,
+                                render_buf->blurs[last_blur_idx], VK_IMAGE_ASPECT_COLOR_BIT,
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                VK_ACCESS_SHADER_READ_BIT,
+                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                1);
+                }
+
+                VkPipeline pipe	=
+                        renderer->current_render_buffer->render_setup->blur_pipes[blur_idx];
+                if (pipe != renderer->bound_pipe) {
+                        vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+                        renderer->bound_pipe = pipe;
+                }
+
+                VkRect2D blur_rect;
+                blur_rect.offset.x = rect.offset.x * BLUR_IMAGE_SCALE;
+                blur_rect.offset.y = rect.offset.y * BLUR_IMAGE_SCALE;
+                blur_rect.extent.width = rect.extent.width * BLUR_IMAGE_SCALE;
+                blur_rect.extent.height = rect.extent.height * BLUR_IMAGE_SCALE;
+
+                begin_render_pass(cbuf, render_buf->blur_framebuffers[blur_idx],
+                        render_buf->render_setup->blur_rpass[blur_idx],
+                        blur_rect, width, height);
+
+                VkDescriptorSet *in_set = &render_buf->blur_sets[last_blur_idx];
+                if (i == 0) {
+                        // If this is the first pass, sample the original image instead.
+                        in_set = source_image_set;
+                }
+                vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        renderer->pipe_layout, 0, 1, in_set, 0, NULL);
+
+                struct PushConstants push_constants;
+                push_constants.screen_dims[0] = width;
+                push_constants.screen_dims[1] = height;
+                // We re-use is_focused for radius.
+                push_constants.is_focused = 1.5 + (BLUR_PASSES - i);
+
+                vkCmdPushConstants(cbuf, renderer->pipe_layout,
+                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                        0, sizeof(push_constants), &push_constants);
+
+                vkCmdDraw(cbuf, 4, 1, 0, 0);
+
+                vkCmdEndRenderPass(cbuf);
+        }
+}
+
 // Set render_uv to false to, well, not render to the UV texture. That will
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
@@ -229,9 +301,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         get_rect_for_matrix(screen_width, screen_height, matrix, &rect);
         renderer->scissor = rect;
 
-        // Do one blur pass from the intermediate into the first blur image
-        // Entire blur process takes 0.56ms with BLUR_IMAGE_SCALE = 0.25 in
-        // fullscreen.
+        // Blur
         // Transition intermediate to SHADER_READ
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
         vulkan_image_transition_cbuf(cbuf,
@@ -241,70 +311,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
-        int last_blur_idx = -1;
-        for (int i = 0; i < BLUR_PASSES; i++) {
-                // The image we're rendering to
-                int blur_idx = i % 2;
+        blur_image(renderer, rect, screen_width, screen_height, &render_buf->intermediate_set);
 
-                int width = screen_width * BLUR_IMAGE_SCALE;
-                int height = screen_height * BLUR_IMAGE_SCALE;
-
-                if (i != 0) {
-                        // Unless we're on the first pass, we have to transition
-                        // the previous blur image to SHADER_READ_ONLY
-                        vulkan_image_transition_cbuf(cbuf,
-                                render_buf->blurs[last_blur_idx], VK_IMAGE_ASPECT_COLOR_BIT,
-                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                VK_ACCESS_SHADER_READ_BIT,
-                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                1);
-                }
-
-                VkPipeline pipe	=
-                        renderer->current_render_buffer->render_setup->blur_pipes[blur_idx];
-                if (pipe != renderer->bound_pipe) {
-                        vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-                        renderer->bound_pipe = pipe;
-                }
-
-                VkRect2D blur_rect;
-                blur_rect.offset.x = rect.offset.x * BLUR_IMAGE_SCALE;
-                blur_rect.offset.y = rect.offset.y * BLUR_IMAGE_SCALE;
-                blur_rect.extent.width = rect.extent.width * BLUR_IMAGE_SCALE;
-                blur_rect.extent.height = rect.extent.height * BLUR_IMAGE_SCALE;
-
-                begin_render_pass(cbuf, render_buf->blur_framebuffers[blur_idx],
-                        render_buf->render_setup->blur_rpass[blur_idx],
-                        blur_rect, width, height);
-
-                VkDescriptorSet *in_set = &render_buf->blur_sets[last_blur_idx];
-                if (i == 0) {
-                        // If this is the first pass, sample the intermediate
-                        // image instead.
-                        in_set = &render_buf->intermediate_set;
-                }
-                vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        renderer->pipe_layout, 0, 1, in_set, 0, NULL);
-
-                struct PushConstants push_constants;
-                push_constants.screen_dims[0] = width;
-                push_constants.screen_dims[1] = height;
-                // We re-use is_focused for radius.
-                push_constants.is_focused = 1.5 + (BLUR_PASSES - i);
-
-                vkCmdPushConstants(cbuf, renderer->pipe_layout,
-                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                        0, sizeof(push_constants), &push_constants);
-
-                vkCmdDraw(cbuf, 4, 1, 0, 0);
-
-                vkCmdEndRenderPass(cbuf);
-
-                last_blur_idx = blur_idx;
-        }
         // The blur takes almost 1ms on the CPU! Not great. I think I could
         // reduce this by using a render pass with many subpasses for the
         // transitions and only binding the blur descriptors once.
@@ -319,6 +327,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 1);
 
         // Transition blur image to SHADER_READ_ONLY
+        int last_blur_idx = (BLUR_PASSES - 1) % 2;
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->blurs[last_blur_idx], VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
