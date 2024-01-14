@@ -13,11 +13,17 @@
 #include "../vulkan/error.h"
 
 #define WLR_VK_RENDER_MODE_COUNT 3
-#define POSTPROCESS_MODE_COUNT 2
-// Anything less has lots of artifacts
-#define BLUR_PASSES 5
-// This + BLUR_PASSES controls how heavy the blur is.
-#define BLUR_IMAGE_SCALE 0.25
+#define POSTPROCESS_MODE_COUNT 3
+// This is in a single direction (so downsample or upsample). Total passes is
+// double this.
+#define BLUR_PASSES 3
+// We always need one more image for blurring than we have passes.
+#define BLUR_IMAGES (BLUR_PASSES + 1)
+// The size of the first blur image compared to the screen. If we want a heavy
+// blur, for example, there's no reason to create a full-res blur image. Not
+// using it right now because there are some are some artifacts, and it annoys
+// me that it's necessary...
+#define BLUR_SCALE 1
 
 // Used for all shaders
 struct PushConstants {
@@ -172,12 +178,13 @@ struct wlr_vk_render_format_setup {
 	VkRenderPass rpass;
 	VkRenderPass postprocess_rpass;
 	VkRenderPass simple_rpass;
-	VkRenderPass blur_rpass[2];
+	VkRenderPass blur_rpass[BLUR_IMAGES];
 
 	VkPipeline simple_tex_pipe;
 	VkPipeline tex_pipe;
 	VkPipeline quad_pipe;
-	VkPipeline blur_pipes[2];
+        // Need one pipeline for every render pass
+	VkPipeline blur_pipes[BLUR_IMAGES];
 	VkPipeline postprocess_pipe;
 };
 
@@ -193,7 +200,7 @@ struct wlr_vk_render_buffer {
         // separate.
 	VkFramebuffer postprocess_framebuffer;
         // So does blur
-	VkFramebuffer blur_framebuffers[2];
+	VkFramebuffer blur_framebuffers[BLUR_IMAGES];
 
 	uint32_t mem_count;
 	VkDeviceMemory memories[WLR_DMABUF_MAX_PLANES];
@@ -206,11 +213,11 @@ struct wlr_vk_render_buffer {
         // Needed so we can sample it in the postprocess pass
         VkDescriptorSet intermediate_set;
 
-        // Images we go back and forth between to do multiple blur passes
-	VkImage blurs[2];
-	VkImageView blur_views[2];
-	VkDeviceMemory blur_mems[2];
-        VkDescriptorSet blur_sets[2];
+        // Images for doing blur passes, each one is half the size of the previous
+	VkImage blurs[BLUR_IMAGES];
+	VkImageView blur_views[BLUR_IMAGES];
+	VkDeviceMemory blur_mems[BLUR_IMAGES];
+        VkDescriptorSet blur_sets[BLUR_IMAGES];
 
 	// Depth buffer
 	VkImage depth;

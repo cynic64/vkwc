@@ -8,21 +8,32 @@ layout(std140, push_constant) uniform UBO {
         vec2 surface_id;
         vec2 surface_dims;
         vec2 screen_dims;
-        float radius;
+        // 0 = downsampling, 1 = upsampling
+        float upsample;
 } data;
 
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 out_color;
 
 void main() {
-        float r = data.radius;
-        vec3 sum = vec3(0);
-        sum += texture(tex, uv + vec2(r, r) / data.screen_dims).rgb;
-        sum += texture(tex, uv + vec2(-r, r) / data.screen_dims).rgb;
-        sum += texture(tex, uv + vec2(r, -r) / data.screen_dims).rgb;
-        sum += texture(tex, uv + vec2(-r, -r) / data.screen_dims).rgb;
-        sum /= 4;
-
-        out_color = vec4(sum, 1);
+        if (data.upsample == 0) {
+                // Downsample
+                out_color = texture(tex, uv) / 2
+                        + texture(tex, uv + vec2(1, 0) / data.screen_dims) / 8
+                        + texture(tex, uv + vec2(-1, 0 / data.screen_dims)) / 8
+                        + texture(tex, uv + vec2(0.0,  1) / data.screen_dims) / 8
+                        + texture(tex, uv + vec2(0.0, -1) / data.screen_dims) / 8;
+                out_color.a = 1;
+        } else {
+                // Upsample
+                out_color = texture(tex, uv + vec2(1, 1) / data.screen_dims) / 6
+                        + texture(tex, uv + vec2(-1, 1) / data.screen_dims) / 6
+                        + texture(tex, uv + vec2(1, -1) / data.screen_dims) / 6
+                        + texture(tex, uv + vec2(-1, -1) / data.screen_dims) / 6
+                        + texture(tex, uv + vec2(2, 0) / data.screen_dims) / 12
+                        + texture(tex, uv + vec2(-2, 0) / data.screen_dims) / 12
+                        + texture(tex, uv + vec2(0, 2) / data.screen_dims) / 12
+                        + texture(tex, uv + vec2(0, -2) / data.screen_dims) / 12;
+        }
 }
 

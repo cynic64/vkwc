@@ -156,7 +156,7 @@ static void destroy_render_format_setup(struct wlr_vk_renderer *renderer,
 	vkDestroyPipeline(dev, setup->simple_tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->tex_pipe, NULL);
 	vkDestroyPipeline(dev, setup->quad_pipe, NULL);
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < BLUR_IMAGES; i++) {
 	        vkDestroyPipeline(dev, setup->blur_pipes[i], NULL);
                 vkDestroyRenderPass(dev, setup->blur_rpass[i], NULL);
         }
@@ -340,7 +340,7 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
         vkDestroyImageView(dev, buffer->intermediate_view, NULL);
         vkFreeMemory(dev, buffer->intermediate_mem, NULL);
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < BLUR_IMAGES; i++) {
                 vkDestroyImage(dev, buffer->blurs[i], NULL);
                 vkDestroyImageView(dev, buffer->blur_views[i], NULL);
                 vkFreeMemory(dev, buffer->blur_mems[i], NULL);
@@ -428,7 +428,7 @@ void render_buffer_create_descriptor_sets(struct wlr_vk_renderer *renderer,
         vkUpdateDescriptorSets(renderer->dev->dev, 1, &write, 0, NULL);
 
         // Blur images
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < BLUR_IMAGES; i++) {
                 dpool = vulkan_alloc_texture_ds(renderer, &buffer->blur_sets[i]);
                 assert(dpool != NULL);
 
@@ -534,11 +534,15 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 &buffer->intermediate_view);
 
         // Create the blur images
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < BLUR_IMAGES; i++) {
+                int width = dmabuf.width / (1 << i) * BLUR_SCALE;
+                int height = dmabuf.height / (1 << i) * BLUR_SCALE;
+                if (width < 1) width = 1;
+                if (height < 1) height = 1;
                 create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
                         VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
                                 | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
-                        dmabuf.width * BLUR_IMAGE_SCALE, dmabuf.height * BLUR_IMAGE_SCALE,
+                        width, height,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                 | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
                                 | VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -638,11 +642,13 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         assert(res == VK_SUCCESS);
 
         // This is for the blur passes
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < BLUR_IMAGES; i++) {
                 VkFramebufferCreateInfo blur_fb_info = {0};
                 blur_fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-                blur_fb_info.width = dmabuf.width * BLUR_IMAGE_SCALE;
-                blur_fb_info.height = dmabuf.height * BLUR_IMAGE_SCALE;
+                blur_fb_info.width = dmabuf.width / (1 << i) * BLUR_SCALE;
+                blur_fb_info.height = dmabuf.height / (1 << i) * BLUR_SCALE;
+                if (blur_fb_info.width < 1) blur_fb_info.width = 1;
+                if (blur_fb_info.height < 1) blur_fb_info.height = 1;
                 blur_fb_info.layers = 1u;
 
                 blur_fb_info.attachmentCount = 1;
@@ -1313,10 +1319,10 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
         // Descriptor layout for textures.
         create_tex_desc_layout(renderer->dev->dev, renderer->sampler, &renderer->tex_desc_layout);
 
-        // We reuse this for the frame so far because it's the same samper
+        // We reuse this for the current frame and blur because it's the same sampler
         // and descriptor count.
         VkDescriptorSetLayout desc_layouts[] =
-                {renderer->tex_desc_layout, renderer->tex_desc_layout};
+                {renderer->tex_desc_layout, renderer->tex_desc_layout, renderer->tex_desc_layout};
 
         // Pipeline layout, gets used for everything since we use the same
         // uniforms and stuff in every shader.
@@ -1389,7 +1395,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
         create_render_pass(renderer->dev->dev, format, &setup->rpass);
         create_postprocess_render_pass(renderer->dev->dev, format, &setup->postprocess_rpass);
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < BLUR_IMAGES; i++) {
                 create_blur_render_pass(renderer->dev->dev, format, &setup->blur_rpass[i]);
         }
         create_simple_render_pass(renderer->dev->dev, format, &setup->simple_rpass);
@@ -1409,7 +1415,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
                 renderer->vert_module, renderer->quad_frag_module,
                 setup->rpass, renderer->pipe_layout, &setup->quad_pipe);
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < BLUR_IMAGES; i++) {
                 create_postprocess_pipe(renderer->dev->dev,
                         renderer->postprocess_vert_module, renderer->blur_frag_module,
                         setup->blur_rpass[i], renderer->pipe_layout, &setup->blur_pipes[i]);

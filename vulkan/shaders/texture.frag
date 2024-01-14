@@ -62,6 +62,33 @@ vec2 get_local_uv() {
         return (coords + vec2(0.5)) / data.surface_dims;
 }
 
+vec4 neon(vec3 color, float dist, float size) {
+        if (dist > -1 && dist < 0) {
+                // Outer border
+                return vec4(1, 1, 1, 1);
+        } else if (dist > -size && dist < size) {
+                // Fade away from the border
+                float opacity = 1 - (abs(dist) / size);
+                opacity *= opacity * opacity * opacity;
+                return vec4(color, opacity);
+        } else {
+                return vec4(0);
+        }
+}
+
+vec4 mix(vec4 x, vec4 y) {
+        // Mix with alpha
+        if (y.a > x.a) {
+                vec4 tmp = x;
+                x = y;
+                y = tmp;
+        }
+
+        if (y.a == 0) return x;
+
+        return vec4(x.rgb + y.rgb / (x.a / y.a), x.a);
+}
+
 vec4 get_outside_color(vec2 uv) {
         float x_dist, y_dist;
         if (uv.x > 1) x_dist = data.surface_dims.x * (uv.x - 1);
@@ -72,6 +99,7 @@ vec4 get_outside_color(vec2 uv) {
         if (x_dist < 0) x_dist = 0;
         if (y_dist < 0) y_dist = 0;
 
+        //float dist = sqrt(x_dist * x_dist + y_dist * y_dist);
         float dist = max(x_dist, y_dist);
 
         vec4 bright = vec4(0.5, 0.5, 0.5, 1);
@@ -80,40 +108,21 @@ vec4 get_outside_color(vec2 uv) {
 
         if (data.is_focused == 0) bright = dark;
 
-        if (dist < 1) {
-                return bright;
-        } else if (uv.y < 0 && y_dist < 48 && x_dist < 16) {
-                // "Titlebar" thing at top
-                if (x_dist <= 0 && y_dist > 16 && y_dist < 32) {
-                        // Little box in titlebar
-                        return dark;
-                } else {
-                        return background;
-                }
-        } else if (dist < 16) {
-                return background;
-        }
+        vec4 sum = vec4(0);
 
-        // Shadow stuff
-        if (uv.y < 0) y_dist -= 32;
-        y_dist -= 16;
-        x_dist -= 16;
+        // One-pixel border around the window
+        if (dist < 1) sum += bright;
 
-        if (x_dist < 0) x_dist = 0;
-        if (y_dist < 0) y_dist = 0;
+        sum = mix(sum, neon(vec3(0.539, 0.031, 0.02), dist, 32));
+        sum = mix(sum, neon(vec3(0.644, 0.141, 0.038), dist - 16, 32));
+        sum = mix(sum, neon(vec3(0.847, 0.456, 0.056), dist - 32, 32));
+        sum = mix(sum, neon(vec3(0.246, 0.262, 0.381), dist - 48, 32));
+        sum = mix(sum, neon(vec3(0.076, 0.082, 0.133), dist - 64, 32));
+        sum = mix(sum, neon(vec3(0.01, 0.089, 0.133), dist - 80, 32));
+        sum = mix(sum, neon(vec3(0.033, 0.235, 0.342), dist - 96, 32));
+        sum = mix(sum, neon(vec3(0.023, 0.392, 0.25), dist - 112, 32));
 
-        dist = sqrt(x_dist*x_dist + y_dist*y_dist);
-
-        if (dist < 32) {
-                float shadow_opacity = 1 - dist / 32;
-                // Make it fade fast
-                shadow_opacity *= shadow_opacity;
-                shadow_opacity *= shadow_opacity;
-                vec3 shadow_color = vec3(0);
-                return vec4(shadow_color, 0.5 * shadow_opacity);
-        } else {
-                return vec4(0);
-        }
+        return sum;
 }
 
 vec3 get_blurred_background() {
