@@ -19,6 +19,36 @@ layout(location = 0) in vec2 global_uv;
 layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec4 out_uv;
 
+vec3 colors[8] = {
+        // black
+        vec3(.01, 0.089, 0.133),
+        // white
+        vec3(.847, 0.456, 0.056),
+        // red
+        vec3(.539, 0.031, 0.02),
+        // orange
+        vec3(.644, 0.141, 0.038),
+        // purple
+        vec3(.246, 0.262, 0.381),
+        // blue
+        vec3(.076, 0.082, 0.133),
+        // aqua
+        vec3(.033, 0.235, 0.342),
+        // green
+        vec3(.023, 0.392, 0.25),
+};
+
+vec3 cs_white = vec3(0.831, 0.708, 0.445);
+vec3 cs_black = vec3(0.021, 0.021, 0.021);
+
+vec3 cs_red = vec3(0.965, 0.067, 0.034);
+vec3 cs_green = vec3(0.479, 0.497, 0.019);
+vec3 cs_yellow = vec3(0.956, 0.509, 0.028);
+vec3 cs_blue = vec3(0.227, 0.376, 0.314);
+vec3 cs_pink = vec3(0.651, 0.238, 0.328);
+vec3 cs_aqua = vec3(0.27, 0.527, 0.202);
+vec3 cs_orange = vec3(0.991, 0.216, 0.01);
+
 uint hash(uint x) {
         x += ( x << 10u );
         x ^= ( x >>  6u );
@@ -61,9 +91,6 @@ vec2 get_local_uv() {
         coords += vec2(0.5);
         coords /= data.surface_dims;
 
-        //out_color = vec4(abs((z - 1) * 1000), 0, 0, 1);
-        //out_uv = vec4(coords, data.surface_id.x, 1);
-
         return coords;
 }
 
@@ -74,7 +101,8 @@ vec4 neon(vec3 color, float dist, float size) {
         } else if (dist > -size && dist < size) {
                 // Fade away from the border
                 float opacity = 1 - (abs(dist) / size);
-                opacity *= opacity * opacity * opacity * opacity;
+                opacity *= opacity * opacity;
+                opacity *= opacity;
                 return vec4(color, opacity);
         } else {
                 return vec4(0);
@@ -118,14 +146,13 @@ vec4 get_outside_color(vec2 uv) {
         // One-pixel border around the window
         if (dist < 1) sum += bright;
 
-        sum = mix(sum, neon(vec3(0.539, 0.031, 0.02), dist, 32));
-        sum = mix(sum, neon(vec3(0.644, 0.141, 0.038), dist - 16, 32));
-        sum = mix(sum, neon(vec3(0.847, 0.456, 0.056), dist - 32, 32));
-        sum = mix(sum, neon(vec3(0.246, 0.262, 0.381), dist - 48, 32));
-        sum = mix(sum, neon(vec3(0.076, 0.082, 0.133), dist - 64, 32));
-        sum = mix(sum, neon(vec3(0.01, 0.089, 0.133), dist - 80, 32));
-        sum = mix(sum, neon(vec3(0.033, 0.235, 0.342), dist - 96, 32));
-        //sum = mix(sum, neon(vec3(0.023, 0.392, 0.25), dist - 112, 32));
+        sum = mix(sum, neon(colors[0], dist, 32));
+        sum = mix(sum, neon(colors[1], dist - 16, 32));
+        sum = mix(sum, neon(colors[2], dist - 32, 32));
+        sum = mix(sum, neon(colors[3], dist - 48, 32));
+        sum = mix(sum, neon(colors[4], dist - 64, 32));
+        sum = mix(sum, neon(colors[5], dist - 80, 32));
+        sum = mix(sum, neon(colors[6], dist - 96, 32));
 
         return sum;
 }

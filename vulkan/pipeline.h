@@ -6,16 +6,13 @@
 // Needed for PushConstants definition >:(
 #include "../render/vulkan.h"
 
-void create_pipeline_with_depth(VkDevice device,
+void create_pipeline(VkDevice device,
                 VkShaderModule vert_module, VkShaderModule frag_module,
-		VkRenderPass rpass, VkPipelineLayout pipe_layout, VkPipeline *pipe);
+		VkRenderPass rpass, int output_attach_count,
+                VkPipelineLayout pipe_layout, VkPipeline *pipe);
 
 void create_pipeline_layout(VkDevice device, VkSampler tex_sampler,
                 int layout_count, VkDescriptorSetLayout *layouts,
 		VkPipelineLayout *pipe_layout);
-
-void create_postprocess_pipe(VkDevice device,
-                VkShaderModule vert_module, VkShaderModule frag_module,
-		VkRenderPass rpass, VkPipelineLayout pipe_layout, VkPipeline *pipe);
 
 #endif // pipeline_h_INCLUDED

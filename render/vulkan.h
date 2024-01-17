@@ -13,7 +13,7 @@
 #include "../vulkan/error.h"
 
 #define WLR_VK_RENDER_MODE_COUNT 3
-#define POSTPROCESS_MODE_COUNT 4
+#define POSTPROCESS_MODE_COUNT 6
 // This is in a single direction (so downsample or upsample). Total passes is
 // double this.
 #define BLUR_PASSES 5
