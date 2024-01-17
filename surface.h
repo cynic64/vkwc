@@ -28,7 +28,8 @@ struct Surface {
         int width, height;
 	int tex_width, tex_height;
 
-	// Set these and calc_matrices will do the rest. Rotations in radians, speeds in radians per frame.
+        // Set these and calc_matrices will do the rest. Rotations in radians,
+        // speeds in radians per frame.
 	float x, y, z;
 	double x_rot, y_rot, z_rot;
 	double x_rot_speed, y_rot_speed, z_rot_speed;

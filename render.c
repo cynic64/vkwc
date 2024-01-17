@@ -166,9 +166,8 @@ void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRec
         if (min_y < 0) min_y = 0;
         if (max_x > screen_width) max_x = screen_width;
         if (max_y > screen_height) max_y = screen_height;
-        if (max_x < min_x) max_x = min_x + 1;
-        if (max_y < min_y) max_y = min_y + 1;
-        printf("get_rect_for_matrix final dims: %d %d %d %d\n", min_x, min_y, max_x, max_y);
+        if (max_x <= min_x) max_x = min_x + 1;
+        if (max_y <= min_y) max_y = min_y + 1;
 
         rect->offset.x = min_x;
         rect->offset.y = min_y;

@@ -796,6 +796,11 @@ static struct Surface *create_surface(struct Server *server, struct wl_list *sur
         surface->spawn_time = get_time();
         surface->x = server->cursor->x - server->output->width / 2;
         surface->y = server->cursor->y - server->output->height / 2;
+        wlr_log(WLR_INFO, "Cursor XY is %f %f, server dims are %d %d",
+                server->cursor->x, server->cursor->y,
+                server->output->width, server->output->height);
+        wlr_log(WLR_INFO, "Set surface XY with dims %d %d to %f %f",
+                surface->tex_width, surface->tex_height, surface->x, surface->y);
 
 	wl_list_insert(surfaces->prev, &surface->link);
 
@@ -815,7 +820,7 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 
 	focus_surface(server->seat, surface);
 
-	printf("Surface mapped (id %f), set dims to %d %d\n",
+	wlr_log(WLR_INFO, "Surface mapped (id %f), set dims to %d %d",
                 surface->id, surface->tex_width, surface->tex_height);
 }
 
@@ -937,18 +942,30 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 	surface->toplevel = surface;
 
 	if (xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
+                printf("\tIt's a popup!\n");
 		struct wlr_xdg_popup *popup = xdg_surface->popup;
-		struct wlr_surface *popup_surface = popup->base->surface;
-		printf("It's a popup! Geo: %d %d %d %d\n", popup_surface->sx, popup_surface->sy,
-			popup_surface->current.width, popup_surface->current.height);
-
-		double relative_x, relative_y;
-		wlr_xdg_popup_get_position(popup, &relative_x, &relative_y);
-		surface->x = relative_x;
-		surface->y = relative_y;
 
 		surface->toplevel = find_surface(popup->parent, &server->surfaces);
 		assert(surface->toplevel != NULL);
+
+                // If it's a popup, we want the top-left corner to appear
+                // wherever the cursor is, which is a bit tricky because the
+                // popup's offset is relative to the parent.
+
+                // Figure out where the cursor is relative to the parent so we
+                // can put the popup in the right spot
+                int toplevel_x, toplevel_y;
+                struct Surface *toplevel;
+                check_uv(server, server->cursor->x, server->cursor->y,
+                        &toplevel, &toplevel_x, &toplevel_y);
+                if (toplevel == surface->toplevel) {
+                        // If the toplevel in the tree doesns't match what the
+                        // mouse is over, the user probably didn't right-click
+                        // to open the popup. So only continue if the toplevels
+                        // match.
+                        surface->x = toplevel_x;
+                        surface->y = toplevel_y;
+                }
 	}
 
 	wl_signal_add(&wlr_surface->events.new_subsurface, &server->handle_new_subsurface);
@@ -967,7 +984,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 }
 
 int main(int argc, char	*argv[]) {
-	wlr_log_init(WLR_DEBUG, NULL);
+	wlr_log_init(WLR_INFO, NULL);
 	char *startup_cmd = NULL;
 
 	int c;
