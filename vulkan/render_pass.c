@@ -3,7 +3,7 @@
 #include <assert.h>
 
 // This is the render pass for when we're rendering windows: it outputs to the
-// intermediate, depth and UV.
+// intermediate and UV.
 void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 	// Intermediate
 	VkAttachmentDescription intermediate_attach = {
@@ -13,18 +13,6 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
-	// Depth
-	VkAttachmentDescription depth_attach = {
-		.format = DEPTH_FORMAT,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	};
 
 	// UV
@@ -42,12 +30,8 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
-	VkAttachmentReference depth_ref = {
-		.attachment = 1,
-		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-	};
 	VkAttachmentReference uv_attach_ref = {
-		.attachment = 2,
+		.attachment = 1,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
@@ -57,7 +41,6 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 		.colorAttachmentCount = sizeof(render_attachments) / sizeof(render_attachments[0]),
 		.pColorAttachments = render_attachments,
-		.pDepthStencilAttachment = &depth_ref,
 	};
 
         VkSubpassDescription subpasses[] = {render_subpass};
@@ -94,7 +77,6 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 
 	VkAttachmentDescription attachments[] = {
                 intermediate_attach,
-                depth_attach,
                 uv_attach,
         };
 
@@ -126,18 +108,6 @@ void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *r
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
-	// Depth
-	VkAttachmentDescription depth_attach = {
-		.format = DEPTH_FORMAT,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	};
-
 	// UV - we don't care
 	VkAttachmentDescription uv_attach = {
 		.format = UV_FORMAT,
@@ -153,12 +123,8 @@ void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *r
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
-	VkAttachmentReference depth_ref = {
-		.attachment = 1,
-		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-	};
 	VkAttachmentReference uv_attach_ref = {
-		.attachment = 2,
+		.attachment = 1,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
@@ -168,7 +134,6 @@ void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *r
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 		.colorAttachmentCount = sizeof(render_attachments) / sizeof(render_attachments[0]),
 		.pColorAttachments = render_attachments,
-		.pDepthStencilAttachment = &depth_ref,
 	};
 
         VkSubpassDescription subpasses[] = {render_subpass};
@@ -205,7 +170,6 @@ void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *r
 
 	VkAttachmentDescription attachments[] = {
                 intermediate_attach,
-                depth_attach,
                 uv_attach,
         };
 
@@ -280,18 +244,6 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
 		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	// Depth
-	VkAttachmentDescription depth_attach = {
-		.format = DEPTH_FORMAT,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	};
-
 	// UV
 	VkAttachmentDescription uv_attach = {
 		.format = UV_FORMAT,
@@ -314,7 +266,7 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
 
 	// Attachment references
 	VkAttachmentReference screen_attach_ref = {
-		.attachment = 3,
+		.attachment = 2,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
@@ -341,7 +293,6 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
 
 	VkAttachmentDescription attachments[] = {
                 intermediate_attach,
-                depth_attach,
                 uv_attach,
                 screen_attach,
         };
@@ -369,10 +320,6 @@ void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
 	clear_values[0].color.float32[1] = 0;
 	clear_values[0].color.float32[2] = 0;
 	clear_values[0].color.float32[3] = 0;
-	// depth
-	clear_values[0].depthStencil.stencil = 0;
-	clear_values[1].depthStencil.depth = 1.0;
-	clear_values[1].depthStencil.stencil = 0;
 
 	VkRenderPassBeginInfo rpass_info = {0};
 	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

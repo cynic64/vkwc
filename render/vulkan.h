@@ -13,7 +13,7 @@
 #include "../vulkan/error.h"
 
 #define WLR_VK_RENDER_MODE_COUNT 3
-#define POSTPROCESS_MODE_COUNT 3
+#define POSTPROCESS_MODE_COUNT 4
 // This is in a single direction (so downsample or upsample). Total passes is
 // double this.
 #define BLUR_PASSES 5
@@ -211,11 +211,6 @@ struct wlr_vk_render_buffer {
 	VkDeviceMemory blur_mems[BLUR_PASSES];
         VkDescriptorSet blur_sets[BLUR_PASSES];
 
-	// Depth buffer
-	VkImage depth;
-	VkImageView depth_view;
-	VkDeviceMemory depth_mem;
-
 	// UV buffer
 	VkImage uv;
 	VkImageView uv_view;
@@ -229,8 +224,8 @@ struct wlr_vk_render_buffer {
 
         // Presentation target, which is what actually gets shown to the user.
         // We don't render directly to it because we want to be able to choose
-        // what we display - either the windows, the depth buffer or the UV
-        // buffer.
+        // what we display - either the windows, the UV buffer, or whatever
+        // bizarre postprocess pass I've come up with most recently.
 	VkImage screen;
 	VkImageView screen_view;
 
@@ -251,6 +246,7 @@ struct wlr_vk_renderer {
 
 	VkShaderModule vert_module;
 	VkShaderModule simple_tex_frag_module;
+	VkShaderModule tex_vert_module;
 	VkShaderModule tex_frag_module;
 	VkShaderModule quad_frag_module;
 	VkShaderModule blur_frag_module;

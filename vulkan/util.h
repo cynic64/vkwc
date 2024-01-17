@@ -31,7 +31,7 @@ void cbuf_submit_wait(VkQueue queue, VkCommandBuffer cbuf);
 
 void cbuf_begin_onetime(VkCommandBuffer cbuf);
 
-void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float clear_color[4]);
+void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float color[4]);
 
 void create_image(VkPhysicalDevice phys_dev, VkDevice device,
 		VkFormat format, VkFormatFeatureFlagBits features,

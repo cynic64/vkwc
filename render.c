@@ -216,9 +216,6 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                 int width = screen_width * blur_scale;
                 int height = screen_height * blur_scale;
 
-                printf("Rendering to %d from %d with dims %d %d\n",
-                        image_idx, last_image_idx, width, height);
-
                 if (i != 0) {
                         // Unless we're on the first pass, we have to transition
                         // the previous blur image to SHADER_READ_ONLY
@@ -508,7 +505,6 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
                 1);
 
         // Transition intermediate to COLOR_ATTACHMENT_OPTIMAL
-
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -516,17 +512,6 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
-
-        // Transition depth to DEPTH_STENCIL_ATTACHMENT_OPTIMAL - usually the
-        // render passes in the draw commands do this automatically. But if
-        // nothing gets drawn, that doesn't happen, and render_end expects the
-        // depth buffer to be DEPTH_STENCIL
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->depth, VK_IMAGE_ASPECT_DEPTH_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                VK_ACCESS_NONE, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                 1);
 
         // End GPU timer

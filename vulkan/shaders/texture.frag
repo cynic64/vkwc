@@ -58,8 +58,13 @@ vec2 get_local_uv() {
         // window is moved. If it was 0.1, 0.2, 0.3, 0.4 before it will still be
         // 0.1, 0.2, 0.3, 0.4 even if you move the window.
         vec2 coords = round(inverted.xy / inverted.w * data.surface_dims);
+        coords += vec2(0.5);
+        coords /= data.surface_dims;
 
-        return (coords + vec2(0.5)) / data.surface_dims;
+        //out_color = vec4(abs((z - 1) * 1000), 0, 0, 1);
+        //out_uv = vec4(coords, data.surface_id.x, 1);
+
+        return coords;
 }
 
 vec4 neon(vec3 color, float dist, float size) {

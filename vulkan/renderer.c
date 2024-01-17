@@ -23,6 +23,7 @@
 #include "render/pixel_format.h"
 #include "render/vulkan.h"
 #include "vulkan/shaders/common.vert.h"
+#include "vulkan/shaders/texture.vert.h"
 #include "vulkan/shaders/texture.frag.h"
 #include "vulkan/shaders/simple_texture.frag.h"
 #include "vulkan/shaders/quad.frag.h"
@@ -348,10 +349,6 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
 
         vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
 
-	vkDestroyImage(dev, buffer->depth, NULL);
-	vkDestroyImageView(dev, buffer->depth_view, NULL);
-	vkFreeMemory(dev, buffer->depth_mem, NULL);
-
 	vkDestroyImage(dev, buffer->uv, NULL);
 	vkDestroyImageView(dev, buffer->uv_view, NULL);
 	vkFreeMemory(dev, buffer->uv_mem, NULL);
@@ -563,22 +560,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         &buffer->blur_views[i]);
         }
 
-	// Create depth buffer
-	create_image(renderer->dev->phdev, renderer->dev->dev, DEPTH_FORMAT,
-		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT,
-	        dmabuf.width, dmabuf.height,
-	        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-	        &buffer->depth);
-
-	vkGetImageMemoryRequirements(renderer->dev->dev, buffer->depth, &mem_reqs);
-	alloc_memory(renderer, mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &buffer->depth_mem);
-
-	res = vkBindImageMemory(renderer->dev->dev, buffer->depth, buffer->depth_mem, 0);
-	assert(res == VK_SUCCESS);
-
-        create_image_view(renderer->dev->dev, DEPTH_FORMAT, buffer->depth,
-                VK_IMAGE_ASPECT_DEPTH_BIT, &buffer->depth_view);
-
 	// Create attachment to write UV coordinates into
 	create_image(renderer->dev->phdev, renderer->dev->dev,
                 UV_FORMAT, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT,
@@ -624,7 +605,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         // final image
         VkImageView intermediate_attachs[] = {
                 buffer->intermediate_view,
-                buffer->depth_view,
                 buffer->uv_view,
         };
         VkFramebufferCreateInfo fb_info = {0};
@@ -663,7 +643,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         // image and is created with a different render pass.
         VkImageView postprocess_attachs[] = {
                 buffer->intermediate_view,
-                buffer->depth_view,
                 buffer->uv_view,
                 buffer->screen_view,
         };
@@ -1013,6 +992,7 @@ static void vulkan_destroy(struct wlr_renderer *wlr_renderer) {
 	}
 
 	vkDestroyShaderModule(dev->dev, renderer->vert_module, NULL);
+	vkDestroyShaderModule(dev->dev, renderer->tex_vert_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->tex_frag_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->simple_tex_frag_module, NULL);
 	vkDestroyShaderModule(dev->dev, renderer->quad_frag_module, NULL);
@@ -1331,6 +1311,7 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
 
 	// Load shaders
 	VkShaderModuleCreateInfo sinfo = {0};
+        // common vert
 	sinfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	sinfo.codeSize = sizeof(common_vert_data);
 	sinfo.pCode = common_vert_data;
@@ -1341,6 +1322,12 @@ void init_static_render_data(struct wlr_vk_renderer *renderer) {
 	sinfo.codeSize = sizeof(simple_texture_frag_data);
 	sinfo.pCode = simple_texture_frag_data;
 	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->simple_tex_frag_module);
+        assert(res == VK_SUCCESS);
+
+	// tex vert
+	sinfo.codeSize = sizeof(texture_vert_data);
+	sinfo.pCode = texture_vert_data;
+	res = vkCreateShaderModule(dev, &sinfo, NULL, &renderer->tex_vert_module);
         assert(res == VK_SUCCESS);
 
 	// tex frag
@@ -1402,27 +1389,29 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
         // Create pipelines
         // We can use the postprocess vert shader because it does exactly what
         // we want it to: outputs a fullscreen quad.
-        create_pipeline_with_depth(renderer->dev->dev,
-                renderer->postprocess_vert_module, renderer->tex_frag_module,
-                setup->rpass, renderer->pipe_layout, &setup->tex_pipe);
+        create_pipeline(renderer->dev->dev,
+                renderer->tex_vert_module, renderer->tex_frag_module,
+                setup->rpass, 2, renderer->pipe_layout, &setup->tex_pipe);
 
-        create_pipeline_with_depth(renderer->dev->dev,
+        // TODO: make this not render to UV.
+        create_pipeline(renderer->dev->dev,
                 renderer->vert_module, renderer->simple_tex_frag_module,
-                setup->rpass, renderer->pipe_layout, &setup->simple_tex_pipe);
+                setup->rpass, 2, renderer->pipe_layout, &setup->simple_tex_pipe);
 
-        create_pipeline_with_depth(renderer->dev->dev,
+        create_pipeline(renderer->dev->dev,
                 renderer->vert_module, renderer->quad_frag_module,
-                setup->rpass, renderer->pipe_layout, &setup->quad_pipe);
+                setup->rpass, 2, renderer->pipe_layout, &setup->quad_pipe);
 
         for (int i = 0; i < BLUR_PASSES; i++) {
-                create_postprocess_pipe(renderer->dev->dev,
+                create_pipeline(renderer->dev->dev,
                         renderer->postprocess_vert_module, renderer->blur_frag_module,
-                        setup->blur_rpass[i], renderer->pipe_layout, &setup->blur_pipes[i]);
+                        setup->blur_rpass[i], 1 /* Only one output attachment */,
+                        renderer->pipe_layout, &setup->blur_pipes[i]);
         }
 
-        create_postprocess_pipe(renderer->dev->dev,
+        create_pipeline(renderer->dev->dev,
                 renderer->postprocess_vert_module, renderer->postprocess_frag_module,
-                setup->postprocess_rpass, renderer->pipe_layout, &setup->postprocess_pipe);
+                setup->postprocess_rpass, 1, renderer->pipe_layout, &setup->postprocess_pipe);
 
 	wl_list_insert(&renderer->render_format_setups, &setup->link);
 	return setup;

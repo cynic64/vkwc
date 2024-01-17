@@ -3,7 +3,6 @@
 
 #include <vulkan/vulkan.h>
 
-static const VkFormat DEPTH_FORMAT = VK_FORMAT_D32_SFLOAT;
 static const VkFormat UV_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
 
 void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,

@@ -151,9 +151,7 @@ bool vulkan_has_extension(size_t count, const char **exts, const char *find) {
 void vulkan_clear_image(VkCommandBuffer cbuf, VkImage image, float color[4]) {
         VkImageSubresourceRange clear_range = {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
                 .levelCount = 1,
-                .baseArrayLayer = 0,
                 .layerCount = 1
         };
 
