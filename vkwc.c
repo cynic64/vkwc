@@ -103,16 +103,17 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
 		bool is_toplevel = surface->toplevel == surface;
                 double time = get_time();
-		if (is_toplevel) {
-                        // This makes the windows zoom in when they spawn
-                        float scale_factor = (time - surface->spawn_time) / 0.2;
-                        // Make it first scale up quickly, then slowly reach the final size
-                        scale_factor = sqrt(scale_factor);
-                        scale_factor = sqrt(scale_factor);
-                        if (scale_factor > 1) scale_factor = 1;
-                        surface->width = scale_factor * surface->tex_width;
-                        surface->height = scale_factor * surface->tex_height;
 
+                // This makes the windows zoom in when they spawn
+                float scale_factor = (time - surface->spawn_time) / 0.2;
+                // Make it first scale up quickly, then slowly reach the final size
+                scale_factor = sqrt(scale_factor);
+                scale_factor = sqrt(scale_factor);
+                if (scale_factor > 1) scale_factor = 1;
+                surface->width = scale_factor * surface->tex_width;
+                surface->height = scale_factor * surface->tex_height;
+
+		if (is_toplevel) {
 			glm_mat4_identity(surface->matrix);
 
 			mat4 view;
@@ -200,30 +201,34 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 				0,
 			});
 
-			// Scale ourselves down so that our width and height becomes relative to toplevel (1 would
-			// be the same width as toplevel, 0.5 would be half, etc.)
-			glm_scale(surface->matrix, (vec3) {(float) surface->width / toplevel->width,
-				(float) surface->height / toplevel->height, 1});
+                        // Scale ourselves down so that our width and height
+                        // becomes relative to toplevel (1 would be the same
+                        // width as toplevel, 0.5 would be half, etc.)
+			glm_scale(surface->matrix,
+                                (vec3) {(float) surface->width / toplevel->width,
+				        (float) surface->height / toplevel->height,
+                                        1});
 
 			// Apply toplevel's transformation
 			glm_mat4_mul(surface->toplevel->matrix, surface->matrix, surface->matrix);
 		}
 	}
 
-        printf("calc_matrices took %5.3f ms\n", (get_time() - start_time) * 1000);
+        wlr_log(WLR_DEBUG, "calc_matrices took %5.3f ms", (get_time() - start_time) * 1000);
 }
 
 void check_uv(struct Server *server, int cursor_x, int cursor_y,
         	struct Surface **surface_out, int *surface_x, int *surface_y) {
         double start_time = get_time();
 
-	// Checks the UV texture to see what's under the cursor. Returns the surface under the cursor
-	// and the x and y relative to this surface.
+        // Checks the UV texture to see what's under the cursor. Returns the
+        // surface under the cursor and the x and y relative to this surface.
 	// Returns NULL to surface if there is no surface under the cursor.
 	
-	// There are multiple render buffers, so we have to find the right one. I do this just by
-	// checking whether the render buffer's dimensions match those of the first output, which isn't
-	// a great way but works for now.
+        // There are multiple render buffers, so we have to find the right one.
+        // I do this just by checking whether the render buffer's dimensions
+        // match those of the first output, which isn't a great way but works
+        // for now.
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) server->renderer;
 	struct wlr_vk_render_buffer *render_buffer = NULL;
 	struct wlr_output *output = server->output;
@@ -255,7 +260,7 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	vkUnmapMemory(renderer->dev->dev, render_buffer->host_uv_mem);
 
 	//printf("id, x, y: %f %f %f\n", pixel_surface_id, pixel_x_norm, pixel_y_norm);
-        printf("check_uv took %5.3f ms\n", (get_time() - start_time) * 1000);
+        wlr_log(WLR_DEBUG, "check_uv took %5.3f ms", (get_time() - start_time) * 1000);
 
 	// Close to 0 means the cursor is above the background, so no surface
 	if (pixel_surface_id < error_margin) {
@@ -268,7 +273,8 @@ void check_uv(struct Server *server, int cursor_x, int cursor_y,
 	bool found_surface = false;
 	struct Surface *surface = NULL;
 	wl_list_for_each(surface, &server->surfaces, link) {
-		if (surface->id - error_margin < pixel_surface_id && surface->id + error_margin > pixel_surface_id) {
+		if (surface->id - error_margin < pixel_surface_id
+                                && surface->id + error_margin > pixel_surface_id) {
 			//printf("Surface with id %f matches (dims %d %d)\n",
                                 //surface->id, surface->width, surface->height);
 			found_surface = true;
@@ -596,7 +602,7 @@ static void process_cursor_motion(struct Server *server, uint32_t time) {
 
 	struct Surface *surface;
 	int surface_x, surface_y;	// Cursor position relative to surface
-	check_uv(server, server->cursor->x, server->cursor->y, &surface, &surface_x, &surface_y);
+        check_uv(server, server->cursor->x, server->cursor->y, &surface, &surface_x, &surface_y);
 
 	if (surface == NULL) {
                 if (server->last_mouse_surface != NULL) {
@@ -731,10 +737,11 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 		wlr_surface_send_frame_done(surface->wlr_surface, &now);
 	}
 
-	// Send cursor position to focused Surface, with so much spinning stuff it might have changed
+        // Send cursor position to focused Surface, with so much spinning stuff
+        // it might have changed
 	process_cursor_motion(server, time);
 
-        printf("handle_output_frame took %5.3f ms\n", (get_time() - start_time) * 1000);
+        wlr_log(WLR_DEBUG, "handle_output_frame took %5.3f ms", (get_time() - start_time) * 1000);
 }
 
 static void handle_new_output(struct wl_listener *listener, void *data)	{
@@ -814,8 +821,8 @@ static void handle_xdg_map(struct wl_listener *listener, void *data) {
 
 // Adds a subsurface to the server's list of surfaces.
 // 
-// I had to make this a helper function instead of merging it with handle_new_subsurface because otherwise
-// it couldn't call itself recursively.
+// I had to make this a helper function instead of merging it with
+// handle_new_subsurface because otherwise it couldn't call itself recursively.
 static void add_subsurface(struct Server *server, struct wlr_subsurface *subsurface) {
 	struct wlr_surface *wlr_surface = subsurface->surface;
 
@@ -960,7 +967,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 }
 
 int main(int argc, char	*argv[]) {
-	wlr_log_init(WLR_DEBUG,	NULL);
+	wlr_log_init(WLR_DEBUG, NULL);
 	char *startup_cmd = NULL;
 
 	int c;
@@ -1133,10 +1140,12 @@ int main(int argc, char	*argv[]) {
 		fprintf(stderr,	"Can't load XCursor theme!\n");
 		exit(1);
 	}
-	struct wlr_xcursor *xcursor = wlr_xcursor_manager_get_xcursor(xcursor_manager, "left_ptr", 1);
+	struct wlr_xcursor *xcursor = wlr_xcursor_manager_get_xcursor(xcursor_manager,
+                "left_ptr", 1);
 	if (xcursor) {
 		struct wlr_xcursor_image *image	= xcursor->images[0];
-		wlr_xwayland_set_cursor(xwayland, image->buffer, image->width *	4, image->width, image->height,
+		wlr_xwayland_set_cursor(xwayland, image->buffer, image->width *	4,
+                                        image->width, image->height,
 					image->hotspot_x, image->hotspot_y);
 	};
 
@@ -1180,7 +1189,7 @@ int main(int argc, char	*argv[]) {
 	 * compositor. Starting	the backend rigged up all of the necessary event
 	 * loop	configuration to listen	to libinput events, DRM	events,	generate
 	 * frame events	at the refresh rate, and so on.	*/
-	wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s",
+	wlr_log(WLR_DEBUG, "Running Wayland compositor on WAYLAND_DISPLAY=%s",
 			socket);
 	wl_display_run(server.wl_display);
 

@@ -54,7 +54,8 @@ void print_scene_graph(struct wlr_scene_node *node, int	level) {
 		struct wlr_scene_rect *scene_rect = (struct wlr_scene_rect *) node;
 		printf("Cast as RECT. Dims: %d x %d, color: %f %f %f %f\n",
 			scene_rect->width, scene_rect->height,
-			scene_rect->color[0], scene_rect->color[1],scene_rect->color[2], scene_rect->color[3]);
+			scene_rect->color[0], scene_rect->color[1],scene_rect->color[2],
+                        scene_rect->color[3]);
 	} else if (node->type == WLR_SCENE_NODE_BUFFER) {
 		struct wlr_scene_buffer *scene_buffer = (struct wlr_scene_buffer *) node;
 		printf("Cast as BUFFER. Destination dims: %d x %d\n",

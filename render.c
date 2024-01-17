@@ -166,6 +166,9 @@ void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRec
         if (min_y < 0) min_y = 0;
         if (max_x > screen_width) max_x = screen_width;
         if (max_y > screen_height) max_y = screen_height;
+        if (max_x < min_x) max_x = min_x + 1;
+        if (max_y < min_y) max_y = min_y + 1;
+        printf("get_rect_for_matrix final dims: %d %d %d %d\n", min_x, min_y, max_x, max_y);
 
         rect->offset.x = min_x;
         rect->offset.y = min_y;
@@ -177,8 +180,8 @@ void debug_images(struct wlr_renderer *wlr_renderer) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
-        printf("Intermediate image is at %p\n", render_buf->intermediate);
-        printf("UV is at %p\n", render_buf->uv);
+        wlr_log(WLR_DEBUG, "Intermediate image is at %p", render_buf->intermediate);
+        wlr_log(WLR_DEBUG, "UV is at %p", render_buf->uv);
 }
 
 // Assumes image is in SHADER_READ_ONLY. If with_threshold is set, a threshold
@@ -242,6 +245,8 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                 blur_rect.offset.y = rect.offset.y * blur_scale;
                 blur_rect.extent.width = rect.extent.width * blur_scale;
                 blur_rect.extent.height = rect.extent.height * blur_scale;
+                if (blur_rect.extent.width < 1) blur_rect.extent.width = 1;
+                if (blur_rect.extent.height < 1) blur_rect.extent.height = 1;
 
                 begin_render_pass(cbuf, render_buf->blur_framebuffers[image_idx],
                         render_buf->render_setup->blur_rpass[image_idx],
@@ -283,7 +288,7 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
 
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_BLUR);
 
-        printf("\t[CPU] blur: %5.3f ms\n", (get_time() - start_time) * 1000);
+        wlr_log(WLR_DEBUG, "\t[CPU] blur: %5.3f ms", (get_time() - start_time) * 1000);
 }
 
 // Set render_uv to false to, well, not render to the UV texture. That will
@@ -294,7 +299,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 int surface_width, int surface_height, bool is_focused,
                 float time_since_spawn,
                 float surface_id, bool render_uv) {
-        printf("Render texture with dims %d %d\n", surface_width, surface_height);
+        wlr_log(WLR_DEBUG, "Render texture with dims %d %d", surface_width, surface_height);
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
@@ -341,7 +346,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
         blur_image(renderer, rect, screen_width, screen_height, BLUR_PASSES,
@@ -350,23 +356,25 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         // The blur takes almost 1ms on the CPU! Not great. I think I could
         // reduce this by using a render pass with many subpasses for the
         // transitions and only binding the blur descriptors once.
-        printf("\t[CPU] render_texture subsection: %5.3f ms\n", (get_time() - start_time) * 1000);
+        wlr_log(WLR_DEBUG, "\t[CPU] render_texture subsection: %5.3f ms",
+                (get_time() - start_time) * 1000);
 
         // Transition intermediate back to COLOR_ATTACH
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 1);
 
         // Transition blur image to SHADER_READ_ONLY
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->blurs[0], VK_IMAGE_ASPECT_COLOR_BIT,
-                //VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE_1);
@@ -417,7 +425,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         // I don't really know what this does, vulkan_texture_destroy uses it
         texture->last_used = renderer->frame;
 
-        printf("\t[CPU] render_texture: %5.3f ms\n", (get_time() - start_time) * 1000);
+        wlr_log(WLR_DEBUG, "\t[CPU] render_texture: %5.3f ms", (get_time() - start_time) * 1000);
 
 }
 
@@ -536,7 +544,7 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
 	unsigned idx = 0;
 
 	wl_list_for_each_safe(texture, tmp_tex, &renderer->foreign_textures, foreign_link) {
-                printf("Acquire image at %p\n", texture->image);
+                wlr_log(WLR_DEBUG, "Acquire image at %p", texture->image);
                 // I'm not sure exactly what a "foreign texture" is. foot
                 // doesn't create any but imv does, for example. Anyway, if
                 // there is a foreign texture we have to transition it to
@@ -695,7 +703,8 @@ void render_end(struct wlr_renderer *wlr_renderer) {
                 render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
         // Blur entire intermediate
@@ -761,53 +770,53 @@ void render_end(struct wlr_renderer *wlr_renderer) {
         // Submit
         double pre_submit_time = get_time();
         double elapsed = (pre_submit_time - start_time) * 1000;
-        printf("\t[CPU] render_end up to submit: %5.3f ms\n", elapsed);
+        wlr_log(WLR_DEBUG, "\t[CPU] render_end up to submit: %5.3f ms", elapsed);
 
         cbuf_submit_wait(renderer->dev->queue, renderer->cb);
 
         elapsed = (get_time() - pre_submit_time) * 1000;
-        printf("\t[CPU] Submit: %5.2f ms\n", elapsed);
+        wlr_log(WLR_DEBUG, "\t[CPU] Submit: %5.2f ms", elapsed);
 
 	renderer->bound_pipe = VK_NULL_HANDLE;
 	renderer->render_width = 0;
 	renderer->render_height = 0;
 
         // Check GPU timestamps
-        printf("\t[GPU] render_begin: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] render_begin: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_BEGIN) * 1000);
-        printf("\t[GPU] render_begin subsection: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] render_begin subsection: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_BEGIN_1) * 1000);
-        printf("\t[GPU] Most recent render_rect: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] Most recent render_rect: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_RECT) * 1000);
-        printf("\t[GPU] Most recent render_texture: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] Most recent render_texture: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_TEXTURE) * 1000);
-        printf("\t[GPU] Most recent render_texture subsection: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] Most recent render_texture subsection: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_TEXTURE_1) * 1000);
-        printf("\t[GPU] render_end: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] render_end: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_END) * 1000);
-        printf("\t[GPU] render_end subsection: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] render_end subsection: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_RENDER_END_1) * 1000);
-        printf("\t[GPU] Most recent blur: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] Most recent blur: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_BLUR) * 1000);
-        printf("\t[GPU] Most recent blur subsection: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] Most recent blur subsection: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_BLUR_1) * 1000);
-        printf("\t[GPU] Entire pipeline: %5.3f ms\n",
+        wlr_log(WLR_DEBUG, "\t[GPU] Entire pipeline: %5.3f ms",
                 vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
                         renderer->dev->instance->timestamp_period, TIMER_EVERYTHING) * 1000);
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;
         wl_list_for_each_safe(texture, tmp_tex, &renderer->destroy_textures, destroy_link) {
-                printf("Destroy texture %p\n", texture);
+                wlr_log(WLR_DEBUG, "Destroy texture %p", texture);
                 wlr_texture_destroy(&texture->wlr_texture);
         }
 
@@ -863,16 +872,22 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
         // Draw frame counter.
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
 	render_rect_simple(renderer, color, 10, 10, 10, 10);
+        wlr_log(WLR_DEBUG, "----");
 
 	// Draw each surface
         for (int i = 0; i < surface_count; i++) {
                 struct Surface *surface = surfaces_sorted[i];
                 if (surface->width == 0 && surface->height == 0) {
+                        wlr_log(WLR_DEBUG, "Skip surface, toplevel has dims %d %d",
+                                surface->toplevel->width, surface->toplevel->height);
                         continue;
                 }
 
+                wlr_log(WLR_DEBUG, "Draw surface with dims %d %d",
+                        surface->width, surface->height);
 		render_surface(output, surface, surface == focused_surface);
 	};
+        wlr_log(WLR_DEBUG, "----");
 
 	// Finish
         debug_images(renderer);
@@ -891,7 +906,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
 	int tr_width, tr_height;
 	wlr_output_transformed_resolution(output, &tr_width, &tr_height);
 
-        printf("Average FPS: %10.5f, ms this frame: %5.2f\n", framerate, frame_ms);
+        wlr_log(WLR_DEBUG, "Average FPS: %10.5f, ms this frame: %5.2f", framerate, frame_ms);
 
         frame_count++;
 
