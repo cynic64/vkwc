@@ -652,7 +652,8 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
         cbuf_submit_wait(renderer->dev->queue, pre_cbuf);
 }
 
-void render_end(struct wlr_renderer *wlr_renderer) {
+void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
+                int src_colorscheme_idx, int dst_colorscheme_idx) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
@@ -748,10 +749,20 @@ void render_end(struct wlr_renderer *wlr_renderer) {
                 desc_sets, 0, NULL);
 
         // We don't actually use the PushConstants struct, so this is a bit
-        // cheeky. But the int fits so it's OK.
+        // cheeky. But the int and float fit so it's OK. TODO: Make postprocess
+        // pushconstants its own struct.
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                0, sizeof(renderer->postprocess_mode), &renderer->postprocess_mode);
+                0, 4, &renderer->postprocess_mode);
+	vkCmdPushConstants(cbuf, renderer->pipe_layout,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                4, 8, &colorscheme_ratio);
+	vkCmdPushConstants(cbuf, renderer->pipe_layout,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                8, 12, &src_colorscheme_idx);
+	vkCmdPushConstants(cbuf, renderer->pipe_layout,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                12, 16, &dst_colorscheme_idx);
         vkCmdDraw(cbuf, 4, 1, 0, 0);
 
         vkCmdEndRenderPass(cbuf);
@@ -834,8 +845,10 @@ void render_end(struct wlr_renderer *wlr_renderer) {
 }
 
 // `surfaces` should be a list of struct Surface, defined in vkwc.c
+// TODO: struct for colorscheme stuff
 bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
-                struct Surface *focused_surface, int cursor_x, int cursor_y) {
+                struct Surface *focused_surface, int cursor_x, int cursor_y,
+                float colorscheme_ratio, int src_colorscheme_idx, int dst_colorscheme_idx) {
         if (start_time == 0) {
                 start_time = get_time();
         }
@@ -891,7 +904,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
 	// Finish
         debug_images(renderer);
 
-	render_end(renderer);
+	render_end(renderer, colorscheme_ratio, src_colorscheme_idx, dst_colorscheme_idx);
 
         renderer->rendering = false;
 

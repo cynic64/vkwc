@@ -430,6 +430,9 @@ static bool handle_keybinding(struct Server *server, xkb_keysym_t sym) {
                         (struct wlr_vk_renderer *) server->renderer;
                 vk_renderer->postprocess_mode++;
                 vk_renderer->postprocess_mode %= POSTPROCESS_MODE_COUNT;
+        } else if (sym == XKB_KEY_m) {
+                // Change to next colorscheme
+                server->target_colorscheme_ratio = 1;
         }
 
 	for (int i = 0; i < sizeof(TRANSFORM_MODES) / sizeof(TRANSFORM_MODES[0]); i++) {
@@ -722,9 +725,25 @@ static void handle_output_frame(struct wl_listener *listener, void *data) {
 	struct wl_list *surfaces = &server->surfaces;
 	calc_matrices(surfaces, output->width, output->height);
 
+        // Animations
+        if (server->colorscheme_ratio == 1) {
+                // We've finished the animation - reset ratio and swap schemes
+                server->colorscheme_ratio = 0;
+                server->target_colorscheme_ratio = 0;
+                server->src_colorscheme_idx = server->dst_colorscheme_idx;
+                server->dst_colorscheme_idx = (server->dst_colorscheme_idx + 1) % COLORSCHEME_COUNT;
+        }
+        if (server->target_colorscheme_ratio > server->colorscheme_ratio) {
+                server->colorscheme_ratio += 0.01;
+        }
+
+        if (server->colorscheme_ratio < 0) server->colorscheme_ratio = 0;
+        if (server->colorscheme_ratio > 1) server->colorscheme_ratio = 1;
+
 	/* Render the scene if needed and commit the output */
 	draw_frame(output, &server->surfaces, server->last_mouse_surface,
-                server->cursor->x, server->cursor->y);
+                server->cursor->x, server->cursor->y, server->colorscheme_ratio,
+                server->src_colorscheme_idx, server->dst_colorscheme_idx);
 
 	struct timespec	now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
@@ -1012,6 +1031,12 @@ int main(int argc, char	*argv[]) {
 	 * backend based on the	current	environment, such as opening an	X11 window
 	 * if an X11 server is running.	*/
 	server.backend = wlr_backend_autocreate(server.wl_display);
+
+        // Colorscheme stuff
+        server.colorscheme_ratio = 0;
+        server.target_colorscheme_ratio = 0;
+        server.src_colorscheme_idx = 0;
+        server.dst_colorscheme_idx = 1;
 
 	// Create a renderer, we want Vulkan
 	int drm_fd = -1;

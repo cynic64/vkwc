@@ -27,6 +27,8 @@
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
 
+#define COLORSCHEME_COUNT 4
+
 enum CursorMode	{
 	VKWC_CURSOR_PASSTHROUGH,
 	VKWC_CURSOR_XY_ROTATE,
@@ -84,6 +86,14 @@ struct Server {
 
 	struct wl_listener new_surface;
 	struct wl_list surfaces;
+
+        // We want to animate to the target colorscheme ratio, so that's why
+        // there's two variables here - one for the current state and one for
+        // where we want to end up.
+        float colorscheme_ratio;
+        float target_colorscheme_ratio;
+        int src_colorscheme_idx;
+        int dst_colorscheme_idx;
 };
 
 #endif // vkwc_h_INCLUDED
