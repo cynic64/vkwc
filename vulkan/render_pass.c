@@ -107,27 +107,12 @@ void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *r
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
-	// UV - we don't care
-	VkAttachmentDescription uv_attach = {
-		.format = UV_FORMAT,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
 	// Attachment references
 	VkAttachmentReference intermediate_out_ref = {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
-	VkAttachmentReference uv_attach_ref = {
-		.attachment = 1,
-		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	};
-
-	VkAttachmentReference render_attachments[] = {intermediate_out_ref, uv_attach_ref};
+	VkAttachmentReference render_attachments[] = {intermediate_out_ref};
 
 	VkSubpassDescription render_subpass = {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -169,7 +154,6 @@ void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *r
 
 	VkAttachmentDescription attachments[] = {
                 intermediate_attach,
-                uv_attach,
         };
 
 	VkRenderPassCreateInfo rpass_info = {0};
