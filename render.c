@@ -607,8 +607,6 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         VkCommandBuffer cbuf = renderer->cb;
 
-        double start_time = get_time();
-
         int width = renderer->render_width;
         int height = renderer->render_height;
 
@@ -623,7 +621,6 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
-        // 0.012 ms
 
         assert(renderer->cursor_x < width);
         assert(renderer->cursor_y < height);
@@ -643,7 +640,6 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 render_buf->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 render_buf->host_uv,
                 1, &uv_copy_region);
-        // 0.025 ms
 
         VkRect2D rect = {{0, 0}, {width, height}};
         renderer->scissor = rect;
@@ -656,21 +652,17 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
-        // 0.031 ms
 
         // Blur entire intermediate
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
         // Only do 3 passes
         blur_image(renderer, rect, width, height, 3, &render_buf->intermediate_set, true);
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
-        // 0.245 ms
 
         // Postprocess pass
         struct wlr_vk_render_format_setup *setup = render_buf->render_setup;
         vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, setup->postprocess_pipe);
         renderer->bound_pipe = setup->postprocess_pipe;
-
-        // 0.35 ms
 
         // Transition UV to SHADER_READ_ONLY
         vulkan_image_transition_cbuf(cbuf,
@@ -679,13 +671,11 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
-        // 0.25 ???
 
         // Begin render pass
         begin_postprocess_render_pass(renderer->cb,
                 render_buf->postprocess_framebuffer,
                 setup->postprocess_rpass, rect, width, height);
-        // 0.26
 
         // Bind descriptors
         VkDescriptorSet desc_sets[] = {render_buf->intermediate_set,
@@ -694,7 +684,6 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),
                 desc_sets, 0, NULL);
-        // 0.25
 
         // We don't actually use the PushConstants struct, so this is a bit
         // cheeky. But the int and float fit so it's OK. TODO: Make postprocess
@@ -711,14 +700,9 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 12, 16, &dst_colorscheme_idx);
-        // 0.27
         vkCmdDraw(cbuf, 4, 1, 0, 0);
-        // 0.26
 
         vkCmdEndRenderPass(cbuf);
-        // 0.26
-
-        printf("\t[CPU] render_end subsection: %5.3f ms\n", (get_time() - start_time) * 1000);
 
         // End GPU timers
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_EVERYTHING);
