@@ -264,9 +264,7 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                         0, sizeof(push_constants), &push_constants);
 
-                double st = get_time();
                 vkCmdDraw(cbuf, 4, 1, 0, 0);
-                printf("Single draw takes %5.3f ms\n", (get_time() - st) * 1000);
 
                 vkCmdEndRenderPass(cbuf);
 
@@ -308,18 +306,37 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         // Setup stuff for the texture we're about to render
 	struct wlr_vk_texture *texture = vulkan_get_texture(wlr_texture);
 	assert(texture->renderer == renderer);
-	if (texture->dmabuf_imported &&	!texture->owned) {
-		// Store this texture in the list of textures that need	to be
-		// acquired before rendering and released after	rendering.
-		// We don't do it here immediately since barriers inside
-		// a renderpass	are suboptimal (would require additional renderpass
-		// dependency and potentially multiple barriers) and it's
-		// better to issue one barrier for all used textures anyways.
-		texture->owned = true;
-		assert(texture->foreign_link.prev == NULL);
-		assert(texture->foreign_link.next == NULL);
-		wl_list_insert(&renderer->foreign_textures, &texture->foreign_link);
-	}
+        bool is_foreign = texture->dmabuf_imported && !texture->owned;
+
+        if (is_foreign) {
+                // Acquire it
+	        VkImageMemoryBarrier barrier;
+
+		VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
+		if (!texture->transitioned) {
+			src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+			texture->transitioned = true;
+		}
+
+                // Acquire: make sure it's in SHADER_READ_ONLY before any
+                // shader reads
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+		barrier.dstQueueFamilyIndex = renderer->dev->queue_family;
+		barrier.image = texture->image;
+		barrier.oldLayout = src_layout;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = 0u; // ignored anyways
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.levelCount = 1;
+
+                vkCmdPipelineBarrier(cbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                                | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        0, 0, NULL, 0, NULL, 1, &barrier);
+        }
 
         // Scissor to only the window being drawn + some padding
         VkRect2D rect;
@@ -405,6 +422,29 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
         // Finish
 	vkCmdEndRenderPass(cbuf);
+
+        if (is_foreign) {
+                // Release: put it back in LAYOUT_GENERAL? I guess we do it so
+                // they can write a new image? idk.
+                VkImageMemoryBarrier barrier = {0};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.srcQueueFamilyIndex = renderer->dev->queue_family;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+		barrier.image = texture->image;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barrier.dstAccessMask = 0u; // ignored anyways
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.levelCount = 1;
+
+                vkCmdPipelineBarrier(cbuf, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL, 0, NULL,
+                        1, &barrier);
+
+                texture->owned = true;
+        }
 
         // End GPU timer
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_TEXTURE);
@@ -560,104 +600,6 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
         wlr_log(WLR_DEBUG, "\t[CPU] render_begin: %5.3f ms", (get_time() - start_time) * 1000);
 }
 
-void insert_barriers(struct wlr_vk_renderer *renderer) {
-	VkCommandBuffer cbuf = renderer->cb;
-        // We need to insert the acquire barriers before everything else
-        // executes. But we already recorded all the draw commands! So we need
-        // a second command buffer that we submit first.
-	VkCommandBuffer pre_cbuf = renderer->stage.cb;
-
-	// Insert acquire and release barriers for dmabuf-images
-	unsigned barrier_count = wl_list_length(&renderer->foreign_textures);
-	VkImageMemoryBarrier* acquire_barriers = calloc(barrier_count,
-                sizeof(VkImageMemoryBarrier));
-	VkImageMemoryBarrier* release_barriers = calloc(barrier_count + 1,
-                sizeof(VkImageMemoryBarrier));
-
-	struct wlr_vk_texture *texture, *tmp_tex;
-	unsigned idx = 0;
-
-	wl_list_for_each_safe(texture, tmp_tex, &renderer->foreign_textures, foreign_link) {
-                wlr_log(WLR_DEBUG, "Acquire image at %p", texture->image);
-                // I'm not sure exactly what a "foreign texture" is. foot
-                // doesn't create any but imv does, for example. Anyway, if
-                // there is a foreign texture we have to transition it to
-                // SHADER_READ_ONLY_OPTIMAL.
-
-		VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
-		if (!texture->transitioned) {
-			src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-			texture->transitioned = true;
-		}
-
-                // Acquire: make sure it's in SHADER_READ_ONLY before any
-                // shader reads
-		acquire_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		acquire_barriers[idx].srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-		acquire_barriers[idx].dstQueueFamilyIndex = renderer->dev->queue_family;
-		acquire_barriers[idx].image = texture->image;
-		acquire_barriers[idx].oldLayout = src_layout;
-		acquire_barriers[idx].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		acquire_barriers[idx].srcAccessMask = 0u; // ignored anyways
-		acquire_barriers[idx].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		acquire_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		acquire_barriers[idx].subresourceRange.layerCount = 1;
-		acquire_barriers[idx].subresourceRange.levelCount = 1;
-
-                // Release: put it back in LAYOUT_GENERAL? I guess we do it so
-                // they can write a new image? idk.
-		release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
-		release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-		release_barriers[idx].image = texture->image;
-		release_barriers[idx].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		release_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		release_barriers[idx].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		release_barriers[idx].dstAccessMask = 0u; // ignored anyways
-		release_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		release_barriers[idx].subresourceRange.layerCount = 1;
-		release_barriers[idx].subresourceRange.levelCount = 1;
-		++idx;
-
-		wl_list_remove(&texture->foreign_link);
-		texture->owned = false;
-	}
-
-        // Release render buffer after rendering. This doesn't actually change
-        // the layout but does change the queue family, which I guess is
-        // important.
-	release_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	release_barriers[idx].srcQueueFamilyIndex = renderer->dev->queue_family;
-	release_barriers[idx].dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-	release_barriers[idx].image = renderer->current_render_buffer->screen;
-        // We transition the screen image to COLOR_ATTACHMENT_OPTIMAL when we
-        // render to it, so now we have to transition it back to GENERAL
-	release_barriers[idx].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	release_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-	release_barriers[idx].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	release_barriers[idx].dstAccessMask = 0u; // ignored anyways
-	release_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	release_barriers[idx].subresourceRange.layerCount = 1;
-	release_barriers[idx].subresourceRange.levelCount = 1;
-
-        cbuf_begin_onetime(pre_cbuf);
-
-	vkCmdPipelineBarrier(pre_cbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-                        | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		0, 0, NULL, 0, NULL, barrier_count, acquire_barriers);
-
-	vkCmdPipelineBarrier(cbuf, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL, 0, NULL,
-		barrier_count + 1, release_barriers);
-
-	free(acquire_barriers);
-	free(release_barriers);
-
-        cbuf_submit_wait(renderer->dev->queue, pre_cbuf);
-}
-
 void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 int src_colorscheme_idx, int dst_colorscheme_idx) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
@@ -776,13 +718,7 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
         vkCmdEndRenderPass(cbuf);
         // 0.26
 
-        // Acquire and release window textures and output image correctly. It
-        // might seem weird to this in render_end and not render_begin. But the
-        // list of foreign textures gets populated by render_texture, so we
-        // have to do it here.
-        insert_barriers(renderer);
         printf("\t[CPU] render_end subsection: %5.3f ms\n", (get_time() - start_time) * 1000);
-        // At least 0.8, usually 1.2-ish - insert barriers is expensive for some reason.
 
         // End GPU timers
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_EVERYTHING);

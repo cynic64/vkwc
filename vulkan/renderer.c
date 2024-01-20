@@ -39,7 +39,7 @@
 static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
 static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
 static const size_t start_descriptor_pool_size = 256u;
-static bool default_debug = true;
+static bool default_debug = false;
 
 static const struct wlr_renderer_impl renderer_impl;
 
@@ -1405,14 +1405,13 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
                 renderer->tex_vert_module, renderer->tex_frag_module,
                 setup->rpass, 2, renderer->pipe_layout, &setup->tex_pipe);
 
-        // TODO: make this not render to UV.
         create_pipeline(renderer->dev->dev,
                 renderer->vert_module, renderer->simple_tex_frag_module,
-                setup->rpass, 2, renderer->pipe_layout, &setup->simple_tex_pipe);
+                setup->rpass, 1, renderer->pipe_layout, &setup->simple_tex_pipe);
 
         create_pipeline(renderer->dev->dev,
                 renderer->vert_module, renderer->quad_frag_module,
-                setup->rpass, 2, renderer->pipe_layout, &setup->quad_pipe);
+                setup->rpass, 1, renderer->pipe_layout, &setup->quad_pipe);
 
         for (int i = 0; i < BLUR_PASSES; i++) {
                 create_pipeline(renderer->dev->dev,
