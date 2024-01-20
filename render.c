@@ -458,10 +458,12 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
         assert(render_buf != NULL);
         VkCommandBuffer cbuf = renderer->cb;
 
+        double start_time = get_time();
+
         cbuf_begin_onetime(cbuf);
 
         // Reset timers
-        vkCmdResetQueryPool(cbuf, renderer->query_pool, 0, TIMER_COUNT);
+        vkCmdResetQueryPool(cbuf, renderer->query_pool, 0, TIMER_COUNT * 2);
 
         // Start GPU timers
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN);
@@ -523,6 +525,8 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
 
         // End GPU timer
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN);
+
+        wlr_log(WLR_DEBUG, "\t[CPU] render_begin: %5.3f ms", (get_time() - start_time) * 1000);
 }
 
 void insert_barriers(struct wlr_vk_renderer *renderer) {
@@ -792,36 +796,20 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 	renderer->render_height = 0;
 
         // Check GPU timestamps
-        wlr_log(WLR_DEBUG, "\t[GPU] render_begin: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_RENDER_BEGIN) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] render_begin subsection: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_RENDER_BEGIN_1) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] Most recent render_rect: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_RENDER_RECT) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] Most recent render_texture: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_RENDER_TEXTURE) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] Most recent render_texture subsection: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_RENDER_TEXTURE_1) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] render_end: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_RENDER_END) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] render_end subsection: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_RENDER_END_1) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] Most recent blur: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_BLUR) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] Most recent blur subsection: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_BLUR_1) * 1000);
-        wlr_log(WLR_DEBUG, "\t[GPU] Entire pipeline: %5.3f ms",
-                vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
-                        renderer->dev->instance->timestamp_period, TIMER_EVERYTHING) * 1000);
+        for (int i = 0; i < TIMER_COUNT; i++) {
+                // There's always the start and the end timer, so the index goes up by 2s.
+                int timer_idx = 2*i;
+                elapsed = vulkan_get_elapsed(renderer->dev->dev, renderer->query_pool,
+                        renderer->dev->instance->timestamp_period, timer_idx);
+                if (elapsed != -1) {
+                        renderer->timer_sums[i] += elapsed;
+                        renderer->timer_counts[i] ++;
+                }
+                float avg = renderer->timer_sums[i] / renderer->timer_counts[i];
+
+                wlr_log(WLR_DEBUG, "\t[GPU] %s: %5.3f ms (%5.3f ms avg)", TIMER_NAMES[i],
+                        elapsed * 1000, avg * 1000);
+        }
 
         // Destroy pending textures
         struct wlr_vk_texture *texture, *tmp_tex;

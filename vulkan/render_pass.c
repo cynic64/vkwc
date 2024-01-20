@@ -96,7 +96,6 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 // This is for the simpler rendering strategy used in vulkan/renderer.c, which
 // starts and ends the render pass once per frame instead of once per surface
 // because no fancy effects are used. So we clear the buffers before drawing.
-// TODO: render straight to the screen and don't bother with the other buffers.
 void create_simple_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 	// Intermediate - clear it!
 	VkAttachmentDescription intermediate_attach = {

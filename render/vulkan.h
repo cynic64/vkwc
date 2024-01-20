@@ -11,6 +11,7 @@
 #include <wlr/render/interface.h>
 
 #include "../vulkan/error.h"
+#include "../vulkan/timer.h"
 
 #define WLR_VK_RENDER_MODE_COUNT 3
 #define POSTPROCESS_MODE_COUNT 6
@@ -296,6 +297,11 @@ struct wlr_vk_renderer {
 
         // Lets us measure how long individual calls take
         VkQueryPool query_pool;
+        // For averaging over time
+        float timer_sums[TIMER_COUNT];
+        // Some timers don't get triggered every frame, so we need invidual
+        // counters for averaging.
+        int timer_counts[TIMER_COUNT];
 
 	struct {
 		VkCommandBuffer cb;

@@ -13,7 +13,9 @@
 #define TIMER_RENDER_TEXTURE_1 14
 #define TIMER_BLUR 16
 #define TIMER_BLUR_1 18
-#define TIMER_COUNT 20
+#define TIMER_COUNT 10 // Half the total number of indices
+
+extern char *TIMER_NAMES[TIMER_COUNT];
 
 double vulkan_get_elapsed(VkDevice device, VkQueryPool query_pool, double timestamp_period,
                 int start_idx);

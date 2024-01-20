@@ -2,6 +2,19 @@
 
 #include <assert.h>
 
+char *TIMER_NAMES[TIMER_COUNT] = {
+        "Entire pipeline",
+        "render_begin",
+        "Most recent render_rect",
+        "Most recent render_texture",
+        "render_end",
+        "render_end subsection",
+        "render_begin subection",
+        "Most recent render_texture subsection",
+        "Most recent blur",
+        "Most recent blur subsection"
+};
+
 // Assumes the start timestamp is at start_idx and the end timestamp is at
 // start_idx + 1. Result is in seconds.
 double vulkan_get_elapsed(VkDevice device, VkQueryPool query_pool, double timestamp_period,

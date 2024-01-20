@@ -1489,7 +1489,7 @@ struct wlr_renderer *vulkan_renderer_create_for_device(struct wlr_vk_device *dev
         VkQueryPoolCreateInfo query_info = {0};
         query_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
         query_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        query_info.queryCount = TIMER_COUNT;
+        query_info.queryCount = TIMER_COUNT * 2;
 
         res = vkCreateQueryPool(dev->dev, &query_info, NULL, &renderer->query_pool);
         assert(res == VK_SUCCESS);
