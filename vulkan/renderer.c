@@ -345,9 +345,11 @@ static void destroy_render_buffer(struct wlr_vk_render_buffer *buffer) {
                 vkDestroyImage(dev, buffer->blurs[i], NULL);
                 vkDestroyImageView(dev, buffer->blur_views[i], NULL);
                 vkFreeMemory(dev, buffer->blur_mems[i], NULL);
+                vkDestroyFramebuffer(dev, buffer->blur_framebuffers[i], NULL);
         }
 
         vkDestroyFramebuffer(dev, buffer->framebuffer, NULL);
+        vkDestroyFramebuffer(dev, buffer->simple_framebuffer, NULL);
 
 	vkDestroyImage(dev, buffer->uv, NULL);
 	vkDestroyImageView(dev, buffer->uv_view, NULL);
@@ -620,6 +622,16 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         res = vkCreateFramebuffer(dev, &fb_info, NULL, &buffer->framebuffer);
         assert(res == VK_SUCCESS);
 
+        // This is the for the simple rendering used in this file, which
+        // doesn't even have UV
+        fb_info.attachmentCount = 1;
+        fb_info.pAttachments = &buffer->intermediate_view;
+        fb_info.renderPass = buffer->render_setup->simple_rpass;
+
+        res = vkCreateFramebuffer(dev, &fb_info, NULL,
+                &buffer->simple_framebuffer);
+        assert(res == VK_SUCCESS);
+
         // This is for the blur passes
         for (int i = 0; i < BLUR_PASSES; i++) {
                 VkFramebufferCreateInfo blur_fb_info = {0};
@@ -709,7 +721,7 @@ static void vulkan_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint
         VkRect2D rect = {{0, 0}, {width, height}};
         renderer->scissor = rect;
 
-        begin_render_pass(cbuf, render_buf->framebuffer,
+        begin_render_pass(cbuf, render_buf->simple_framebuffer,
                 render_buf->render_setup->simple_rpass, rect, width, height);
 }
 

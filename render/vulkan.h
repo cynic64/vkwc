@@ -189,6 +189,8 @@ struct wlr_vk_render_buffer {
 	struct wl_list link; // wlr_vk_renderer.buffers
 
 	VkFramebuffer framebuffer;
+        // The simple renderer in vulkan/renderer.c doesn't use UV
+	VkFramebuffer simple_framebuffer;
         // The postprocess pass uses different images, so it needs to be
         // separate.
 	VkFramebuffer postprocess_framebuffer;

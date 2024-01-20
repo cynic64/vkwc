@@ -218,20 +218,6 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                 int width = screen_width * blur_scale;
                 int height = screen_height * blur_scale;
 
-                if (i != 0) {
-                        // Unless we're on the first pass, we have to transition
-                        // the previous blur image to SHADER_READ_ONLY
-                        vulkan_image_transition_cbuf(cbuf,
-                                render_buf->blurs[last_image_idx], VK_IMAGE_ASPECT_COLOR_BIT,
-                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                VK_ACCESS_SHADER_READ_BIT,
-                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                1);
-                }
-
                 VkPipeline pipe	=
                         renderer->current_render_buffer->render_setup->blur_pipes[image_idx];
                 if (pipe != renderer->bound_pipe) {
@@ -278,7 +264,9 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                         0, sizeof(push_constants), &push_constants);
 
+                double st = get_time();
                 vkCmdDraw(cbuf, 4, 1, 0, 0);
+                printf("Single draw takes %5.3f ms\n", (get_time() - st) * 1000);
 
                 vkCmdEndRenderPass(cbuf);
 
@@ -451,6 +439,46 @@ int surface_comp(const void *a, const void *b) {
         return (a_z > b_z) - (a_z < b_z);
 }
 
+// Inserts pipeline barriers so noone else is using our images before we do.
+void insert_acquire_barriers(struct wlr_vk_renderer *renderer) {
+	VkCommandBuffer cbuf = renderer->cb;
+
+	VkImageMemoryBarrier acquire_barrier = {0};
+
+        // Add acquire/release barriers for the current render buffer.
+        // It's worth noting that I used to not include this, and everything
+        // worked fine. But it's in the original code for vulkan/renderer.c, so
+        // I guess it must do something.
+	VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
+	if (!renderer->current_render_buffer->transitioned) {
+		src_layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+		renderer->current_render_buffer->transitioned = true;
+	}
+
+        // Acquire render buffer before rendering: Transition output image to
+        // LAYOUT_GENERAL before any reads and writes to it.
+	acquire_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	acquire_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+	acquire_barrier.dstQueueFamilyIndex = renderer->dev->queue_family;
+	acquire_barrier.image = renderer->current_render_buffer->screen;
+	acquire_barrier.oldLayout = src_layout;
+	acquire_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	acquire_barrier.srcAccessMask = 0u; // ignored anyways
+        // Including READ here seems a bit weird because we never read from the
+        // output image. But it was in the original code so fuck it, they know
+        // better than me
+	acquire_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	acquire_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	acquire_barrier.subresourceRange.layerCount = 1;
+	acquire_barrier.subresourceRange.levelCount = 1;
+
+	vkCmdPipelineBarrier(cbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                        | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		0, 0, NULL, 0, NULL, 1, &acquire_barrier);
+}
+
 void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t height) {
 	struct wlr_vk_renderer *renderer = vulkan_get_renderer(wlr_renderer);
 	assert(renderer->current_render_buffer);
@@ -472,6 +500,9 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
 	renderer->render_width = width;
 	renderer->render_height = height;
 	renderer->bound_pipe = VK_NULL_HANDLE;
+
+        // Acquire images
+        insert_acquire_barriers(renderer);
 
         // Clear the first intermediate image, otherwise we have leftover junk
         // from the previous frame.
@@ -537,10 +568,10 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
 	VkCommandBuffer pre_cbuf = renderer->stage.cb;
 
 	// Insert acquire and release barriers for dmabuf-images
-	unsigned barrier_count = wl_list_length(&renderer->foreign_textures) + 1;
+	unsigned barrier_count = wl_list_length(&renderer->foreign_textures);
 	VkImageMemoryBarrier* acquire_barriers = calloc(barrier_count,
                 sizeof(VkImageMemoryBarrier));
-	VkImageMemoryBarrier* release_barriers = calloc(barrier_count,
+	VkImageMemoryBarrier* release_barriers = calloc(barrier_count + 1,
                 sizeof(VkImageMemoryBarrier));
 
 	struct wlr_vk_texture *texture, *tmp_tex;
@@ -592,34 +623,6 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
 		texture->owned = false;
 	}
 
-        // Also add acquire/release barriers for the current render buffer.
-        // It's worth noting that I used to not include this, and everything
-        // worked fine. But it's in the original code for vulkan/renderer.c, so
-        // I guess it must do something.
-	VkImageLayout src_layout = VK_IMAGE_LAYOUT_GENERAL;
-	if (!renderer->current_render_buffer->transitioned) {
-		src_layout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-		renderer->current_render_buffer->transitioned = true;
-	}
-
-        // Acquire render buffer before rendering: Transition output image to
-        // LAYOUT_GENERAL before any reads and writes to it.
-	acquire_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	acquire_barriers[idx].srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
-	acquire_barriers[idx].dstQueueFamilyIndex = renderer->dev->queue_family;
-	acquire_barriers[idx].image = renderer->current_render_buffer->screen;
-	acquire_barriers[idx].oldLayout = src_layout;
-	acquire_barriers[idx].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-	acquire_barriers[idx].srcAccessMask = 0u; // ignored anyways
-        // Including READ here seems a bit weird because we never read from the
-        // output image. But it was in the original code so fuck it, they know
-        // better than me
-	acquire_barriers[idx].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	acquire_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	acquire_barriers[idx].subresourceRange.layerCount = 1;
-	acquire_barriers[idx].subresourceRange.levelCount = 1;
-
         // Release render buffer after rendering. This doesn't actually change
         // the layout but does change the queue family, which I guess is
         // important.
@@ -637,7 +640,6 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
 	release_barriers[idx].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	release_barriers[idx].subresourceRange.layerCount = 1;
 	release_barriers[idx].subresourceRange.levelCount = 1;
-	++idx;
 
         cbuf_begin_onetime(pre_cbuf);
 
@@ -648,7 +650,7 @@ void insert_barriers(struct wlr_vk_renderer *renderer) {
 
 	vkCmdPipelineBarrier(cbuf, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
 		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL, 0, NULL,
-		barrier_count, release_barriers);
+		barrier_count + 1, release_barriers);
 
 	free(acquire_barriers);
 	free(release_barriers);
@@ -679,6 +681,7 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
+        // 0.012 ms
 
         assert(renderer->cursor_x < width);
         assert(renderer->cursor_y < height);
@@ -698,6 +701,7 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 render_buf->uv, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 render_buf->host_uv,
                 1, &uv_copy_region);
+        // 0.025 ms
 
         VkRect2D rect = {{0, 0}, {width, height}};
         renderer->scissor = rect;
@@ -710,26 +714,21 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
+        // 0.031 ms
 
         // Blur entire intermediate
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
         // Only do 3 passes
-        blur_image(renderer, rect, width, height, 4, &render_buf->intermediate_set, true);
+        blur_image(renderer, rect, width, height, 3, &render_buf->intermediate_set, true);
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
-
-        // Transition blur to SHADER_READ_ONLY
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->blurs[0], VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                1);
+        // 0.245 ms
 
         // Postprocess pass
         struct wlr_vk_render_format_setup *setup = render_buf->render_setup;
         vkCmdBindPipeline(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, setup->postprocess_pipe);
         renderer->bound_pipe = setup->postprocess_pipe;
+
+        // 0.35 ms
 
         // Transition UV to SHADER_READ_ONLY
         vulkan_image_transition_cbuf(cbuf,
@@ -738,11 +737,13 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
+        // 0.25 ???
 
         // Begin render pass
         begin_postprocess_render_pass(renderer->cb,
                 render_buf->postprocess_framebuffer,
                 setup->postprocess_rpass, rect, width, height);
+        // 0.26
 
         // Bind descriptors
         VkDescriptorSet desc_sets[] = {render_buf->intermediate_set,
@@ -751,6 +752,7 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 	vkCmdBindDescriptorSets(cbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
 		renderer->pipe_layout, 0, sizeof(desc_sets) / sizeof(desc_sets[0]),
                 desc_sets, 0, NULL);
+        // 0.25
 
         // We don't actually use the PushConstants struct, so this is a bit
         // cheeky. But the int and float fit so it's OK. TODO: Make postprocess
@@ -767,15 +769,20 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 12, 16, &dst_colorscheme_idx);
+        // 0.27
         vkCmdDraw(cbuf, 4, 1, 0, 0);
+        // 0.26
 
         vkCmdEndRenderPass(cbuf);
+        // 0.26
 
         // Acquire and release window textures and output image correctly. It
         // might seem weird to this in render_end and not render_begin. But the
         // list of foreign textures gets populated by render_texture, so we
         // have to do it here.
         insert_barriers(renderer);
+        printf("\t[CPU] render_end subsection: %5.3f ms\n", (get_time() - start_time) * 1000);
+        // At least 0.8, usually 1.2-ish - insert barriers is expensive for some reason.
 
         // End GPU timers
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_EVERYTHING);
