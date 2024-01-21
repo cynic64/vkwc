@@ -152,6 +152,9 @@ static void destroy_render_format_setup(struct wlr_vk_renderer *renderer,
 
 	VkDevice dev = renderer->dev->dev;
 	vkDestroyRenderPass(dev, setup->rpass, NULL);
+	vkDestroyRenderPass(dev, setup->rpass_clear, NULL);
+	vkDestroyRenderPass(dev, setup->quad_rpass, NULL);
+	vkDestroyRenderPass(dev, setup->quad_clear_rpass, NULL);
 	vkDestroyRenderPass(dev, setup->postprocess_rpass, NULL);
 	vkDestroyRenderPass(dev, setup->simple_rpass, NULL);
 	vkDestroyPipeline(dev, setup->simple_tex_pipe, NULL);
@@ -1391,7 +1394,15 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
 	setup->render_format = format;
 
-        create_render_pass(renderer->dev->dev, format, &setup->rpass);
+        create_render_pass(renderer->dev->dev, format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                false, &setup->rpass);
+        create_render_pass(renderer->dev->dev, format, VK_IMAGE_LAYOUT_UNDEFINED,
+                true, &setup->rpass_clear);
+        create_render_pass(renderer->dev->dev, format, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                false, &setup->quad_rpass);
+        create_render_pass(renderer->dev->dev, format, VK_IMAGE_LAYOUT_UNDEFINED,
+                true, &setup->quad_clear_rpass);
+
         create_postprocess_render_pass(renderer->dev->dev, format, &setup->postprocess_rpass);
         for (int i = 0; i < BLUR_PASSES; i++) {
                 create_blur_render_pass(renderer->dev->dev, format, &setup->blur_rpass[i]);

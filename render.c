@@ -61,7 +61,7 @@ struct RenderData {
 };
 
 void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
-                int x, int y, int width, int height) {
+                int x, int y, int width, int height, bool clear) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
@@ -87,8 +87,10 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         VkRect2D rect = {{0, 0}, {screen_width, screen_height}};
         renderer->scissor = rect;
 
+        VkRenderPass rpass = clear ? render_buf->render_setup->quad_clear_rpass
+                : render_buf->render_setup->quad_rpass;
         begin_render_pass(cbuf, render_buf->framebuffer,
-                render_buf->render_setup->rpass, rect, screen_width, screen_height);
+                rpass, rect, screen_width, screen_height);
 
         // We don't bother rendering from one surface to the other because we
         // don't support fancy blurred transparency stuff here. So we don't
@@ -277,7 +279,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 struct wlr_texture *wlr_texture, mat4 matrix,
                 int surface_width, int surface_height, bool is_focused,
                 float time_since_spawn,
-                float surface_id, bool render_uv) {
+                float surface_id, bool render_uv, bool clear) {
         wlr_log(WLR_DEBUG, "Render texture with dims %d %d", surface_width, surface_height);
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
@@ -356,15 +358,6 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         wlr_log(WLR_DEBUG, "\t[CPU] render_texture subsection: %5.3f ms",
                 (get_time() - start_time) * 1000);
 
-        // Transition intermediate back to COLOR_ATTACH
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
-
         // Transition blur image to SHADER_READ_ONLY
         vulkan_image_transition_cbuf(cbuf,
                 render_buf->blurs[0], VK_IMAGE_ASPECT_COLOR_BIT,
@@ -384,8 +377,10 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 	}
 
         // Starts the command buffer and enters the render pass
+        VkRenderPass rpass = clear ? render_buf->render_setup->rpass_clear
+                : render_buf->render_setup->rpass;
         begin_render_pass(cbuf, render_buf->framebuffer,
-                render_buf->render_setup->rpass, rect, screen_width, screen_height);
+                rpass, rect, screen_width, screen_height);
 
         VkDescriptorSet desc_sets[] = {render_buf->blur_sets[0], texture->ds};
 
@@ -450,7 +445,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
 }
 
-static void render_surface(struct wlr_output *output, struct Surface *surface, bool is_focused) {
+static void render_surface(struct wlr_output *output, struct Surface *surface, bool is_focused,
+                bool clear) {
 	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
         if (texture == NULL) {
                 return;
@@ -461,7 +457,7 @@ static void render_surface(struct wlr_output *output, struct Surface *surface, b
 
 	render_texture(output->renderer, texture, surface->matrix,
                 surface->width, surface->height,
-                is_focused, get_time() - surface->spawn_time, surface->id, render_uv);
+                is_focused, get_time() - surface->spawn_time, surface->id, render_uv, clear);
 }
 
 // Comparison function so we can qsort surfaces by Z.
@@ -474,7 +470,7 @@ int surface_comp(const void *a, const void *b) {
 }
 
 // Inserts pipeline barriers so noone else is using our images before we do.
-void insert_acquire_barriers(struct wlr_vk_renderer *renderer) {
+void insert_acquire_barrier(struct wlr_vk_renderer *renderer) {
 	VkCommandBuffer cbuf = renderer->cb;
 
 	VkImageMemoryBarrier acquire_barrier = {0};
@@ -536,57 +532,7 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
 	renderer->bound_pipe = VK_NULL_HANDLE;
 
         // Acquire images
-        insert_acquire_barriers(renderer);
-
-        // Clear the first intermediate image, otherwise we have leftover junk
-        // from the previous frame.
-        // Transition it to TRANSFER_DST_OPTIMAL so we can clear it
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                1);
-
-        vulkan_clear_image(cbuf, render_buf->intermediate, (float [4]) {0, 0, 0, 1});
-
-        // Clear the UV buffer too
-        // Transition it to TRANSFER_DST_OPTIMAL so we can clear it. Maybe in
-        // the future I will have a separate render pass for the first drawn
-        // "thing" that clears everything.
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                1);
-
-        // The clear is very slow, about 0.6ms each.
-        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
-        vulkan_clear_image(cbuf, render_buf->uv, (float [4]){0, 0, 0, 1});
-        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
-
-        // Transition UV back to COLOR_ATTACHMENT_OPTIMAL
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->uv, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_ACCESS_TRANSFER_WRITE_BIT,
-                // Make fragment shader reads wait on it as well as color
-                // attachment output
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                1);
-
-        // Transition intermediate to COLOR_ATTACHMENT_OPTIMAL
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediate, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                1);
+        insert_acquire_barrier(renderer);
 
         // End GPU timer
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN);
@@ -794,7 +740,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
 
         // Draw frame counter.
 	float color[4] = { rand()%2, rand()%2, rand()%2, 1.0 };
-	render_rect_simple(renderer, color, 10, 10, 10, 10);
+	render_rect_simple(renderer, color, 10, 10, 10, 10, true);
         wlr_log(WLR_DEBUG, "----");
 
 	// Draw each surface
@@ -808,7 +754,7 @@ bool draw_frame(struct wlr_output *output, struct wl_list *surfaces,
 
                 wlr_log(WLR_DEBUG, "Draw surface with dims %d %d",
                         surface->width, surface->height);
-		render_surface(output, surface, surface == focused_surface);
+		render_surface(output, surface, surface == focused_surface, false);
 	};
         wlr_log(WLR_DEBUG, "----");
 

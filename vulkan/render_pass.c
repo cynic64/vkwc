@@ -4,14 +4,17 @@
 
 // This is the render pass for when we're rendering windows: it outputs to the
 // intermediate and UV.
-void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
+// In render_texture, the intermediate will have been in SHADER_READ_ONLY so
+// the blur pass could read it, so we need prev_intermediate_layout.
+void create_render_pass(VkDevice device, VkFormat format, VkImageLayout prev_intermediate_layout,
+                bool clear, VkRenderPass *rpass) {
 	// Intermediate
 	VkAttachmentDescription intermediate_attach = {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+		.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.initialLayout = prev_intermediate_layout,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
@@ -19,9 +22,10 @@ void create_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpass) {
 	VkAttachmentDescription uv_attach = {
 		.format = UV_FORMAT,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+		.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.initialLayout = clear ? VK_IMAGE_LAYOUT_UNDEFINED
+                        : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	};
 
@@ -175,7 +179,6 @@ void create_blur_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpa
 	VkAttachmentDescription output_attach = {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-                // We do need to load it because we might sample it.
 		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -298,11 +301,11 @@ void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
                 int screen_width, int screen_height) {
 	// Clear attachments
 	VkClearValue clear_values[4] = {0};
-	// Intermediate color - only gets used in vulkan/renderer.c
+	// Intermediate color
 	clear_values[0].color.float32[0] = 0;
 	clear_values[0].color.float32[1] = 0;
 	clear_values[0].color.float32[2] = 0;
-	clear_values[0].color.float32[3] = 0;
+	clear_values[0].color.float32[3] = 1;
 
 	VkRenderPassBeginInfo rpass_info = {0};
 	rpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

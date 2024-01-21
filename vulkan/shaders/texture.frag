@@ -114,7 +114,6 @@ vec4 get_outside_color(vec2 uv) {
         sum = mix(sum, neon(colors[4], dist - 64, 32));
         sum = mix(sum, neon(colors[5], dist - 80, 32));
         sum = mix(sum, neon(colors[6], dist - 96, 32));
-        sum = mix(sum, neon(colors[7], dist - 128, 32));
 
         return sum;
 }
