@@ -130,23 +130,27 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 			glm_mat4_mul(surface->matrix, projection, surface->matrix);
 			glm_mat4_mul(surface->matrix, view, surface->matrix);
 
+                        // Hacky padding stuff...
+                        int padding = 128;
+                        int real_x = surface->x - padding;
+                        int real_y = surface->y - padding;
+                        int real_width = surface->width + 2 * padding;
+                        int real_height = surface->height + 2 * padding;
+
 			// These are in backwards order
 			// Move it
 			glm_translate(surface->matrix,
-                                // Round X and Y so we don't end up with a
-                                // half-pixel offset, which makes everything
-                                // blurry >:(
-                                (vec3) {(int) surface->x, (int) surface->y, surface->z});
+                                (vec3) {real_x, real_y, surface->z});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
 			glm_rotate_z(surface->matrix, surface->z_rot, surface->matrix);
 			// Move it so its 0, 0 is at the center
 			glm_translate(surface->matrix,
-				(vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
+				(vec3) {-0.5 * real_width, -0.5 * real_height, 0.0});
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix,
-				(vec3) {surface->width, surface->height, surface->width});
+				(vec3) {real_width, real_height, real_width});
 
                         /*
 			vec4 top_left = {0, 0, 0, 1};
@@ -538,8 +542,10 @@ static void server_new_pointer(struct Server *server,
 	 * opportunity to do libinput configuration on the device to set
 	 * acceleration, etc. */
 	wlr_cursor_attach_input_device(server->cursor, device);
-        server->cursor->x = server->output->width / 2;
-        server->cursor->y = server->output->height / 2;
+        if (server->output != NULL) {
+                server->cursor->x = server->output->width / 2;
+                server->cursor->y = server->output->height / 2;
+        }
 }
 
 static void handle_new_input(struct wl_listener	*listener, void	*data) {
@@ -813,8 +819,10 @@ static struct Surface *create_surface(struct Server *server, struct wl_list *sur
 	surface->toplevel = NULL;
 	surface->id = (double) rand() / RAND_MAX;
         surface->spawn_time = get_time();
-        surface->x = server->cursor->x - server->output->width / 2;
-        surface->y = server->cursor->y - server->output->height / 2;
+        //surface->x = server->cursor->x - server->output->width / 2;
+        //surface->y = server->cursor->y - server->output->height / 2;
+        surface->x = 0;
+        surface->y = 0;
         wlr_log(WLR_INFO, "Cursor XY is %f %f, server dims are %d %d",
                 server->cursor->x, server->cursor->y,
                 server->output->width, server->output->height);

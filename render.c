@@ -129,52 +129,6 @@ void render_rect_simple(struct wlr_renderer *wlr_renderer, const float color[4],
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_RECT);
 }
 
-// Sometimes we want to set a tight scissor around a window that might be
-// rotated weirdly. This figures out the screen coordinates.
-void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRect2D *rect) {
-        // The whole point of making the fragment shader fill was so I'd have
-        // some space. This adds it back in.
-        int padding = 128;
-
-        // Figure out where the corners end up
-        float corners[4][4] = {
-                {0, 0, 0, 1},
-                {1, 0, 0, 1},
-                {0, 1, 0, 1},
-                {1, 1, 0, 1}
-        };
-        int min_x = INT_MAX, min_y = INT_MAX, max_x = INT_MIN, max_y = INT_MIN;
-        for (int i = 0; i < 4; i++) {
-                float dest[4];
-                glm_mat4_mulv(matrix, corners[i], dest);
-                dest[0] /= dest[3];
-                dest[1] /= dest[3];
-                int x = (dest[0] * 0.5 + 0.5) * screen_width;
-                int y = (dest[1] * 0.5 + 0.5) * screen_height;
-
-                if (x < min_x) min_x = x;
-                if (y < min_y) min_y = y;
-                if (x > max_x) max_x = x;
-                if (y > max_y) max_y = y;
-        }
-        min_x -= padding;
-        min_y -= padding;
-        max_x += padding;
-        max_y += padding;
-
-        if (min_x < 0) min_x = 0;
-        if (min_y < 0) min_y = 0;
-        if (max_x > screen_width) max_x = screen_width;
-        if (max_y > screen_height) max_y = screen_height;
-        if (max_x <= min_x) max_x = min_x + 1;
-        if (max_y <= min_y) max_y = min_y + 1;
-
-        rect->offset.x = min_x;
-        rect->offset.y = min_y;
-        rect->extent.width = max_x - min_x;
-        rect->extent.height = max_y - min_y;
-}
-
 void debug_images(struct wlr_renderer *wlr_renderer) {
 	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
@@ -276,6 +230,46 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
         wlr_log(WLR_DEBUG, "\t[CPU] blur: %5.3f ms", (get_time() - start_time) * 1000);
 }
 
+// Sometimes we want to set a tight scissor around a window that might be
+// rotated weirdly. This figures out the screen coordinates.
+void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRect2D *rect) {
+	// We don't have to apply padding because calc_matrices does that for us.
+
+        // Figure out where the corners end up
+        float corners[4][4] = {
+                {0, 0, 0, 1},
+                {1, 0, 0, 1},
+                {0, 1, 0, 1},
+                {1, 1, 0, 1}
+        };
+        int min_x = INT_MAX, min_y = INT_MAX, max_x = INT_MIN, max_y = INT_MIN;
+        for (int i = 0; i < 4; i++) {
+                float dest[4];
+                glm_mat4_mulv(matrix, corners[i], dest);
+                dest[0] /= dest[3];
+                dest[1] /= dest[3];
+                int x = (dest[0] * 0.5 + 0.5) * screen_width;
+                int y = (dest[1] * 0.5 + 0.5) * screen_height;
+
+                if (x < min_x) min_x = x;
+                if (y < min_y) min_y = y;
+                if (x > max_x) max_x = x;
+                if (y > max_y) max_y = y;
+        }
+
+        if (min_x < 0) min_x = 0;
+        if (min_y < 0) min_y = 0;
+        if (max_x > screen_width) max_x = screen_width;
+        if (max_y > screen_height) max_y = screen_height;
+        if (max_x <= min_x) max_x = min_x + 1;
+        if (max_y <= min_y) max_y = min_y + 1;
+
+        rect->offset.x = min_x;
+        rect->offset.y = min_y;
+        rect->extent.width = max_x - min_x;
+        rect->extent.height = max_y - min_y;
+}
+
 // Set render_uv to false to, well, not render to the UV texture. That will
 // make it so mouse events go "through" the surface and to whatever's below
 // instead.
@@ -338,7 +332,6 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                         0, 0, NULL, 0, NULL, 1, &barrier);
         }
 
-        // Scissor to only the window being drawn + some padding
         VkRect2D rect;
         get_rect_for_matrix(screen_width, screen_height, matrix, &rect);
         renderer->scissor = rect;
@@ -402,7 +395,8 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
 	// Draw
         struct PushConstants push_constants = {0};
-        glm_mat4_inv(matrix, push_constants.mat4);
+        //glm_mat4_inv(matrix, push_constants.mat4);
+        memcpy(push_constants.mat4, matrix, sizeof(push_constants.mat4));
 
         push_constants.surface_id[0] = surface_id;
         push_constants.surface_id[1] = render_uv ? 1 : 0;
@@ -567,7 +561,7 @@ void render_begin(struct wlr_renderer *wlr_renderer, uint32_t width, uint32_t he
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 1);
 
-        // The clears are very slow, about 0.3ms each.
+        // The clear is very slow, about 0.6ms each.
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
         vulkan_clear_image(cbuf, render_buf->uv, (float [4]){0, 0, 0, 1});
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_BEGIN_1);
@@ -606,6 +600,8 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 	assert(renderer->current_render_buffer);
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         VkCommandBuffer cbuf = renderer->cb;
+
+        double start_time = get_time();
 
         int width = renderer->render_width;
         int height = renderer->render_height;
@@ -654,10 +650,8 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
                 1);
 
         // Blur entire intermediate
-        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
         // Only do 3 passes
         blur_image(renderer, rect, width, height, 3, &render_buf->intermediate_set, true);
-        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
 
         // Postprocess pass
         struct wlr_vk_render_format_setup *setup = render_buf->render_setup;
@@ -700,7 +694,9 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 	vkCmdPushConstants(cbuf, renderer->pipe_layout,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 12, 16, &dst_colorscheme_idx);
+        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
         vkCmdDraw(cbuf, 4, 1, 0, 0);
+        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_RENDER_END_1);
 
         vkCmdEndRenderPass(cbuf);
 

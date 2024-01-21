@@ -14,7 +14,8 @@ layout(std140, push_constant) uniform UBO {
         float is_focused;
 } data;
 
-layout(location = 0) in vec2 global_uv;
+layout(location = 0) in vec2 uv;
+layout(location = 1) in vec2 global_uv;
 
 layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec4 out_uv;
@@ -54,30 +55,9 @@ float random_float(vec2 uv) {
 	return f - 1.0;                        // Range [0:1]
 }
 
-vec2 get_local_uv() {
-        // Get the local UV from the global UV and inverted projection matrix.
-        // Explanation at bottom of file.
-        float r0 = data.proj[0][2];
-        float r1 = data.proj[1][2];
-        float r2 = data.proj[2][2];
-        float r3 = data.proj[3][2];
-        float x = global_uv.x * 2 - 1, y = global_uv.y * 2 - 1;
-        float z = -(r3 + x*r0 + y*r1) / r2;
-
-        vec4 inverted = data.proj * vec4(x, y, z, 1);
-        // The rounding makes sure we always get the same values even if the
-        // window is moved. If it was 0.1, 0.2, 0.3, 0.4 before it will still be
-        // 0.1, 0.2, 0.3, 0.4 even if you move the window.
-        vec2 coords = round(inverted.xy / inverted.w * data.surface_dims);
-        coords += vec2(0.5);
-        coords /= data.surface_dims;
-
-        return coords;
-}
-
 vec4 neon(vec3 color, float dist, float size) {
         if (dist > -1 && dist < 0) {
-                // Outer border
+                // Line
                 return vec4(1, 1, 1, 1);
         } else if (dist > -size && dist < size) {
                 // Fade away from the border
@@ -134,26 +114,21 @@ vec4 get_outside_color(vec2 uv) {
         sum = mix(sum, neon(colors[4], dist - 64, 32));
         sum = mix(sum, neon(colors[5], dist - 80, 32));
         sum = mix(sum, neon(colors[6], dist - 96, 32));
+        sum = mix(sum, neon(colors[7], dist - 128, 32));
 
         return sum;
 }
 
 vec3 get_blurred_background() {
-        vec2 uv = global_uv;
-
-        return texture(blur, uv).rgb;
+        return texture(blur, global_uv).rgb;
 }
 
 void main() {
-        vec2 uv = get_local_uv();
-
-        float thing = 0;
         if (uv.x > 0 && uv.x < 1 && uv.y > 0 && uv.y < 1) {
                 // We're in the window
                 vec4 window = texture(tex, uv);
                 vec3 background = get_blurred_background();
-                //float opacity = data.is_focused == 1 ? 0.9 : 0.7;
-                float opacity = data.is_focused == 1 ? 0.95 : 0.85;
+                float opacity = data.is_focused == 1 ? 0.9 : 0.7;
 
                 float alpha = window.a;
                 window *= opacity;
@@ -178,32 +153,3 @@ void main() {
                 out_uv = vec4(0);
         }
 }
-
-// We want to be able to set any pixel on the screen with this fragment shader,
-// so the vertex shader is set to always output a fullscreen quad. This means
-// we have to do the opposite of what the transform matrix usually does -
-// instead of figuring out which pixels the corners of the window land on, we
-// need to figure out where we are in the window based off the pixel.
-//
-// So we invert the matrix, which is already done for us by render_texture.
-// However, we have to correctly guess the *the Z coordinate that would be
-// under this pixel if we were rendering normally*, otherwise the inversion
-// won't work properly.
-//
-// Usually we take normal_proj * vec4(uv, 0, 1). So we have to figure out what
-// Z value to use so that inverse_proj * vec4(uv, z, 1) has a Z of 0, otherwise
-// it's all messed up. The matrix multiplication looks like this:
-//
-// [ . . . . ]
-// [ . . . . ]
-// [ . . . . ] * [x, y, z, 1] = [_, _, 0, _]
-// [ . . . . ]
-//
-// I marked the values we don't care about with _. Anyway, result's Z will be
-// the 3rd row of the matrix * [x, y, z, 1], so if we number the elements of
-// the third row r0..r3:
-//
-// x*r0 + y*r1 + z*r2 + 1*r3 = 0
-// z = -(r3 + x*r0 + y*r1) / r2
-//
-// And then we can invert and everyone is happy :D

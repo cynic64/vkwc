@@ -89,11 +89,6 @@ vec3 rgb2hsv(vec3 c) {
 }
 
 void main() {
-        // Select colorscheme
-        vec3 colors[8];
-        if (uv.x > data.colorscheme_ratio) colors = all_colors[data.src_colorscheme_idx];
-        else colors = all_colors[data.dst_colorscheme_idx];
-
         if (data.mode == 0) {
                 out_color = texture(screen_tex, uv);
         } else if (data.mode == 1) {
@@ -117,6 +112,11 @@ void main() {
 
                 out_color = vec4(screen + bloom * 0.15, 1);
         } else if (data.mode == 4) {
+                // Select colorscheme
+                vec3 colors[8];
+                if (uv.x > data.colorscheme_ratio) colors = all_colors[data.src_colorscheme_idx];
+                else colors = all_colors[data.dst_colorscheme_idx];
+
                 // Color remap
                 vec3 screen = texture(screen_tex, uv).rgb;
                 vec3 hsv = rgb2hsv(screen);
@@ -152,6 +152,11 @@ void main() {
                         out_color = vec4(1, 0, 1, 1);
                 }
         } else if (data.mode == 5) {
+                // Select colorscheme
+                vec3 colors[8];
+                if (uv.x > data.colorscheme_ratio) colors = all_colors[data.src_colorscheme_idx];
+                else colors = all_colors[data.dst_colorscheme_idx];
+
                 // Colorscheme demo
                 out_color = vec4(colors[int(uv.x * 7.999)], 1);
         } else {

@@ -309,13 +309,14 @@ VkPhysicalDevice vulkan_find_drm_phdev(struct wlr_vk_instance *ini, int drm_fd) 
 		return VK_NULL_HANDLE;
 	}
 
-	for (int i = 0; i < num_phdevs; i++) {
+	for (int i = num_phdevs - 1; i >= 0; i--) {
 		VkPhysicalDevice phdev = phdevs[i];
 
 		// check whether device supports vulkan 1.1, needed for
 		// vkGetPhysicalDeviceProperties2
 		VkPhysicalDeviceProperties phdev_props;
 		vkGetPhysicalDeviceProperties(phdev, &phdev_props);
+                printf("Trying device %s\n", phdev_props.deviceName);
 
                 // Timestamp period in nanoseconds
                 printf("Timestamp period: %f\n", phdev_props.limits.timestampPeriod);
@@ -349,6 +350,7 @@ VkPhysicalDevice vulkan_find_drm_phdev(struct wlr_vk_instance *ini, int drm_fd) 
 
 		const char *name = VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME;
 		if (find_extensions(avail_ext_props, avail_extc, &name, 1) != NULL) {
+                        printf("\tCan't do drm\n");
 			wlr_log(WLR_DEBUG, "  Ignoring physical device \"%s\": "
 				"VK_EXT_physical_device_drm not supported",
 				phdev_props.deviceName);
@@ -368,10 +370,13 @@ VkPhysicalDevice vulkan_find_drm_phdev(struct wlr_vk_instance *ini, int drm_fd) 
 		dev_t render_devid = makedev(drm_props.renderMajor, drm_props.renderMinor);
 		if (primary_devid == drm_stat.st_rdev ||
 				render_devid == drm_stat.st_rdev) {
+                        printf("\tMatch!\n");
 			wlr_log(WLR_INFO, "Found matching Vulkan physical device: %s",
 				phdev_props.deviceName);
 			return phdev;
-		}
+		} else {
+                        printf("\tNo match :-(\n");
+                }
 	}
 
 	return VK_NULL_HANDLE;

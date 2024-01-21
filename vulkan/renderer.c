@@ -1407,11 +1407,11 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
         create_pipeline(renderer->dev->dev,
                 renderer->vert_module, renderer->simple_tex_frag_module,
-                setup->rpass, 1, renderer->pipe_layout, &setup->simple_tex_pipe);
+                setup->simple_rpass, 1, renderer->pipe_layout, &setup->simple_tex_pipe);
 
         create_pipeline(renderer->dev->dev,
                 renderer->vert_module, renderer->quad_frag_module,
-                setup->rpass, 1, renderer->pipe_layout, &setup->quad_pipe);
+                setup->rpass, 2, renderer->pipe_layout, &setup->quad_pipe);
 
         for (int i = 0; i < BLUR_PASSES; i++) {
                 create_pipeline(renderer->dev->dev,
