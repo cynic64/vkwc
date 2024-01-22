@@ -1,6 +1,8 @@
 #include "timer.h"
 
 #include <assert.h>
+#include <wlr/util/log.h>
+#include <stdlib.h>
 
 char *TIMER_NAMES[TIMER_COUNT] = {
         "Entire pipeline",
@@ -26,9 +28,11 @@ double vulkan_get_elapsed(VkDevice device, VkQueryPool query_pool, double timest
 
         if (res == VK_NOT_READY) {
                 return -1;
+        } else if (res != VK_SUCCESS) {
+                wlr_log(WLR_ERROR, "Couldn't get timestamp: %d", res);
+                exit(1);
         }
 
-        assert(res == VK_SUCCESS);
         // Divide by 1000000000 to convert ns to ms
         double elapsed = ((double) (timestamps[1] - timestamps[0]))
                 * timestamp_period / 1000000000;

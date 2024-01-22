@@ -159,6 +159,7 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
         vulkan_start_timer(cbuf, renderer->query_pool, TIMER_BLUR);
 
         int last_image_idx = 0;
+        int idx_to_time = 1;
         for (int i = 0; i < 2 * pass_count - 1; i++) {
                 int image_idx;
                 if (i < pass_count) {
@@ -204,8 +205,6 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                         renderer->pipe_layout, 0, 1, in_set, 0, NULL);
 
                 struct PushConstants push_constants = {0};
-                // Important to feed in the dimensions of the image we're
-                // sampling and not our own image here
                 push_constants.screen_dims[0] = width;
                 push_constants.screen_dims[1] = height;
                 if (i >= pass_count) {
@@ -220,7 +219,13 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                         0, sizeof(push_constants), &push_constants);
 
+                if (i == idx_to_time) {
+                        vulkan_start_timer(cbuf, renderer->query_pool, TIMER_BLUR_1);
+                }
                 vkCmdDraw(cbuf, 4, 1, 0, 0);
+                if (i == idx_to_time) {
+                        vulkan_end_timer(cbuf, renderer->query_pool, TIMER_BLUR_1);
+                }
 
                 vkCmdEndRenderPass(cbuf);
 

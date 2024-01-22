@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 static const VkFormat UV_FORMAT = VK_FORMAT_R8G8B8A8_UNORM;
+static const VkFormat BLUR_FORMAT = VK_FORMAT_B8G8R8A8_SRGB;
 
 void begin_render_pass(VkCommandBuffer cbuf, VkFramebuffer framebuffer,
                 VkRenderPass rpass, VkRect2D render_area,

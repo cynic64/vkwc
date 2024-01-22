@@ -102,6 +102,7 @@ struct wlr_vk_instance *vulkan_instance_create(size_t ext_count,
 		wlr_log(WLR_ERROR, "wlroots requires vulkan 1.1 which is not available");
 		return NULL;
 	}
+        wlr_log(WLR_INFO, "Instance version: %x\n", ini_version);
 
 	// query extension support
 	uint32_t avail_extc = 0;

@@ -39,7 +39,7 @@
 static const VkDeviceSize min_stage_size = 1024 * 1024; // 1MB
 static const VkDeviceSize max_stage_size = 64 * min_stage_size; // 64MB
 static const size_t start_descriptor_pool_size = 256u;
-static bool default_debug = false;
+static bool default_debug = true;
 
 static const struct wlr_renderer_impl renderer_impl;
 
@@ -514,9 +514,6 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
                 dmabuf.width, dmabuf.height,
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                        | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-                        // Needed for clearing it
-                        | VK_IMAGE_USAGE_TRANSFER_DST_BIT
                         | VK_IMAGE_USAGE_SAMPLED_BIT,
                 &buffer->intermediate);
 
@@ -541,13 +538,10 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                 int height = dmabuf.height / (2 << i);
                 if (width < 1) width = 1;
                 if (height < 1) height = 1;
-                create_image(renderer->dev->phdev, renderer->dev->dev, fmt->format.vk_format,
-                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
-                                | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+                create_image(renderer->dev->phdev, renderer->dev->dev, BLUR_FORMAT,
+                        VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
                         width, height,
-                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                                | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                         &buffer->blurs[i]);
 
                 vkGetImageMemoryRequirements(renderer->dev->dev, buffer->blurs[i],
@@ -560,7 +554,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
                         buffer->blur_mems[i], 0);
                 assert(res == VK_SUCCESS);
 
-                create_image_view(renderer->dev->dev, fmt->format.vk_format,
+                create_image_view(renderer->dev->dev, BLUR_FORMAT,
                         buffer->blurs[i], VK_IMAGE_ASPECT_COLOR_BIT,
                         &buffer->blur_views[i]);
         }
@@ -628,7 +622,7 @@ static struct wlr_vk_render_buffer *create_render_buffer(
         // This is the for the simple rendering used in this file, which
         // doesn't even have UV
         fb_info.attachmentCount = 1;
-        fb_info.pAttachments = &buffer->intermediate_view;
+        fb_info.pAttachments = &buffer->screen_view;
         fb_info.renderPass = buffer->render_setup->simple_rpass;
 
         res = vkCreateFramebuffer(dev, &fb_info, NULL,
@@ -734,44 +728,7 @@ static void vulkan_end(struct wlr_renderer *wlr_renderer) {
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
         VkCommandBuffer cbuf = renderer->cb;
 
-        int width = render_buf->wlr_buffer->width;
-        int height = render_buf->wlr_buffer->height;
-
         vkCmdEndRenderPass(cbuf);
-
-        // Copy intermediate image to final output
-        // Transition final to IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->screen, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-                // I'm not really sure what to put here. I think the "proper"
-                // way to do it would be to wait for the image to finish being
-                // presented by using a fence or something.
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
-
-        // Transition intermediate to IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediate,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 1);
-
-        // Now do the actual copy
-        vulkan_copy_image(cbuf, render_buf->intermediate,
-                render_buf->screen,
-                VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 0, 0,
-                width, height
-        );
-
-        // Transition intermediate back to COLOR_ATTACHMENT
-        vulkan_image_transition_cbuf(cbuf,
-                render_buf->intermediate,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 1);
 
         // Submit
         double start_time = get_time();
