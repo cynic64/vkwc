@@ -12,7 +12,10 @@ layout(std140, push_constant) uniform UBO {
         float mode;
 } data;
 
-layout(location = 0) in vec2 uv;
+// We use the same fragment shader as windows, which get their local UV and
+// global UV through the second. So iwe ignore the first here and start at idx
+// 1.
+layout(location = 1) in vec2 uv;
 layout(location = 0) out vec4 out_color;
 
 vec3 threshold(vec3 x) {

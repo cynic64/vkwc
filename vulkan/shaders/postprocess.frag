@@ -162,5 +162,8 @@ void main() {
         } else {
                 out_color = vec4(1, 0, 1, 1);
         }
+
+        // If we do this we can avoid clearing the screen
+        out_color.a = 1;
 }
 

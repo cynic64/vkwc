@@ -1021,7 +1021,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 }
 
 int main(int argc, char	*argv[]) {
-	wlr_log_init(WLR_INFO, NULL);
+	wlr_log_init(WLR_DEBUG, NULL);
 	char *startup_cmd = NULL;
 
 	int c;

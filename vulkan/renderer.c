@@ -1383,7 +1383,7 @@ static struct wlr_vk_render_format_setup *find_or_create_render_setup(
 
         for (int i = 0; i < BLUR_PASSES; i++) {
                 create_pipeline(renderer->dev->dev,
-                        renderer->postprocess_vert_module, renderer->blur_frag_module,
+                        renderer->tex_vert_module, renderer->blur_frag_module,
                         setup->blur_rpass[i], 1 /* Only one output attachment */,
                         renderer->pipe_layout, &setup->blur_pipes[i]);
         }

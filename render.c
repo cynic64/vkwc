@@ -139,18 +139,68 @@ void debug_images(struct wlr_renderer *wlr_renderer) {
         wlr_log(WLR_DEBUG, "UV is at %p", render_buf->uv);
 }
 
+// Sometimes we want to set a tight scissor around a window that might be
+// rotated weirdly. This figures out the screen coordinates.
+void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, int padding,
+                VkRect2D *rect) {
+        // Figure out where the corners end up
+        float corners[4][4] = {
+                {0, 0, 0, 1},
+                {1, 0, 0, 1},
+                {0, 1, 0, 1},
+                {1, 1, 0, 1}
+        };
+        int min_x = INT_MAX, min_y = INT_MAX, max_x = INT_MIN, max_y = INT_MIN;
+        for (int i = 0; i < 4; i++) {
+                float dest[4];
+                glm_mat4_mulv(matrix, corners[i], dest);
+                dest[0] /= dest[3];
+                dest[1] /= dest[3];
+                int x = (dest[0] * 0.5 + 0.5) * screen_width;
+                int y = (dest[1] * 0.5 + 0.5) * screen_height;
+
+                if (x < min_x) min_x = x;
+                if (y < min_y) min_y = y;
+                if (x > max_x) max_x = x;
+                if (y > max_y) max_y = y;
+        }
+
+        min_x -= padding;
+        min_y -= padding;
+        max_x += padding;
+        max_y += padding;
+
+        if (min_x < 0) min_x = 0;
+        if (min_y < 0) min_y = 0;
+        if (max_x > screen_width) max_x = screen_width;
+        if (max_y > screen_height) max_y = screen_height;
+        if (max_x <= min_x) max_x = min_x + 1;
+        if (max_y <= min_y) max_y = min_y + 1;
+
+        rect->offset.x = min_x;
+        rect->offset.y = min_y;
+        rect->extent.width = max_x - min_x;
+        rect->extent.height = max_y - min_y;
+}
+
 // Assumes image is in SHADER_READ_ONLY. If with_threshold is set, a threshold
 // will first be applied to the image. So you end up with just the bright parts
 // blurred.
-void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
+void blur_image(struct wlr_vk_renderer *renderer,
                 int screen_width, int screen_height, int pass_count, VkDescriptorSet *src_image_set,
-                bool with_threshold) {
+                mat4 matrix, bool with_threshold) {
         assert(pass_count <= BLUR_PASSES);
 
         VkCommandBuffer cbuf = renderer->cb;
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
         double start_time = get_time();
+
+
+        VkRect2D rect;
+        // We need to clear a bigger area so junk from previous frames doesn't bleed into ours
+        int padding = 32;
+        get_rect_for_matrix(screen_width, screen_height, matrix, padding, &rect);
 
         // There might have already been a texture rendered, so reset the timers
         vkCmdResetQueryPool(cbuf, renderer->query_pool, TIMER_BLUR, 2);
@@ -205,6 +255,7 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
                         renderer->pipe_layout, 0, 1, in_set, 0, NULL);
 
                 struct PushConstants push_constants = {0};
+                memcpy(push_constants.mat4, matrix, sizeof(push_constants.mat4));
                 push_constants.screen_dims[0] = width;
                 push_constants.screen_dims[1] = height;
                 if (i >= pass_count) {
@@ -235,46 +286,6 @@ void blur_image(struct wlr_vk_renderer *renderer, VkRect2D rect,
         vulkan_end_timer(cbuf, renderer->query_pool, TIMER_BLUR);
 
         wlr_log(WLR_DEBUG, "\t[CPU] blur: %5.3f ms", (get_time() - start_time) * 1000);
-}
-
-// Sometimes we want to set a tight scissor around a window that might be
-// rotated weirdly. This figures out the screen coordinates.
-void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRect2D *rect) {
-	// We don't have to apply padding because calc_matrices does that for us.
-
-        // Figure out where the corners end up
-        float corners[4][4] = {
-                {0, 0, 0, 1},
-                {1, 0, 0, 1},
-                {0, 1, 0, 1},
-                {1, 1, 0, 1}
-        };
-        int min_x = INT_MAX, min_y = INT_MAX, max_x = INT_MIN, max_y = INT_MIN;
-        for (int i = 0; i < 4; i++) {
-                float dest[4];
-                glm_mat4_mulv(matrix, corners[i], dest);
-                dest[0] /= dest[3];
-                dest[1] /= dest[3];
-                int x = (dest[0] * 0.5 + 0.5) * screen_width;
-                int y = (dest[1] * 0.5 + 0.5) * screen_height;
-
-                if (x < min_x) min_x = x;
-                if (y < min_y) min_y = y;
-                if (x > max_x) max_x = x;
-                if (y > max_y) max_y = y;
-        }
-
-        if (min_x < 0) min_x = 0;
-        if (min_y < 0) min_y = 0;
-        if (max_x > screen_width) max_x = screen_width;
-        if (max_y > screen_height) max_y = screen_height;
-        if (max_x <= min_x) max_x = min_x + 1;
-        if (max_y <= min_y) max_y = min_y + 1;
-
-        rect->offset.x = min_x;
-        rect->offset.y = min_y;
-        rect->extent.width = max_x - min_x;
-        rect->extent.height = max_y - min_y;
 }
 
 static void render_surface(struct wlr_output *output, struct Surface *surface, bool is_focused,
@@ -343,9 +354,8 @@ static void render_surface(struct wlr_output *output, struct Surface *surface, b
                         0, 0, NULL, 0, NULL, 1, &barrier);
         }
 
-        VkRect2D inner_rect, rect;
-        get_rect_for_matrix(screen_width, screen_height, surface->inner_matrix, &inner_rect);
-        get_rect_for_matrix(screen_width, screen_height, surface->matrix, &rect);
+        VkRect2D rect;
+        get_rect_for_matrix(screen_width, screen_height, surface->matrix, 0, &rect);
 
         // Blur
         // Transition intermediate to SHADER_READ
@@ -358,9 +368,8 @@ static void render_surface(struct wlr_output *output, struct Surface *surface, b
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
-        renderer->scissor = inner_rect;
-        blur_image(renderer, inner_rect, screen_width, screen_height, BLUR_PASSES,
-                &render_buf->intermediate_set, false);
+        blur_image(renderer, screen_width, screen_height, BLUR_PASSES,
+                &render_buf->intermediate_set, surface->inner_matrix, false);
 
         wlr_log(WLR_DEBUG, "\t[CPU] render_texture subsection: %5.3f ms",
                 (get_time() - start_time) * 1000);
@@ -588,8 +597,8 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 
         // Blur entire intermediate
         // Only do 3 passes
-        VkRect2D blur_rect = {{500, 500}, {200, 200}};
-        blur_image(renderer, blur_rect, width, height, 3, &render_buf->intermediate_set, true);
+        mat4 matrix = {{2, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 1, 0}, {-1, -1, 0, 1}};
+        blur_image(renderer, width, height, 3, &render_buf->intermediate_set, matrix, true);
 
         // Postprocess pass
         struct wlr_vk_render_format_setup *setup = render_buf->render_setup;
