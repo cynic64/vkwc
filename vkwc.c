@@ -132,25 +132,35 @@ void calc_matrices(struct wl_list *surfaces, int output_width, int output_height
 
                         // Hacky padding stuff...
                         int padding = 128;
-                        int real_x = surface->x - padding;
-                        int real_y = surface->y - padding;
                         int real_width = surface->width + 2 * padding;
                         int real_height = surface->height + 2 * padding;
+
+                        memcpy(surface->inner_matrix, surface->matrix, sizeof(surface->inner_matrix));
 
 			// These are in backwards order
 			// Move it
 			glm_translate(surface->matrix,
-                                (vec3) {real_x, real_y, surface->z});
+                                (vec3) {surface->x, surface->y, surface->z});
+			glm_translate(surface->inner_matrix,
+                                (vec3) {surface->x, surface->y, surface->z});
 			// Rotate it
 			glm_rotate_x(surface->matrix, surface->x_rot, surface->matrix);
 			glm_rotate_y(surface->matrix, surface->y_rot, surface->matrix);
 			glm_rotate_z(surface->matrix, surface->z_rot, surface->matrix);
+
+			glm_rotate_x(surface->inner_matrix, surface->x_rot, surface->inner_matrix);
+			glm_rotate_y(surface->inner_matrix, surface->y_rot, surface->inner_matrix);
+			glm_rotate_z(surface->inner_matrix, surface->z_rot, surface->inner_matrix);
 			// Move it so its 0, 0 is at the center
 			glm_translate(surface->matrix,
 				(vec3) {-0.5 * real_width, -0.5 * real_height, 0.0});
+			glm_translate(surface->inner_matrix,
+				(vec3) {-0.5 * surface->width, -0.5 * surface->height, 0.0});
 			// Scale from 0..1, 0..1 to surface->width, surface->height
 			glm_scale(surface->matrix,
 				(vec3) {real_width, real_height, real_width});
+			glm_scale(surface->inner_matrix,
+				(vec3) {surface->width, surface->height, surface->width});
 
                         /*
 			vec4 top_left = {0, 0, 0, 1};
@@ -1011,7 +1021,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data) {
 }
 
 int main(int argc, char	*argv[]) {
-	wlr_log_init(WLR_DEBUG, NULL);
+	wlr_log_init(WLR_INFO, NULL);
 	char *startup_cmd = NULL;
 
 	int c;

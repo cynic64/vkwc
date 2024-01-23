@@ -127,7 +127,7 @@ void main() {
                 // We're in the window
                 vec4 window = texture(tex, uv);
                 vec3 background = get_blurred_background();
-                float opacity = data.is_focused == 1 ? 0.9 : 0.7;
+                float opacity = data.is_focused == 1 ? 0.5 : 0.5;
 
                 float alpha = window.a;
                 window *= opacity;

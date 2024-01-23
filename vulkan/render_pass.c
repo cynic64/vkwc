@@ -179,7 +179,7 @@ void create_blur_render_pass(VkDevice device, VkFormat format, VkRenderPass *rpa
 	VkAttachmentDescription output_attach = {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -274,8 +274,7 @@ void create_postprocess_render_pass(VkDevice device, VkFormat format, VkRenderPa
 	deps[0].dstSubpass = VK_SUBPASS_EXTERNAL;
 	deps[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT |
 	        VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	deps[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT |
-		VK_ACCESS_MEMORY_READ_BIT;
+	deps[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT;
 
 	VkAttachmentDescription attachments[] = {
                 intermediate_attach,

@@ -277,16 +277,20 @@ void get_rect_for_matrix(int screen_width, int screen_height, mat4 matrix, VkRec
         rect->extent.height = max_y - min_y;
 }
 
-// Set render_uv to false to, well, not render to the UV texture. That will
-// make it so mouse events go "through" the surface and to whatever's below
-// instead.
-void render_texture(struct wlr_renderer *wlr_renderer,
-                struct wlr_texture *wlr_texture, mat4 matrix,
-                int surface_width, int surface_height, bool is_focused,
-                float time_since_spawn,
-                float surface_id, bool render_uv, bool clear) {
-        wlr_log(WLR_DEBUG, "Render texture with dims %d %d", surface_width, surface_height);
-	struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) wlr_renderer;
+static void render_surface(struct wlr_output *output, struct Surface *surface, bool is_focused,
+                bool clear) {
+	struct wlr_texture *wlr_texture = wlr_surface_get_texture(surface->wlr_surface);
+        if (wlr_texture == NULL) {
+                return;
+        }
+
+        wlr_log(WLR_DEBUG, "Render texture with dims %d %d", surface->width, surface->height);
+        // Only make the surface clickable if it's an XDG surface.
+        bool render_uv = surface->xdg_surface != NULL;
+
+        struct wlr_vk_renderer *renderer = (struct wlr_vk_renderer *) output->renderer;
+        float time_since_spawn = get_time() - surface->spawn_time;
+
         struct wlr_vk_render_buffer *render_buf = renderer->current_render_buffer;
 
         double start_time = get_time();
@@ -339,9 +343,9 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                         0, 0, NULL, 0, NULL, 1, &barrier);
         }
 
-        VkRect2D rect;
-        get_rect_for_matrix(screen_width, screen_height, matrix, &rect);
-        renderer->scissor = rect;
+        VkRect2D inner_rect, rect;
+        get_rect_for_matrix(screen_width, screen_height, surface->inner_matrix, &inner_rect);
+        get_rect_for_matrix(screen_width, screen_height, surface->matrix, &rect);
 
         // Blur
         // Transition intermediate to SHADER_READ
@@ -354,12 +358,10 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 1);
 
-        blur_image(renderer, rect, screen_width, screen_height, BLUR_PASSES,
+        renderer->scissor = inner_rect;
+        blur_image(renderer, inner_rect, screen_width, screen_height, BLUR_PASSES,
                 &render_buf->intermediate_set, false);
 
-        // The blur takes almost 1ms on the CPU! Not great. I think I could
-        // reduce this by using a render pass with many subpasses for the
-        // transitions and only binding the blur descriptors once.
         wlr_log(WLR_DEBUG, "\t[CPU] render_texture subsection: %5.3f ms",
                 (get_time() - start_time) * 1000);
 
@@ -386,6 +388,7 @@ void render_texture(struct wlr_renderer *wlr_renderer,
                 : render_buf->render_setup->rpass;
         begin_render_pass(cbuf, render_buf->framebuffer,
                 rpass, rect, screen_width, screen_height);
+        renderer->scissor = rect;
 
         VkDescriptorSet desc_sets[] = {render_buf->blur_sets[0], texture->ds};
 
@@ -395,13 +398,12 @@ void render_texture(struct wlr_renderer *wlr_renderer,
 
 	// Draw
         struct PushConstants push_constants = {0};
-        //glm_mat4_inv(matrix, push_constants.mat4);
-        memcpy(push_constants.mat4, matrix, sizeof(push_constants.mat4));
+        memcpy(push_constants.mat4, surface->matrix, sizeof(push_constants.mat4));
 
-        push_constants.surface_id[0] = surface_id;
+        push_constants.surface_id[0] = surface->id;
         push_constants.surface_id[1] = render_uv ? 1 : 0;
-        push_constants.surface_dims[0] = surface_width;
-        push_constants.surface_dims[1] = surface_height;
+        push_constants.surface_dims[0] = surface->width;
+        push_constants.surface_dims[1] = surface->height;
         push_constants.screen_dims[0] = screen_width;
         push_constants.screen_dims[1] = screen_height;
         push_constants.is_focused = is_focused;
@@ -447,22 +449,6 @@ void render_texture(struct wlr_renderer *wlr_renderer,
         texture->last_used = renderer->frame;
 
         wlr_log(WLR_DEBUG, "\t[CPU] render_texture: %5.3f ms", (get_time() - start_time) * 1000);
-
-}
-
-static void render_surface(struct wlr_output *output, struct Surface *surface, bool is_focused,
-                bool clear) {
-	struct wlr_texture *texture = wlr_surface_get_texture(surface->wlr_surface);
-        if (texture == NULL) {
-                return;
-        }
-
-        // Only make the surface clickable if it's an XDG surface.
-        bool render_uv = surface->xdg_surface != NULL;
-
-	render_texture(output->renderer, texture, surface->matrix,
-                surface->width, surface->height,
-                is_focused, get_time() - surface->spawn_time, surface->id, render_uv, clear);
 }
 
 // Comparison function so we can qsort surfaces by Z.
@@ -602,7 +588,8 @@ void render_end(struct wlr_renderer *wlr_renderer, float colorscheme_ratio,
 
         // Blur entire intermediate
         // Only do 3 passes
-        blur_image(renderer, rect, width, height, 3, &render_buf->intermediate_set, true);
+        VkRect2D blur_rect = {{500, 500}, {200, 200}};
+        blur_image(renderer, blur_rect, width, height, 3, &render_buf->intermediate_set, true);
 
         // Postprocess pass
         struct wlr_vk_render_format_setup *setup = render_buf->render_setup;

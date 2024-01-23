@@ -24,7 +24,11 @@ struct Surface {
 					// If this _is_ the toplevel surface, set it to point to itself.
 					// TODO: make it null when toplevel instead
 
+        // This defines corners with padding
 	mat4 matrix;
+        // No padding, really just the window
+	mat4 inner_matrix;
+
         int width, height;
 	int tex_width, tex_height;
 
